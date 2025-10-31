@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { google } from "googleapis";
 
-const SPREADSHEET_ID = process.env.NEXT_PUBLIC_GOOGLE_SHEETS_ID_INFO || "";
+const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ID || "";
 const SHEET_NAME = "HORAISE";
 
 // Configura autenticação com Service Account

@@ -25,7 +25,7 @@ import {
 import Link from "next/link";
 
 // Detecta modo offline
-const OFFLINE_MODE = process.env.NEXT_PUBLIC_OFFLINE_MODE === "true" || !process.env.NEXT_PUBLIC_GOOGLE_SHEETS_ID;
+const OFFLINE_MODE = process.env.NEXT_PUBLIC_OFFLINE_MODE === "true" || !process.env.GOOGLE_SHEETS_ID;
 
 export default function LoginPage() {
   const router = useRouter();
@@ -257,7 +257,7 @@ export default function LoginPage() {
                 root: {
                   background: "var(--primary)",
                   border: "none",
-                  "&[data-disabled]": {
+                  "&[dataDisabled]": {
                     background: "var(--primary)",
                     opacity: 1,
                     cursor: "not-allowed",

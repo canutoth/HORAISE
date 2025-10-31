@@ -3,10 +3,10 @@ import { google } from "googleapis";
 
 const SPREADSHEET_ID =
   process.env.GOOGLE_SHEETS_ID ||
-  process.env.NEXT_PUBLIC_GOOGLE_SHEETS_ID ||
+  process.env.GOOGLE_SHEETS_ID ||
   "";
 const SHEET_NAME =
-  process.env.SHEET_NAME || process.env.NEXT_PUBLIC_SHEET_NAME || "Team";
+  process.env.SHEET_NAME || process.env.SHEET_NAME || "Team";
 
 const GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL || "";
 const GOOGLE_PRIVATE_KEY = (process.env.GOOGLE_PRIVATE_KEY || "").replace(

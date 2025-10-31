@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Box,
   Paper,
@@ -35,6 +35,12 @@ const STATUS_LABELS: Record<Exclude<ScheduleStatus, null>, string> = {
 
 // Dias da semana
 const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+
+// Dimensões base do grid
+const TIME_COL_WIDTH = 80; // px
+const DAY_COL_WIDTH = 100; // px
+const CALENDAR_WIDTH = TIME_COL_WIDTH + 7 * DAY_COL_WIDTH; // 780px
+const ROW_HEIGHT = 32; // px - altura uniforme das linhas no mobile
 
 // Horários (7h às 20h) - representando intervalos
 const HOURS = Array.from({ length: 13 }, (_, i) => i + 7); // 7 a 19
@@ -160,6 +166,9 @@ export default function ScheduleCalendar({
   const [selectedStatus, setSelectedStatus] = useState<Exclude<ScheduleStatus, null>>("presencial");
   const [hoveredCell, setHoveredCell] = useState<{ day: number; hour: number } | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  // Mobile header alignment helpers
+  const dayHeaderRef = useRef<HTMLDivElement | null>(null);
+  const [mobileHeaderHeight, setMobileHeaderHeight] = useState<number>(0);
 
   // Detecta se é mobile
   useEffect(() => {
@@ -171,6 +180,23 @@ export default function ScheduleCalendar({
     window.addEventListener("resize", checkMobile);
     
     return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  // Measure the mobile days header height to align the fixed time header
+  useEffect(() => {
+    const measure = () => {
+      if (dayHeaderRef.current) {
+        setMobileHeaderHeight(dayHeaderRef.current.offsetHeight);
+      }
+    };
+    // Initial measure after paint
+    const raf = requestAnimationFrame(measure);
+    // Recalculate on resize
+    window.addEventListener("resize", measure);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", measure);
+    };
   }, []);
 
   // Atualiza uma célula específica
@@ -201,14 +227,14 @@ export default function ScheduleCalendar({
     return schedule[day]?.[hour] || null;
   };
 
-  // Renderiza o calendário (compartilhado entre mobile e desktop)
+  // Renderiza o calendário (desktop)
   const renderCalendar = () => (
-    <Box style={{ minWidth: "780px", maxWidth: "780px" }}>
+    <Box style={{ minWidth: `${CALENDAR_WIDTH}px`, maxWidth: `${CALENDAR_WIDTH}px` }}>
           {/* Cabeçalho dos dias */}
           <Box
             style={{
               display: "grid",
-              gridTemplateColumns: "80px repeat(7, 100px)",
+              gridTemplateColumns: `${TIME_COL_WIDTH}px repeat(7, ${DAY_COL_WIDTH}px)`,
               gap: "2px",
               marginBottom: "2px",
               position: "sticky",
@@ -242,7 +268,7 @@ export default function ScheduleCalendar({
               key={hour}
               style={{
                 display: "grid",
-                gridTemplateColumns: "80px repeat(7, 100px)",
+                gridTemplateColumns: `${TIME_COL_WIDTH}px repeat(7, ${DAY_COL_WIDTH}px)`,
                 gap: "2px",
                 marginBottom: "2px",
               }}
@@ -317,27 +343,168 @@ export default function ScheduleCalendar({
         </Box>
   );
 
+  // Renderiza o calendário para mobile com coluna de horário fixa
+  const renderMobileCalendar = () => (
+    <Box style={{ display: "flex", width: "100%" }}>
+      {/* Coluna fixa de horários */}
+      <Box style={{ width: `${TIME_COL_WIDTH}px`, flex: "0 0 auto" }}>
+        {/* Cabeçalho vazio alinhado com os dias */}
+        <Box
+          style={{
+            padding: "12px 8px",
+            background: "white",
+            position: "sticky",
+            top: 0,
+            zIndex: 11,
+            height: mobileHeaderHeight ? `${mobileHeaderHeight}px` : undefined,
+            marginBottom: "2px",
+          }}
+        />
+        {/* Linhas de horários */}
+        {HOURS.map((hour) => (
+          <Box
+            key={hour}
+            style={{
+              marginBottom: "2px",
+            }}
+          >
+            <Box
+              style={{
+                height: `${ROW_HEIGHT}px`,
+                textAlign: "center",
+                background: "#f8f9fa",
+                fontWeight: 600,
+                fontSize: "13px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: "4px",
+                color: "#495057",
+                border: "1px solid #dee2e6",
+              }}
+            >
+              {String(hour).padStart(2, '0')}h-{String(hour + 1).padStart(2, '0')}h
+            </Box>
+          </Box>
+        ))}
+      </Box>
+
+      {/* Grid scrollável dos dias */}
+      <Box
+        style={{
+          overflowX: "auto",
+          overflowY: "hidden",
+          width: "100%",
+          WebkitOverflowScrolling: "touch",
+        }}
+      >
+        <Box style={{ minWidth: `${7 * DAY_COL_WIDTH}px` }}>
+          {/* Cabeçalho dos dias */}
+          <Box
+            style={{
+              display: "grid",
+              gridTemplateColumns: `repeat(7, ${DAY_COL_WIDTH}px)`,
+              gap: "2px",
+              marginBottom: "2px",
+              position: "sticky",
+              top: 0,
+              background: "white",
+              zIndex: 10,
+            }}
+          >
+            {WEEKDAYS.map((day, idx) => (
+              <Box
+                key={idx}
+                ref={idx === 0 ? dayHeaderRef : undefined}
+                style={{
+                  padding: "12px 8px",
+                  textAlign: "center",
+                  background: "#228BE6",
+                  color: "white",
+                  fontWeight: 600,
+                  fontSize: "14px",
+                  borderRadius: "4px",
+                }}
+              >
+                {day}
+              </Box>
+            ))}
+          </Box>
+
+          {/* Linhas de horários (apenas dias, sem coluna de hora) */}
+          {HOURS.map((hour) => (
+            <Box
+              key={hour}
+              style={{
+                display: "grid",
+                gridTemplateColumns: `repeat(7, ${DAY_COL_WIDTH}px)`,
+                gap: "2px",
+                marginBottom: "2px",
+              }}
+            >
+              {WEEKDAYS.map((_, dayIdx) => {
+                const status = getCellStatus(dayIdx, hour);
+                const isHovered = hoveredCell?.day === dayIdx && hoveredCell?.hour === hour;
+
+                return (
+                  <UnstyledButton
+                    key={dayIdx}
+                    onClick={() => handleCellClick(dayIdx, hour)}
+                    onMouseEnter={() => setHoveredCell({ day: dayIdx, hour })}
+                    onMouseLeave={() => setHoveredCell(null)}
+                    style={{
+                      position: "relative",
+                      height: `${ROW_HEIGHT}px`,
+                      border: "1px solid #dee2e6",
+                      borderRadius: "4px",
+                      background: status ? STATUS_COLORS[status] : "white",
+                      cursor: "pointer",
+                      transition: "all 0.15s",
+                      opacity: status ? 0.8 : 1,
+                    }}
+                  >
+                    {status && isHovered && (
+                      <Box
+                        onClick={(e) => handleClearCell(dayIdx, hour, e)}
+                        style={{
+                          position: "absolute",
+                          top: "4px",
+                          right: "4px",
+                          width: "20px",
+                          height: "20px",
+                          borderRadius: "50%",
+                          background: "rgba(0, 0, 0, 0.6)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                          zIndex: 5,
+                        }}
+                      >
+                        <IconX size={14} color="white" />
+                      </Box>
+                    )}
+                  </UnstyledButton>
+                );
+              })}
+            </Box>
+          ))}
+        </Box>
+      </Box>
+    </Box>
+  );
+
   return (
     <Box>
       {isMobile ? (
-        // Layout Mobile: Empilhado verticalmente
+        // Layout Mobile: Empilhado verticalmente com coluna de horários fixa
         <Stack gap="lg">
           {/* Legenda em cima */}
           <Box>
             <ScheduleLegend selectedStatus={selectedStatus} onSelectStatus={setSelectedStatus} schedule={schedule} />
           </Box>
-          
-          {/* Calendário embaixo com scroll lateral */}
-          <Box 
-            style={{ 
-              overflowX: "auto",
-              overflowY: "hidden",
-              width: "100%",
-              WebkitOverflowScrolling: "touch", // smooth scroll no iOS
-            }}
-          >
-            {renderCalendar()}
-          </Box>
+          {/* Calendário embaixo com scroll lateral apenas nos dias */}
+          {renderMobileCalendar()}
         </Stack>
       ) : (
         // Layout Desktop: Centralizado e estável
@@ -351,7 +518,7 @@ export default function ScheduleCalendar({
             <Box />
             {/* Painel Direito - Calendário Interativo (sem scroll no desktop) */}
             <Box style={{ overflow: "visible" }}>
-              <Box style={{ width: "780px", margin: "0 auto" }}>
+              <Box style={{ width: `${CALENDAR_WIDTH}px`, margin: "0 auto" }}>
                 {renderCalendar()}
               </Box>
             </Box>

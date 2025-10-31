@@ -2,7 +2,9 @@
 // Utiliza a Google Sheets API v4
 
 // Modo offline/desenvolvimento: quando true, não faz chamadas reais à API
-const OFFLINE_MODE = process.env.NEXT_PUBLIC_OFFLINE_MODE === "true" || !process.env.NEXT_PUBLIC_GOOGLE_SHEETS_ID;
+// Importante: esta flag roda no cliente; NÃO use variáveis privadas do servidor aqui,
+// pois elas ficam undefined no bundle do navegador e forçam offline indevidamente.
+const OFFLINE_MODE = process.env.NEXT_PUBLIC_OFFLINE_MODE === "true";
 
 export interface ScheduleData {
   [day: number]: {
@@ -29,10 +31,10 @@ offlineStorage.set("test@test.com", {
   schedule: {},
 });
 
-const SPREADSHEET_ID = process.env.NEXT_PUBLIC_GOOGLE_SHEETS_ID || "";
+const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ID || "";
 // NOTE: client-side will no longer call Google directly with an API key.
 // Reads are proxied through internal API routes which use the service account.
-const SHEET_NAME = process.env.NEXT_PUBLIC_SHEET_NAME || "Team";
+const SHEET_NAME = process.env.SHEET_NAME || "Team";
 
 // Converte array para string separada por vírgula
 const arrayToString = (arr: string[]): string => {
