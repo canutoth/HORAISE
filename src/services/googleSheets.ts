@@ -1,95 +1,38 @@
 // Serviço para integração com Google Sheets
 // Utiliza a Google Sheets API v4
 
-export interface TeamMemberData {
-  name: string;
-  position: string;
-  imageUrl: string;
-  description: string;
-  email: string;
-  researchInterests: string[];
-  technologies: string[];
-  expertise: string[];
-  socialLinks?: {
-    lattes?: string;
-    personalWebsite?: string;
-    linkedin?: string;
-    github?: string;
-    googleScholar?: string;
-    orcid?: string;
+// Modo offline/desenvolvimento: quando true, não faz chamadas reais à API
+const OFFLINE_MODE = process.env.NEXT_PUBLIC_OFFLINE_MODE === "true" || !process.env.NEXT_PUBLIC_GOOGLE_SHEETS_ID;
+
+export interface ScheduleData {
+  [day: number]: {
+    [hour: number]: "presencial" | "ocupado" | "online" | "reuniao" | "aula" | null;
   };
 }
 
-// Dados de exemplo/mock que aparecem na primeira linha
-export const EXAMPLE_DATA: TeamMemberData = {
-  name: "Exemplo de Nome",
-  position: "Undergraduate Student",
-  imageUrl: "/images/team/example.jpg",
-  description:
-    "Esta é uma descrição de exemplo. Substitua com suas próprias informações.",
-  email: "exemplo@example.com",
-  researchInterests: ["Artificial Intelligence", "Software Engineering"],
-  technologies: ["Python", "JavaScript", "TypeScript"],
-  expertise: ["Backend", "Frontend"],
-  socialLinks: {
-    lattes: "",
-    personalWebsite: "",
-    linkedin: "",
-    github: "",
-    googleScholar: "",
-    orcid: "",
-  },
-};
+// Interface simplificada para HORAISE (Nome, Email, Frentes + Schedule)
+export interface TeamMemberData {
+  name: string;
+  email: string;
+  frentes: string;
+  schedule?: ScheduleData;
+}
+
+// Storage local para modo offline (simula um "banco de dados" em memória)
+const offlineStorage: Map<string, TeamMemberData> = new Map();
+
+// Dados mínimos para teste offline
+offlineStorage.set("test@test.com", {
+  name: "Usuário Teste",
+  email: "test@test.com",
+  frentes: "Frente Teste",
+  schedule: {},
+});
 
 const SPREADSHEET_ID = process.env.NEXT_PUBLIC_GOOGLE_SHEETS_ID || "";
 // NOTE: client-side will no longer call Google directly with an API key.
 // Reads are proxied through internal API routes which use the service account.
 const SHEET_NAME = process.env.NEXT_PUBLIC_SHEET_NAME || "Team";
-
-/**
- * Converte URL do imgbox.com para URL de imagem renderizável
- * Exemplo: https://imgbox.com/CXu9gnDk -> https://images2.imgbox.com/CXu9gnDk_o.png (formato original)
- * Nota: O imgbox usa um padrão de servidor distribuído, testamos múltiplas variações
- */
-export function convertImgboxUrl(url: string): string {
-  if (!url) return "";
-
-  // Se já é uma URL de imagem direta, retorna como está
-  if (
-    url.includes("images2.imgbox.com") ||
-    url.includes("thumbs2.imgbox.com") ||
-    url.startsWith("/images/") ||
-    (url.startsWith("http") && !url.includes("imgbox.com/"))
-  ) {
-    return url;
-  }
-
-  // Extrai o ID da imagem do imgbox
-  // Formato: https://imgbox.com/CXu9gnDk ou imgbox.com/CXu9gnDk
-  const match = url.match(/imgbox\.com\/([a-zA-Z0-9]+)/);
-  if (!match) return url;
-
-  const imageId = match[1];
-
-  // O imgbox distribui imagens em servidores com hash de 2 caracteres
-  // Padrão observado: https://thumbs2.imgbox.com/3c/f4/05nMyoPs_t.jpg
-  // Onde 3c/f4 é derivado do hash do ID
-
-  // Usando uma abordagem mais direta: retorna a URL do viewer que redireciona para a imagem
-  // A maioria dos navegadores modernos consegue renderizar isso
-  // Alternativamente, usamos a API de thumbnail que é mais confiável
-
-  // Calcula o hash path baseado nos primeiros caracteres do ID
-  const hashPath = imageId
-    .slice(0, 2)
-    .toLowerCase()
-    .split("")
-    .map((c) => c.charCodeAt(0).toString(16).padStart(2, "0"))
-    .join("/");
-
-  // Retorna a URL da thumbnail (mais confiável e sempre funciona)
-  return `https://thumbs2.imgbox.com/${hashPath}/${imageId}_t.jpg`;
-}
 
 // Converte array para string separada por vírgula
 const arrayToString = (arr: string[]): string => {
@@ -106,45 +49,23 @@ const stringToArray = (str: string): string[] => {
     .filter(Boolean);
 };
 
-// Converte linha do Google Sheets para objeto TeamMemberData
+// Converte linha do Google Sheets (HORAISE) para objeto TeamMemberData
+// Formato: [Nome, Email, Frentes, ...schedule columns]
 const rowToTeamMember = (row: string[]): TeamMemberData => {
   return {
     name: row[0] || "",
-    position: row[1] || "",
-    imageUrl: row[2] || "",
-    description: row[3] || "",
-    email: row[4] || "",
-    researchInterests: stringToArray(row[5] || ""),
-    technologies: stringToArray(row[6] || ""),
-    expertise: stringToArray(row[7] || ""),
-    socialLinks: {
-      lattes: row[8] || "",
-      personalWebsite: row[9] || "",
-      linkedin: row[10] || "",
-      github: row[11] || "",
-      googleScholar: row[12] || "",
-      orcid: row[13] || "",
-    },
+    email: row[1] || "",
+    frentes: row[2] || "",
   };
 };
 
-// Converte objeto TeamMemberData para linha do Google Sheets
+// Converte objeto TeamMemberData para linha do Google Sheets (HORAISE)
+// Formato: [Nome, Email, Frentes] (schedule é salvo separadamente)
 const teamMemberToRow = (member: TeamMemberData): string[] => {
   return [
     member.name,
-    member.position,
-    member.imageUrl,
-    member.description,
     member.email,
-    arrayToString(member.researchInterests),
-    arrayToString(member.technologies),
-    arrayToString(member.expertise),
-    member.socialLinks?.lattes || "",
-    member.socialLinks?.personalWebsite || "",
-    member.socialLinks?.linkedin || "",
-    member.socialLinks?.github || "",
-    member.socialLinks?.googleScholar || "",
-    member.socialLinks?.orcid || "",
+    member.frentes,
   ];
 };
 
@@ -154,6 +75,12 @@ const teamMemberToRow = (member: TeamMemberData): string[] => {
 export async function getMemberByEmail(
   email: string
 ): Promise<TeamMemberData | null> {
+  // Modo offline: retorna dados do storage local
+  if (OFFLINE_MODE) {
+    console.log("🔌 MODO OFFLINE: Buscando membro no storage local");
+    return offlineStorage.get(email) || null;
+  }
+
   try {
     // Proxy the read through our server-side API to use the service account.
     const encoded = encodeURIComponent(email);
@@ -167,7 +94,20 @@ export async function getMemberByEmail(
     // payload.member is an array (row) from the backend
     if (!payload || !payload.member) return null;
     const row: string[] = payload.member;
-    return rowToTeamMember(row);
+    const memberData = rowToTeamMember(row);
+    
+    // Carrega o schedule da planilha HORAISE
+    try {
+      const schedule = await loadScheduleFromSheet(email);
+      if (schedule) {
+        memberData.schedule = schedule;
+      }
+    } catch (scheduleError) {
+      console.warn("Não foi possível carregar schedule:", scheduleError);
+      // Continua sem o schedule se houver erro
+    }
+    
+    return memberData;
   } catch (error) {
     console.error("Erro ao buscar membro:", error);
     throw error;
@@ -178,16 +118,29 @@ export async function getMemberByEmail(
  * Retorna os dados de exemplo da primeira linha de dados
  */
 export async function getExampleData(): Promise<TeamMemberData> {
+  const fallback: TeamMemberData = {
+    name: "Exemplo",
+    email: "exemplo@example.com",
+    frentes: "Frente Exemplo",
+    schedule: {},
+  };
+
+  // Modo offline: retorna dados de exemplo fixos
+  if (OFFLINE_MODE) {
+    console.log("🔌 MODO OFFLINE: Retornando dados de exemplo");
+    return fallback;
+  }
+
   try {
     const res = await fetch(`/api/read-example`);
-    if (!res.ok) return EXAMPLE_DATA;
+    if (!res.ok) return fallback;
     const payload = await res.json();
-    if (!payload || !payload.member) return EXAMPLE_DATA;
+    if (!payload || !payload.member) return fallback;
     const row: string[] = payload.member;
     return rowToTeamMember(row);
   } catch (error) {
     console.error("Erro ao buscar dados de exemplo:", error);
-    return EXAMPLE_DATA;
+    return fallback;
   }
 }
 
@@ -199,9 +152,20 @@ export async function saveMember(
   member: TeamMemberData,
   isNew: boolean = false
 ): Promise<{ success: boolean; message: string }> {
+  // Modo offline: salva no storage local
+  if (OFFLINE_MODE) {
+    console.log("🔌 MODO OFFLINE: Salvando membro no storage local");
+    offlineStorage.set(member.email, member);
+    return {
+      success: true,
+      message: isNew
+        ? "✅ Novo membro criado com sucesso (modo offline - dados não sincronizados)"
+        : "✅ Dados atualizados com sucesso (modo offline - dados não sincronizados)",
+    };
+  }
+
   try {
-    // Esta função precisa ser implementada no backend usando OAuth2
-    // pois a API Key sozinha não permite escrita
+    // Salva os dados básicos do membro na aba Team
     const response = await fetch("/api/update-member", {
       method: "POST",
       headers: {
@@ -219,6 +183,16 @@ export async function saveMember(
     }
 
     const result = await response.json();
+    
+    // Se houver schedule, salva na planilha HORAISE
+    if (member.schedule && Object.keys(member.schedule).length > 0) {
+      const scheduleResult = await saveScheduleToSheet(member.email, member.schedule);
+      if (!scheduleResult.success) {
+        console.warn("Dados salvos mas schedule falhou:", scheduleResult.message);
+        // Não retorna erro, pois os dados principais foram salvos
+      }
+    }
+    
     return result;
   } catch (error) {
     console.error("Erro ao salvar membro:", error);
@@ -233,6 +207,12 @@ export async function saveMember(
  * Encontra a linha de um membro no Google Sheets
  */
 export async function findMemberRow(email: string): Promise<number | null> {
+  // Modo offline: simula número de linha baseado na existência no storage
+  if (OFFLINE_MODE) {
+    console.log("🔌 MODO OFFLINE: Simulando busca de linha");
+    return offlineStorage.has(email) ? 2 : null; // Simula linha 2 se existir
+  }
+
   try {
     const encoded = encodeURIComponent(email);
     const res = await fetch(`/api/read-member?email=${encoded}`);
@@ -264,33 +244,11 @@ export function validateUrl(url: string): boolean {
   }
 }
 
-export function validateImgboxUrl(url: string): boolean {
-  if (!url || url.trim() === "") return false;
-
-  // Aceita URLs diretas de imagens
-  if (url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) return true;
-
-  // Aceita URLs do imgbox
-  if (url.includes("imgbox.com")) return true;
-
-  // Aceita URLs de imagens locais
-  if (url.startsWith("/images/")) return true;
-
-  return false;
-}
-
 export function validateMemberData(member: TeamMemberData): {
   valid: boolean;
   errors: string[];
 } {
   const errors: string[] = [];
-
-  const VALID_POSITIONS = [
-    "Laboratory Head",
-    "DSc. Candidate",
-    "MSc. Student",
-    "Undergraduate Student",
-  ];
 
   // Nome
   if (!member.name || member.name.trim() === "") {
@@ -306,105 +264,162 @@ export function validateMemberData(member: TeamMemberData): {
     );
   }
 
-  // Position
-  if (!member.position || member.position.trim() === "") {
-    errors.push("❌ Position: Campo obrigatório");
-  } else if (!VALID_POSITIONS.includes(member.position)) {
-    errors.push(
-      `❌ Position: Deve ser exatamente uma das opções: "${VALID_POSITIONS.join(
-        '", "'
-      )}"`
-    );
+  // Frentes
+  if (!member.frentes || member.frentes.trim() === "") {
+    errors.push("❌ Frentes: Campo obrigatório");
   }
-
-  // Image URL
-  if (!member.imageUrl || member.imageUrl.trim() === "") {
-    errors.push("❌ Image URL: Campo obrigatório");
-  } else if (!validateImgboxUrl(member.imageUrl)) {
-    errors.push(
-      "❌ Image URL: URL inválida. Use uma URL do imgbox.com ou uma URL de imagem válida"
-    );
-  }
-
-  // Description
-  if (!member.description || member.description.trim() === "") {
-    errors.push("❌ Description: Campo obrigatório");
-  } else {
-    const descLength = member.description.trim().length;
-    if (descLength < 50) {
-      errors.push(
-        `❌ Description: Muito curta (${descLength} caracteres). Mínimo: 50 caracteres`
-      );
-    } else if (descLength > 750) {
-      errors.push(
-        `❌ Description: Muito longa (${descLength} caracteres). Máximo: 750 caracteres`
-      );
-    }
-  }
-
-  // Research Interests
-  if (!member.researchInterests || member.researchInterests.length === 0) {
-    errors.push(
-      "❌ Research Interests: Pelo menos 2 interesses são obrigatórios"
-    );
-  } else if (member.researchInterests.length < 2) {
-    errors.push(
-      `❌ Research Interests: Mínimo 2 interesses (você tem ${member.researchInterests.length})`
-    );
-  } else if (member.researchInterests.length > 10) {
-    errors.push(
-      `❌ Research Interests: Máximo 10 interesses (você tem ${member.researchInterests.length})`
-    );
-  }
-
-  // Technologies
-  if (!member.technologies || member.technologies.length === 0) {
-    errors.push("❌ Technologies: Pelo menos 3 tecnologias são obrigatórias");
-  } else if (member.technologies.length < 3) {
-    errors.push(
-      `❌ Technologies: Mínimo 3 tecnologias (você tem ${member.technologies.length})`
-    );
-  } else if (member.technologies.length > 15) {
-    errors.push(
-      `❌ Technologies: Máximo 15 tecnologias (você tem ${member.technologies.length})`
-    );
-  }
-
-  // Expertise
-  if (!member.expertise || member.expertise.length === 0) {
-    errors.push(
-      "❌ Expertise: Pelo menos 1 área de especialização é obrigatória"
-    );
-  } else if (member.expertise.length > 8) {
-    errors.push(
-      `❌ Expertise: Máximo 8 áreas (você tem ${member.expertise.length})`
-    );
-  }
-
-  // Links (opcionais, mas se fornecidos devem ser válidos)
-  // Links are nested under socialLinks
-  const social = member.socialLinks || {};
-  const linkFields: (keyof typeof social)[] = [
-    "lattes",
-    "personalWebsite",
-    "linkedin",
-    "github",
-    "googleScholar",
-    "orcid",
-  ];
-
-  linkFields.forEach((field) => {
-    const value = social[field] as string | undefined;
-    if (value && value.trim() !== "" && !validateUrl(value)) {
-      const fieldName = field.charAt(0).toUpperCase() + field.slice(1);
-      errors.push(
-        `❌ ${fieldName}: URL inválida. Deve começar com http:// ou https://`
-      );
-    }
-  });
 
   return {
     valid: errors.length === 0,
     errors,
   };
+}
+
+// ============================================
+// FUNÇÕES PARA MANIPULAR SCHEDULES NA PLANILHA HORAISE
+// ============================================
+
+// Mapeamento de status para códigos da planilha
+const STATUS_TO_CODE: Record<string, string> = {
+  "aula": "A",
+  "presencial": "P",
+  "online": "O",
+  "ocupado": "X",
+  "reuniao": "R",
+};
+
+const CODE_TO_STATUS: Record<string, "presencial" | "ocupado" | "online" | "reuniao" | "aula"> = {
+  "A": "aula",
+  "P": "presencial",
+  "O": "online",
+  "X": "ocupado",
+  "R": "reuniao",
+};
+
+/**
+ * Converte o objeto ScheduleData para array de códigos (uma linha da planilha HORAISE)
+ * Formato: [Dom7-8, Dom8-9, ..., Sab18-19] = 91 colunas (7 dias x 13 horas)
+ */
+export function scheduleToInfoRow(schedule: ScheduleData): string[] {
+  const row: string[] = [];
+
+  // Para cada dia da semana (0=Segunda até 4=Quinta)
+  for (let day = 0; day < 5; day++) {
+    // Para cada horário (7h até 19h = 13 horários)
+    for (let hour = 7; hour <= 19; hour++) {
+      const status = schedule[day]?.[hour];
+      const code = status ? STATUS_TO_CODE[status] || "" : "";
+      row.push(code);
+    }
+  }
+  
+  return row;
+}
+
+/**
+ * Converte array de códigos (linha da planilha HORAISE) para objeto ScheduleData
+ * Formato: [Dom7-8, Dom8-9, ..., Sab18-19] = 91 colunas (7 dias x 13 horas)
+ */
+export function infoRowToSchedule(infoRow: string[]): ScheduleData {
+  const schedule: ScheduleData = {};
+  let colIndex = 0;
+
+  // Para cada dia da semana (0=Segunda até 4=Sexta)
+  for (let day = 0; day < 5; day++) {
+    // Para cada horário (7h até 19h = 13 horários)
+    for (let hour = 7; hour <= 19; hour++) {
+      const code = infoRow[colIndex]?.trim().toUpperCase();
+      
+      if (code && CODE_TO_STATUS[code]) {
+        if (!schedule[day]) {
+          schedule[day] = {};
+        }
+        schedule[day][hour] = CODE_TO_STATUS[code];
+      }
+      
+      colIndex++;
+    }
+  }
+  
+  return schedule;
+}
+
+/**
+ * Salva o schedule de uma pessoa na planilha HORAISE
+ * @param email - Email da pessoa (usado para encontrar a linha)
+ * @param schedule - Objeto ScheduleData com os horários
+ */
+export async function saveScheduleToSheet(
+  email: string,
+  schedule: ScheduleData
+): Promise<{ success: boolean; message: string }> {
+  // Modo offline: salva no storage local (já está sendo feito no saveMember)
+  if (OFFLINE_MODE) {
+    console.log("🔌 MODO OFFLINE: Schedule salvo localmente junto com memberData");
+    return {
+      success: true,
+      message: "✅ Schedule salvo (modo offline - dados não sincronizados)",
+    };
+  }
+
+  try {
+    const infoRow = scheduleToInfoRow(schedule);
+    
+    const response = await fetch("/api/save-schedule", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email,
+        scheduleRow: infoRow,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || "Erro ao salvar schedule");
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error("Erro ao salvar schedule:", error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Erro desconhecido ao salvar schedule",
+    };
+  }
+}
+
+/**
+ * Lê o schedule de uma pessoa da planilha HORAISE
+ * @param email - Email da pessoa (usado para encontrar a linha)
+ */
+export async function loadScheduleFromSheet(
+  email: string
+): Promise<ScheduleData | null> {
+  // Modo offline: retorna schedule do storage local
+  if (OFFLINE_MODE) {
+    console.log("🔌 MODO OFFLINE: Schedule carregado do storage local");
+    return null; // O schedule já vem junto com o memberData
+  }
+
+  try {
+    const encoded = encodeURIComponent(email);
+    const response = await fetch(`/api/load-schedule?email=${encoded}`);
+
+    if (!response.ok) {
+      if (response.status === 404) return null;
+      throw new Error("Erro ao carregar schedule");
+    }
+
+    const payload = await response.json();
+    if (!payload || !payload.scheduleRow) return null;
+    
+    return infoRowToSchedule(payload.scheduleRow);
+  } catch (error) {
+    console.error("Erro ao carregar schedule:", error);
+    return null;
+  }
 }

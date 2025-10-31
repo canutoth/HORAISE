@@ -34,24 +34,22 @@ import {
   saveMember,
   validateMemberData,
   type TeamMemberData,
+  type ScheduleData,
 } from "../../../services/googleSheets";
-import PersonCard from "../../../components/PersonCard";
-import MemberListHorizontal from "../../../components/MemberListHorizontal";
-import MemberListVertical from "../../../components/MemberListVertical";
-import FullProfile from "../../../components/FullProfile";
-import ProfileInstructions from "../../../components/ProfileInstructions";
+import ProfileInstructions from "../../../components/Rules";
+import Schedule from "../../../components/Schedule";
 
 export default function EditContentPage() {
   const router = useRouter();
   const params = useParams();
   const personId = decodeURIComponent(params?.personid as string);
 
-  const [jsonText, setJsonText] = useState("");
   const [memberData, setMemberData] = useState<TeamMemberData | null>(null);
+  const [schedule, setSchedule] = useState<ScheduleData>({});
+  const [savedSchedule, setSavedSchedule] = useState<ScheduleData>({}); // Schedule salvo (para comparação)
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isNewMember, setIsNewMember] = useState(false);
-  const [jsonError, setJsonError] = useState<string | null>(null);
 
   // Carrega os dados do membro
   useEffect(() => {
@@ -67,7 +65,9 @@ export default function EditContentPage() {
           if (isNew && newMemberData) {
             const member = JSON.parse(newMemberData) as TeamMemberData;
             setMemberData(member);
-            setJsonText(JSON.stringify(member, null, 2));
+            const memberSchedule = member.schedule || {};
+            setSchedule(memberSchedule);
+            setSavedSchedule(memberSchedule); // Salva o schedule inicial
             setIsNewMember(true);
             // Limpa o sessionStorage
             sessionStorage.removeItem("newMember");
@@ -83,7 +83,9 @@ export default function EditContentPage() {
         const member = await getMemberByEmail(personId);
         if (member) {
           setMemberData(member);
-          setJsonText(JSON.stringify(member, null, 2));
+          const memberSchedule = member.schedule || {};
+          setSchedule(memberSchedule);
+          setSavedSchedule(memberSchedule); // Salva o schedule inicial
           setIsNewMember(false);
         } else {
           // Se não encontrar e não há dados no sessionStorage,
@@ -94,7 +96,9 @@ export default function EditContentPage() {
             email: personId, // Usa o email fornecido
           };
           setMemberData(newMember);
-          setJsonText(JSON.stringify(newMember, null, 2));
+          const exampleSchedule = newMember.schedule || {};
+          setSchedule(exampleSchedule);
+          setSavedSchedule(exampleSchedule); // Salva o schedule inicial
           setIsNewMember(true);
 
           // notificação removida conforme solicitado
@@ -118,32 +122,32 @@ export default function EditContentPage() {
     }
   }, [personId, router]);
 
-  // Parse do JSON em tempo real
-  const parsedData = useMemo<TeamMemberData | null>(() => {
-    try {
-      const parsed = JSON.parse(jsonText);
-      setJsonError(null);
-      return parsed as TeamMemberData;
-    } catch (error) {
-      if (jsonText.trim() !== "") {
-        setJsonError("JSON inválido");
-      }
-      return null;
-    }
-  }, [jsonText]);
+  // Cria dados atualizados combinando memberData com schedule
+  const currentData = useMemo<TeamMemberData | null>(() => {
+    if (!memberData) return null;
+    return {
+      ...memberData,
+      schedule,
+    };
+  }, [memberData, schedule]);
+
+  // Verifica se há alterações não salvas no schedule
+  const hasUnsavedChanges = useMemo(() => {
+    return JSON.stringify(schedule) !== JSON.stringify(savedSchedule);
+  }, [schedule, savedSchedule]);
 
   // Validação dos dados
   const validation = useMemo(() => {
-    if (!parsedData) return { valid: false, errors: ["JSON inválido"] };
-    return validateMemberData(parsedData);
-  }, [parsedData]);
+    if (!currentData) return { valid: false, errors: ["Dados inválidos"] };
+    return validateMemberData(currentData);
+  }, [currentData]);
 
   // Salvar alterações
   const handleSave = async () => {
-    if (!parsedData) {
+    if (!currentData) {
       notifications.show({
         title: "Erro",
-        message: "JSON inválido. Corrija os erros antes de salvar.",
+        message: "Dados inválidos. Corrija os erros antes de salvar.",
         color: "red",
         icon: <IconX />,
       });
@@ -161,7 +165,7 @@ export default function EditContentPage() {
     }
 
     // Verifica se o email é o exemplo (não pode ser salvo)
-    if (parsedData.email === "exemplo@example.com") {
+    if (currentData.email === "exemplo@example.com") {
       notifications.show({
         title: "Erro",
         message: "Não é possível salvar dados de exemplo. Altere o email.",
@@ -174,7 +178,7 @@ export default function EditContentPage() {
     setIsSaving(true);
 
     try {
-      const result = await saveMember(parsedData, isNewMember);
+      const result = await saveMember(currentData, isNewMember);
 
       if (result.success) {
         notifications.show({
@@ -183,7 +187,8 @@ export default function EditContentPage() {
           color: "green",
           icon: <IconCheck />,
         });
-        setMemberData(parsedData);
+        setMemberData(currentData);
+        setSavedSchedule(schedule); // Atualiza o schedule salvo
         setIsNewMember(false); // Agora não é mais novo
       } else {
         notifications.show({
@@ -214,7 +219,8 @@ export default function EditContentPage() {
         ...exampleData,
         email: memberData?.email || personId, // Mantém o email atual
       };
-      setJsonText(JSON.stringify(resetData, null, 2));
+      setMemberData(resetData);
+      setSchedule(resetData.schedule || {});
       notifications.show({
         title: "Resetado",
         message: "Dados resetados para exemplo (email mantido)",
@@ -282,7 +288,7 @@ export default function EditContentPage() {
               </Button>
               <Box>
                 <Title order={2} size="h3" style={{ color: "var(--primary)" }}>
-                  Editor de Perfil
+                  Editor de Horários
                 </Title>
                 <Text size="sm" c="dimmed">
                   {isNewMember ? "Novo perfil" : "Editando perfil existente"}:{" "}
@@ -293,12 +299,12 @@ export default function EditContentPage() {
             <Badge
               size="lg"
               variant="light"
-              color={validation.valid ? "green" : "red"}
+              color={hasUnsavedChanges ? "orange" : "green"}
               leftSection={
-                validation.valid ? <IconCheck size={16} /> : <IconX size={16} />
+                hasUnsavedChanges ? <IconAlertCircle size={16} /> : <IconCheck size={16} />
               }
             >
-              {validation.valid ? "Válido" : "Inválido"}
+              {hasUnsavedChanges ? "Desincronizado" : "Sincronizado"}
             </Badge>
           </Group>
         </Paper>
@@ -344,69 +350,38 @@ export default function EditContentPage() {
           </Alert>
         )}
 
-        <Grid gutter="md">
-          {/* Painel Esquerdo - Editor JSON */}
-          <Grid.Col span={{ base: 12, md: 4.5 }}>
-            <Paper
-              shadow="md"
-              p="md"
-              radius="lg"
-              style={{
-                background: "rgba(255, 255, 255, 0.98)",
-                height: "calc(100vh - 250px)",
-                display: "flex",
-                flexDirection: "column",
-              }}
-            >
-              <Title
-                order={3}
-                size="h4"
-                mb="md"
-                style={{ color: "var(--primary)" }}
-              >
-                Editor JSON
-              </Title>
+        {/* Editor de Horários - Layout Único */}
+        <Paper
+          shadow="md"
+          p="md"
+          radius="lg"
+          mb="md"
+          style={{
+            background: "rgba(255, 255, 255, 0.98)",
+          }}
+        >
+          <Title
+            order={3}
+            size="h4"
+            mb="md"
+            style={{ color: "var(--primary)" }}
+          >
+            Editor de Horários
+          </Title>
 
-              <Box
-                style={{ flex: 1, display: "flex", flexDirection: "column" }}
-              >
-                <Textarea
-                  value={jsonText}
-                  onChange={(e) => setJsonText(e.currentTarget.value)}
-                  placeholder="Cole ou edite o JSON aqui..."
-                  styles={{
-                    wrapper: {
-                      flex: 1,
-                      display: "flex",
-                      flexDirection: "column",
-                    },
-                    root: {
-                      flex: 1,
-                      display: "flex",
-                      flexDirection: "column",
-                    },
-                    input: {
-                      fontFamily: "monospace",
-                      fontSize: "12px",
-                      resize: "none",
-                      flex: 1,
-                      minHeight: "100%",
-                    },
-                  }}
-                  error={jsonError}
-                />
-              </Box>
+          <Box style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <Schedule schedule={schedule} onChange={setSchedule} />
 
-              <Divider my="md" />
-
-              <Group justify="space-between">
+            {/* Botões de ação - Centralizados com o calendário */}
+            <Box style={{ width: "100%", maxWidth: "870px", display: "flex", justifyContent: "center", paddingLeft: "450px" }}>
+              <Group gap="md" mt="md">
                 <Button
-                  leftSection={<IconRefresh size={18} />}
+                  leftSection={<IconX size={18} />}
                   variant="light"
-                  color="var(--primary)"
-                  onClick={handleReset}
+                  color="gray"
+                  onClick={() => setSchedule({})}
                 >
-                  Resetar para Exemplo
+                  Limpar Calendário
                 </Button>
                 <Button
                   leftSection={<IconDeviceFloppy size={18} />}
@@ -418,116 +393,11 @@ export default function EditContentPage() {
                   {isSaving ? "Salvando..." : "Salvar Alterações"}
                 </Button>
               </Group>
-            </Paper>
-          </Grid.Col>
+            </Box>
+          </Box>
+        </Paper>
 
-          {/* Painel Direito - Preview */}
-          <Grid.Col span={{ base: 12, md: 7.5 }}>
-            <Paper
-              shadow="md"
-              p="md"
-              radius="lg"
-              style={{
-                background: "rgba(255, 255, 255, 0.98)",
-                height: "calc(100vh - 250px)",
-                overflowY: "auto",
-              }}
-            >
-              <Title
-                order={3}
-                size="h4"
-                mb="md"
-                style={{ color: "var(--primary)" }}
-              >
-                Preview em Tempo Real
-              </Title>
 
-              {parsedData ? (
-                <Stack gap="lg">
-                  {/* Preview 1: PersonCard */}
-                  <Box>
-                    <Text size="sm" fw={600} c="dimmed" mb="xs">
-                      PersonCard (carrossel / página de time)
-                    </Text>
-                    <Center>
-                      {" "}
-                      <PersonCard
-                        name={parsedData.name}
-                        position={parsedData.position}
-                        imageUrl={parsedData.imageUrl}
-                        description={parsedData.description}
-                        cardWidth={240}
-                      />
-                      <PersonCard
-                        name={parsedData.name}
-                        position={parsedData.position}
-                        imageUrl={parsedData.imageUrl}
-                        description={parsedData.description}
-                        cardWidth={240}
-                        roles={parsedData.expertise?.slice(0, 2)}
-                      />
-                    </Center>
-                  </Box>
-
-                  <Divider />
-
-                  {/* Preview 2: Lista de Membros - Vizualização Horizontal (desktop) */}
-                  <Box>
-                    <Text size="sm" fw={600} c="dimmed" mb="xs">
-                      Lista de Membros - Vizualização desktop
-                    </Text>{" "}
-                    <Center>
-                      <Box
-                        style={{
-                          width: "35%",
-                        }}
-                      >
-                        <MemberListHorizontal member={parsedData} />
-                      </Box>
-                    </Center>
-                  </Box>
-
-                  <Divider />
-
-                  {/* Preview 3: Lista de Membros - Vizualização Vertical (mobile) */}
-                  <Box>
-                    <Text size="sm" fw={600} c="dimmed" mb="xs">
-                      Lista de Membros - Vizualização mobile
-                    </Text>
-                    <Center>
-                      <Box
-                        style={{
-                          width: "35%",
-                        }}
-                      >
-                        <MemberListVertical
-                          member={parsedData}
-                          avatarSize={90}
-                        />
-                      </Box>
-                    </Center>
-                  </Box>
-
-                  <Divider />
-
-                  {/* Preview 4: Perfil Completo */}
-                  <Box>
-                    <Text size="sm" fw={600} c="dimmed" mb="xs">
-                      Página de Perfil Completo
-                    </Text>
-                    <FullProfile member={parsedData} />
-                  </Box>
-                </Stack>
-              ) : (
-                <Center h={400}>
-                  <Text c="dimmed">
-                    JSON inválido - corrija os erros para ver o preview
-                  </Text>
-                </Center>
-              )}
-            </Paper>
-          </Grid.Col>
-        </Grid>
       </Container>
     </Box>
   );

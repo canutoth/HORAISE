@@ -24,11 +24,17 @@ import {
 } from "../services/googleSheets";
 import Link from "next/link";
 
+// Detecta modo offline
+const OFFLINE_MODE = process.env.NEXT_PUBLIC_OFFLINE_MODE === "true" || !process.env.NEXT_PUBLIC_GOOGLE_SHEETS_ID;
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Emails de exemplo disponíveis no modo offline
+  const offlineEmails = ["exemplo@example.com", "test@test.com"];
 
   const handleLogin = async () => {
     setError("");
@@ -127,44 +133,85 @@ export default function LoginPage() {
                 HORAISE Editor
               </Title>
               <Text size="sm" c="dimmed">
-                Edite suas informações de perfil em tempo real
+                Edite seus horários no Lab (=
               </Text>
             </Box>
 
+            {/* Modo Offline - Aviso */}
+            {OFFLINE_MODE && (
+              <Alert
+                icon={<IconAlertCircle size={18} />}
+                title="🔌 Modo Offline/Desenvolvimento"
+                color="orange"
+                variant="light"
+              >
+                <Text size="sm" fw={500}>
+                  Você está em modo offline. As alterações não serão salvas no
+                  Google Sheets.
+                </Text>
+                <Text size="sm" mt="xs">
+                  Emails de teste disponíveis:
+                </Text>
+                <Stack gap={4} mt={4}>
+                  {offlineEmails.map((testEmail) => (
+                    <Text
+                      key={testEmail}
+                      size="sm"
+                      c="orange.7"
+                      style={{
+                        fontFamily: "monospace",
+                        cursor: "pointer",
+                      }}
+                      onClick={() => setEmail(testEmail)}
+                    >
+                      • {testEmail}
+                    </Text>
+                  ))}
+                </Stack>
+                <Text size="xs" mt="sm" c="dimmed">
+                  Para ativar o modo online, configure as variáveis de ambiente
+                  no arquivo .env.local
+                </Text>
+              </Alert>
+            )}
+
             {/* Instruções */}
-            <Alert
-              icon={<IconAlertCircle size={18} />}
-              title="Como funciona"
-              color="var(--primary)"
-              variant="light"
-            >
-              <Text size="sm">
-                Digite seu email para acessar ou editar seu perfil na planilha.
-                Se ainda não houver um cadastro com esse email, um novo registro
-                será criado quando você salvar suas alterações.
-              </Text>
-              <Text size="sm" mt="sm">
-                Não tem certeza se já está cadastrado? Consulte a planilha:{" "}
-                <Link
-                  href="https://docs.google.com/spreadsheets/d/1GoD4EyU-KUvquTzLeFFR1fzPxE0e4SP9jxGSM9SYSQM/edit?gid=0#gid=0"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    color: "var(--primary)",
-                    fontWeight: 600,
-                    textDecoration: "underline",
-                    textDecorationThickness: "1px",
-                  }}
-                >
-                  Abrir planilha
-                </Link>
-              </Text>
-              <Text size="sm" mt="sm">
-                Por favor, não edite diretamente a planilha — use o editor aqui.
-                A única exceção é quando você precisa alterar o email associado
-                ao seu cadastro; nesse caso, deve editar a planilha diretamente.{" "}
-              </Text>
-            </Alert>
+            {!OFFLINE_MODE && (
+              <Alert
+                icon={<IconAlertCircle size={18} />}
+                title="Como funciona"
+                color="var(--primary)"
+                variant="light"
+              >
+                <Text size="sm">
+                  Digite seu email para acessar ou editar seu perfil na
+                  planilha. Se ainda não houver um cadastro com esse email, um
+                  novo registro será criado quando você salvar suas alterações.
+                </Text>
+                <Text size="sm" mt="sm">
+                  Não tem certeza se já está cadastrado? Consulte a planilha:{" "}
+                  <Link
+                    href="https://docs.google.com/spreadsheets/d/1ryPjTs8rZURJ6AWeBW-HW40ycUIvgLU0xNm_68tZ0XE/edit?usp=sharing"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      color: "var(--primary)",
+                      fontWeight: 600,
+                      textDecoration: "underline",
+                      textDecorationThickness: "1px",
+                    }}
+                  >
+                    Abrir planilha
+                  </Link>
+                </Text>
+                <Text size="sm" mt="sm">
+                  Por favor, não edite diretamente a planilha: use o editor
+                  aqui. A única exceção é quando você precisa alterar o email
+                  associado ao seu cadastro; nesse caso, deve editar a planilha
+                  diretamente.{" "}
+                </Text>
+              </Alert>
+            )}
 
             {/* Campo de Email */}
             <TextInput
@@ -227,7 +274,9 @@ export default function LoginPage() {
             {/* Informações adicionais */}
             <Box ta="center">
               <Text size="xs" c="dimmed">
-                Suas alterações serão sincronizadas com o Google Sheets
+                {OFFLINE_MODE
+                  ? "Modo offline: alterações não serão salvas permanentemente"
+                  : "Suas alterações serão sincronizadas com o Google Sheets"}
               </Text>
             </Box>
           </Stack>
@@ -236,7 +285,7 @@ export default function LoginPage() {
         {/* Footer */}
         <Center mt="xl">
           <Text size="xs" c="white" ta="center">
-            © 2025 AISE Lab - Micro App de Edição de Conteúdo
+            © 2025 AISE Lab
           </Text>
         </Center>
       </Container>

@@ -28,8 +28,8 @@ const theme = createTheme({
 });
 
 export const metadata: Metadata = {
-  title: "AISE Team Editor",
-  description: "Editor de perfis da equipe AISE - PUC-Rio",
+  title: "HORAISE",
+  description: "Editor de horários da equipe AISE - PUC-Rio",
 };
 export default function RootLayout({
   children,
