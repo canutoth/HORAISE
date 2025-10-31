@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Paper,
@@ -18,19 +18,19 @@ export type ScheduleStatus = "presencial" | "ocupado" | "online" | "reuniao" | "
 
 // Cores para cada status (RGB)
 const STATUS_COLORS: Record<Exclude<ScheduleStatus, null>, string> = {
-  presencial: "rgb(0, 255, 0)",
+  aula: "rgb(0, 255, 251)",
   ocupado: "rgb(255, 0, 0)",
   online: "rgb(242, 227, 7)",
+  presencial: "rgb(0, 255, 0)",
   reuniao: "rgb(0, 0, 255)",
-  aula: "rgb(0, 255, 251)",
 };
 
 const STATUS_LABELS: Record<Exclude<ScheduleStatus, null>, string> = {
-  presencial: "Presencial",
+  aula: "Aula",
   ocupado: "Ocupado",
   online: "Online",
+  presencial: "Presencial",
   reuniao: "Reunião",
-  aula: "Aula",
 };
 
 // Dias da semana
@@ -159,6 +159,19 @@ export default function ScheduleCalendar({
 }: ScheduleCalendarProps) {
   const [selectedStatus, setSelectedStatus] = useState<Exclude<ScheduleStatus, null>>("presencial");
   const [hoveredCell, setHoveredCell] = useState<{ day: number; hour: number } | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detecta se é mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // Atualiza uma célula específica
   const handleCellClick = (day: number, hour: number) => {
@@ -188,21 +201,9 @@ export default function ScheduleCalendar({
     return schedule[day]?.[hour] || null;
   };
 
-  return (
-    <Group align="flex-start" gap="120px" wrap="nowrap">
-      {/* Painel Esquerdo - Legenda e Distribuição */}
-      <Box style={{ minWidth: "250px", maxWidth: "250px" }}>
-        <ScheduleLegend selectedStatus={selectedStatus} onSelectStatus={setSelectedStatus} schedule={schedule} />
-      </Box>
-
-      {/* Painel Direito - Calendário Interativo */}
-      <Box
-        style={{
-          flex: 1,
-          overflowX: "auto",
-        }}
-      >
-        <Box style={{ minWidth: "580px", maxWidth: "800px" }}>
+  // Renderiza o calendário (compartilhado entre mobile e desktop)
+  const renderCalendar = () => (
+    <Box style={{ minWidth: "780px", maxWidth: "780px" }}>
           {/* Cabeçalho dos dias */}
           <Box
             style={{
@@ -314,7 +315,49 @@ export default function ScheduleCalendar({
             </Box>
           ))}
         </Box>
-      </Box>
-    </Group>
+  );
+
+  return (
+    <Box>
+      {isMobile ? (
+        // Layout Mobile: Empilhado verticalmente
+        <Stack gap="lg">
+          {/* Legenda em cima */}
+          <Box>
+            <ScheduleLegend selectedStatus={selectedStatus} onSelectStatus={setSelectedStatus} schedule={schedule} />
+          </Box>
+          
+          {/* Calendário embaixo com scroll lateral */}
+          <Box 
+            style={{ 
+              overflowX: "auto",
+              overflowY: "hidden",
+              width: "100%",
+              WebkitOverflowScrolling: "touch", // smooth scroll no iOS
+            }}
+          >
+            {renderCalendar()}
+          </Box>
+        </Stack>
+      ) : (
+        // Layout Desktop: Centralizado e estável
+        <Box style={{ width: "100%", maxWidth: "1150px", margin: "0 auto" }}>
+          <Box style={{ display: "grid", gridTemplateColumns: "250px 120px 1fr", alignItems: "start" }}>
+            {/* Painel Esquerdo - Legenda e Distribuição */}
+            <Box style={{ width: "250px" }}>
+              <ScheduleLegend selectedStatus={selectedStatus} onSelectStatus={setSelectedStatus} schedule={schedule} />
+            </Box>
+            {/* Espaçador */}
+            <Box />
+            {/* Painel Direito - Calendário Interativo (sem scroll no desktop) */}
+            <Box style={{ overflow: "visible" }}>
+              <Box style={{ width: "780px", margin: "0 auto" }}>
+                {renderCalendar()}
+              </Box>
+            </Box>
+          </Box>
+        </Box>
+      )}
+    </Box>
   );
 }

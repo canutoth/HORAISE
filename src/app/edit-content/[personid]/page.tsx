@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Box,
   Paper,
@@ -50,6 +50,18 @@ export default function EditContentPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isNewMember, setIsNewMember] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detecta mobile apenas para layout; não altera desktop
+  useEffect(() => {
+    const handleResize = () =>
+      setIsMobile(typeof window !== "undefined" && window.innerWidth < 768);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Sem reserva extra: sticky ocupa o próprio espaço no fluxo
 
   // Carrega os dados do membro
   useEffect(() => {
@@ -263,9 +275,10 @@ export default function EditContentPage() {
         padding: "20px",
         paddingTop: "40px",
         paddingBottom: "40px",
+        overflowX: "hidden",
       }}
     >
-      <Container size="100%">
+      <Container size="100%" style={{ overflowX: "visible" }}>
         {/* Header */}
         <Paper
           shadow="md"
@@ -288,7 +301,7 @@ export default function EditContentPage() {
               </Button>
               <Box>
                 <Title order={2} size="h3" style={{ color: "var(--primary)" }}>
-                  Editor de Horários
+                  Olá, {memberData?.name || personId}
                 </Title>
                 <Text size="sm" c="dimmed">
                   {isNewMember ? "Novo perfil" : "Editando perfil existente"}:{" "}
@@ -369,31 +382,87 @@ export default function EditContentPage() {
             Editor de Horários
           </Title>
 
-          <Box style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <Schedule schedule={schedule} onChange={setSchedule} />
-
-            {/* Botões de ação - Centralizados com o calendário */}
-            <Box style={{ width: "100%", maxWidth: "870px", display: "flex", justifyContent: "center", paddingLeft: "450px" }}>
-              <Group gap="md" mt="md">
-                <Button
-                  leftSection={<IconX size={18} />}
-                  variant="light"
-                  color="gray"
-                  onClick={() => setSchedule({})}
-                >
-                  Limpar Calendário
-                </Button>
-                <Button
-                  leftSection={<IconDeviceFloppy size={18} />}
-                  color="green"
-                  onClick={handleSave}
-                  disabled={!validation.valid || isSaving}
-                  loading={isSaving}
-                >
-                  {isSaving ? "Salvando..." : "Salvar Alterações"}
-                </Button>
-              </Group>
+          <Box style={{ display: "flex", flexDirection: "column", alignItems: isMobile ? "center" : "stretch", overflow: isMobile ? "visible" : "hidden", paddingBottom: isMobile ? "calc(8px + env(safe-area-inset-bottom))" : undefined }}>
+            <Box style={{ width: "100%", overflowX: "visible" }}>
+              <Schedule schedule={schedule} onChange={setSchedule} />
             </Box>
+
+            {/* Botões de ação - Desktop (inalterado) */}
+            {!isMobile && (
+              <Box style={{ width: "100%", maxWidth: "1150px", margin: "12px auto 0" }}>
+                <Box
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "250px 120px 1fr",
+                    alignItems: "start",
+                  }}
+                >
+                  <Box />
+                  <Box />
+                  <Box style={{ display: "flex", justifyContent: "center" }}>
+                    <Box style={{ width: "780px", maxWidth: "100%", display: "flex", justifyContent: "center" }}>
+                      <Group gap="md">
+                        <Button
+                          leftSection={<IconX size={18} />}
+                          variant="light"
+                          color="gray"
+                          onClick={() => setSchedule({})}
+                        >
+                          Limpar Calendário
+                        </Button>
+                        <Button
+                          leftSection={<IconDeviceFloppy size={18} />}
+                          color="green"
+                          onClick={handleSave}
+                          disabled={!validation.valid || isSaving}
+                          loading={isSaving}
+                        >
+                          {isSaving ? "Salvando..." : "Salvar Alterações"}
+                        </Button>
+                      </Group>
+                    </Box>
+                  </Box>
+                </Box>
+              </Box>
+            )}
+
+            {/* Botões de ação - Mobile (sempre visíveis dentro do editor) */}
+            {isMobile && (
+              <Box
+                style={{
+                  position: "sticky",
+                  bottom: 0,
+                  width: "100%",
+                  background:
+                    "linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.95) 20%, rgba(255,255,255,0.98) 100%)",
+                  paddingTop: "8px",
+                  paddingBottom: "8px",
+                  zIndex: 2,
+                }}
+              >
+                <Stack gap="xs">
+                  <Button
+                    leftSection={<IconX size={18} />}
+                    variant="light"
+                    color="gray"
+                    onClick={() => setSchedule({})}
+                    fullWidth
+                  >
+                    Limpar Calendário
+                  </Button>
+                  <Button
+                    leftSection={<IconDeviceFloppy size={18} />}
+                    color="green"
+                    onClick={handleSave}
+                    disabled={!validation.valid || isSaving}
+                    loading={isSaving}
+                    fullWidth
+                  >
+                    {isSaving ? "Salvando..." : "Salvar Alterações"}
+                  </Button>
+                </Stack>
+              </Box>
+            )}
           </Box>
         </Paper>
 

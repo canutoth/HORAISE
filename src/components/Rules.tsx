@@ -51,7 +51,7 @@ export default function ProfileInstructions() {
               <IconAlertTriangle size={18} />
             </ThemeIcon>
             <Title order={4} style={{ color: "var(--mantine-color-dark-9)" }}>
-              Regras dos Horários no Lab
+              Regras
             </Title>
           </Group>
           <Group gap="xs">
