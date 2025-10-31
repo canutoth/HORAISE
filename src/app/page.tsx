@@ -124,7 +124,7 @@ export default function LoginPage() {
                   marginBottom: 8,
                 }}
               >
-                AISE Team Editor
+                HORAISE Editor
               </Title>
               <Text size="sm" c="dimmed">
                 Edite suas informações de perfil em tempo real
