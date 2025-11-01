@@ -168,7 +168,7 @@ export default function ScheduleCalendar({
   const [isMobile, setIsMobile] = useState(false);
   // Mobile header alignment helpers
   const dayHeaderRef = useRef<HTMLDivElement | null>(null);
-  const [mobileHeaderHeight, setMobileHeaderHeight] = useState<number>(0);
+  const [mobileHeaderHeight, setMobileHeaderHeight] = useState<number>(46); // Valor inicial fixo (12px padding top + 12px padding bottom + ~22px texto)
 
   // Detecta se é mobile
   useEffect(() => {
@@ -185,19 +185,29 @@ export default function ScheduleCalendar({
   // Measure the mobile days header height to align the fixed time header
   useEffect(() => {
     const measure = () => {
-      if (dayHeaderRef.current) {
-        setMobileHeaderHeight(dayHeaderRef.current.offsetHeight);
+      if (dayHeaderRef.current && isMobile) {
+        const height = dayHeaderRef.current.offsetHeight;
+        if (height > 0) {
+          setMobileHeaderHeight(height);
+        }
       }
     };
-    // Initial measure after paint
-    const raf = requestAnimationFrame(measure);
-    // Recalculate on resize
-    window.addEventListener("resize", measure);
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("resize", measure);
-    };
-  }, []);
+    
+    // Aguarda a renderização completa
+    if (isMobile) {
+      measure(); // Medição imediata
+      const raf = requestAnimationFrame(measure); // Após paint
+      const timeout = setTimeout(measure, 100); // Garantia extra
+      
+      window.addEventListener("resize", measure);
+      
+      return () => {
+        cancelAnimationFrame(raf);
+        clearTimeout(timeout);
+        window.removeEventListener("resize", measure);
+      };
+    }
+  }, [isMobile]);
 
   // Atualiza uma célula específica
   const handleCellClick = (day: number, hour: number) => {
@@ -356,7 +366,7 @@ export default function ScheduleCalendar({
             position: "sticky",
             top: 0,
             zIndex: 11,
-            height: mobileHeaderHeight ? `${mobileHeaderHeight}px` : undefined,
+            height: `${mobileHeaderHeight}px`,
             marginBottom: "2px",
           }}
         />
