@@ -307,7 +307,7 @@ export default function CadastroPage() {
                 fullWidth
                 variant="light"
                 color="gray"
-                onClick={() => router.push("/")}
+                onClick={() => router.push("/horaise-editor")}
                 disabled={loading}
                 leftSection={<IconArrowLeft size={18} />}
               >

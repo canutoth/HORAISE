@@ -444,7 +444,7 @@ export default function EditContentPage() {
                   leftSection={<IconArrowLeft size={18} />}
                   variant="light"
                   color="var(--primary)"
-                  onClick={() => router.push("/")}
+                  onClick={() => router.push("/horaise-editor")}
                 >
                   Voltar
                 </Button>
@@ -485,7 +485,7 @@ export default function EditContentPage() {
                   leftSection={<IconArrowLeft size={18} />}
                   variant="light"
                   color="var(--primary)"
-                  onClick={() => router.push("/")}
+                  onClick={() => router.push("/horaise-editor")}
                   size="sm"
                 >
                   Voltar

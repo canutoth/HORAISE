@@ -85,17 +85,22 @@ export async function getMemberByEmail(
 
   try {
     // Proxy the read through our server-side API to use the service account.
+    console.log("🔍 Fazendo fetch para /api com email:", email);
     const res = await fetch(`/api`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "read-member", email }),
     });
+    console.log("📡 Resposta da API - Status:", res.status, "OK:", res.ok);
     if (!res.ok) {
       if (res.status === 404) return null;
+      const errorText = await res.text();
+      console.error("❌ Erro na resposta da API:", errorText);
       throw new Error("Erro ao buscar dados do Google Sheets");
     }
 
     const payload = await res.json();
+    console.log("✅ Payload recebido:", payload);
     // payload.member is an array (row) from the backend
     if (!payload || !payload.member) return null;
     const row: string[] = payload.member;

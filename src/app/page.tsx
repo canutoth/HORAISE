@@ -1,89 +1,28 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import {
   Box,
   Paper,
-  TextInput,
-  Button,
   Title,
   Text,
   Container,
   Stack,
   Alert,
-  Loader,
-  Center,
+  SimpleGrid,
+  Group,
+  ThemeIcon,
 } from "@mantine/core";
-import { IconMail, IconAlertCircle, IconLogin } from "@tabler/icons-react";
-import { useRouter } from "next/navigation";
 import {
-  getMemberByEmail,
-  getExampleData,
-  validateEmail,
-  type TeamMemberData,
-} from "../services/googleSheets";
-import Link from "next/link";
+  IconAlertCircle,
+  IconEdit,
+  IconCalendarEvent,
+  IconArrowRight,
+} from "@tabler/icons-react";
+import { useRouter } from "next/navigation";
 
-// Detecta modo offline (apenas via flag pública)
-// Use apenas variável pública para evitar hydration mismatch.
-const OFFLINE_MODE = process.env.NEXT_PUBLIC_OFFLINE_MODE === "true";
-
-export default function LoginPage() {
+export default function HomePage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  // Emails de exemplo disponíveis no modo offline
-  const offlineEmails = ["exemplo@example.com", "test@test.com"];
-
-  const handleLogin = async () => {
-    setError("");
-
-    // Validação básica
-    if (!email.trim()) {
-      setError("Por favor, insira seu email");
-      return;
-    }
-
-    if (!validateEmail(email)) {
-      setError("Por favor, insira um email válido");
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      // Busca o membro pelo email
-      const member = await getMemberByEmail(email);
-
-      if (member) {
-        // Membro encontrado - redireciona para página de edição
-        console.log("Membro existente encontrado:", member.name);
-        const encodedEmail = encodeURIComponent(email);
-        router.push(`/edit-content/${encodedEmail}`);
-      } else {
-        // Membro não encontrado - redireciona para cadastro
-        console.log("Membro não encontrado - redirecionando para cadastro");
-        setError("Email não encontrado. Por favor, cadastre-se primeiro.");
-        setLoading(false);
-        return;
-      }
-    } catch (err) {
-      console.error("Erro ao fazer login:", err);
-      setError(
-        "Erro ao conectar com o servidor. Verifique sua conexão e tente novamente."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleLogin();
-    }
-  };
 
   return (
     <Box
@@ -96,178 +35,182 @@ export default function LoginPage() {
         padding: "20px",
       }}
     >
-      <Container size="xs">
-        <Paper
-          shadow="xl"
-          p="xl"
-          radius="lg"
-          style={{
-            background: "rgba(255, 255, 255, 0.98)",
-            backdropFilter: "blur(10px)",
-          }}
-        >
-          <Stack gap="lg">
-            {/* Header */}
-            <Box ta="center">
-              <Title
-                order={1}
-                size="h2"
-                style={{
-                  background: "var(--primary)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  marginBottom: 8,
-                }}
-              >
-                HORAISE Editor
-              </Title>
-              <Text size="sm" c="dimmed">
-                Edite seus horários no Lab (=
-              </Text>
-            </Box>
-
-            {/* Modo Offline - Aviso */}
-            {OFFLINE_MODE && (
-              <Alert
-                icon={<IconAlertCircle size={18} />}
-                title="🔌 Modo Offline/Desenvolvimento"
-                color="orange"
-                variant="light"
-              >
-                <Text size="sm" fw={500}>
-                  Você está em modo offline. As alterações não serão salvas no
-                  Google Sheets.
-                </Text>
-                <Text size="sm" mt="xs">
-                  Emails de teste disponíveis:
-                </Text>
-                <Stack gap={4} mt={4}>
-                  {offlineEmails.map((testEmail) => (
-                    <Text
-                      key={testEmail}
-                      size="sm"
-                      c="orange.7"
-                      style={{
-                        fontFamily: "monospace",
-                        cursor: "pointer",
-                      }}
-                      onClick={() => setEmail(testEmail)}
-                    >
-                      • {testEmail}
-                    </Text>
-                  ))}
-                </Stack>
-                <Text size="xs" mt="sm" c="dimmed">
-                  Para ativar o modo online, configure as variáveis de ambiente
-                  no arquivo .env.local
-                </Text>
-              </Alert>
-            )}
-
-            {/* Instruções */}
-            {!OFFLINE_MODE && (
-              <Alert
-                icon={<IconAlertCircle size={18} />}
-                title="Como funciona"
-                color="var(--primary)"
-                variant="light"
-              >
-                <Text size="sm">
-                  Digite seu email para acessar ou editar seus horários no AISELab.
-                </Text>
-                <Text size="sm" mt="sm">
-                  Não possui cadastro? {" "}
-                  <Link
-                    href="/cadastro"
-                    style={{
-                      color: "var(--primary)",
-                      fontWeight: 600,
-                      textDecoration: "underline",
-                      textDecorationThickness: "1px",
-                    }}
-                  >
-                    Cadastre-se aqui
-                  </Link>
-                </Text>
-                
-              </Alert>
-            )}
-
-            {/* Campo de Email */}
-            <TextInput
-              size="md"
-              label="Email"
-              placeholder="seu.email@exemplo.com"
-              leftSection={<IconMail size={18} />}
-              value={email}
-              onChange={(e) => setEmail(e.currentTarget.value)}
-              onKeyPress={handleKeyPress}
-              disabled={loading}
-              error={error}
-              color="black"
-              styles={{
-                label: {
-                  color: "#000000",
-                },
-                input: {
-                  color: "#000000",
-                  "::placeholder": {
-                    color: "#000000",
-                    opacity: 0.7,
-                  },
-                  borderColor: error ? "#fa5252" : undefined,
-                },
-              }}
-            />
-
-            {/* Botão de Login */}
-            <Button
-              size="md"
-              fullWidth
-              onClick={handleLogin}
-              disabled={loading}
-              rightSection={
-                loading ? (
-                  <Loader size="xs" color="white" />
-                ) : (
-                  <IconLogin size={18} />
-                )
-              }
-              styles={{
-                root: {
-                  background: "var(--primary)",
-                  border: "none",
-                  "&[dataDisabled]": {
-                    background: "var(--primary)",
-                    opacity: 1,
-                    cursor: "not-allowed",
-                  },
-                },
-                label: {
-                  color: "white",
-                },
+      <Container size="md">
+        <Stack gap="xl">
+          {/* Header Principal */}
+          <Box ta="center">
+            <Title
+              order={1}
+              size="h1"
+              style={{
+                color: "white",
+                marginBottom: 16,
+                fontSize: "clamp(2rem, 5vw, 3rem)",
               }}
             >
-              {loading ? "Verificando..." : "Acessar Editor"}
-            </Button>
+              Bem-vindo(a) ao HORAISE!
+            </Title>
+            <Text size="lg" c="rgba(255, 255, 255, 0.9)">
+              Framework do AISE para facilitar agendamento de reuniões
+            </Text>
+          </Box>
 
-            {/* Informações adicionais */}
-            <Box ta="center">
-              <Text size="xs" c="dimmed">
-                {OFFLINE_MODE
-                  ? "Modo offline: alterações não serão salvas permanentemente"
-                  : "Suas alterações serão sincronizadas com o Google Sheets"}
+          {/* Como Funciona */}
+          <Paper
+            shadow="md"
+            p="lg"
+            radius="lg"
+            style={{
+              background: "rgba(255, 255, 255, 0.98)",
+            }}
+          >
+            <Group gap="xs" mb="md">
+              <ThemeIcon size="lg" variant="light" color="var(--primary)">
+                <IconAlertCircle size={18} />
+              </ThemeIcon>
+              <Title order={3} size="h4" style={{ color: "var(--primary)" }}>
+                Como funciona
+              </Title>
+            </Group>
+            <Text size="sm" c="dimmed">
+              O HORAISE oferece duas ferramentas integradas para gerenciar seus horários no Lab:
+            </Text>
+            <Stack gap="xs" mt="md">
+              <Text size="sm" c="black">
+                <strong style={{ color: "var(--primary)" }}>HORAISE Editor:</strong> Crie e edite sua disponibilidade semanal
               </Text>
-            </Box>
-          </Stack>
-        </Paper>
+              <Text size="sm" c="black">
+                <strong style={{ color: "var(--primary)" }}>HORAISE Scheduler:</strong> Encontre horários em comum para agendar reuniões com a equipe
+              </Text>
+            </Stack>
+          </Paper>
 
-        {/* Footer */}
-        <Center mt="xl">
-          <Text size="xs" c="white" ta="center">
-            © 2025 AISE Lab
-          </Text>
-        </Center>
+          {/* Cards das Ferramentas */}
+          <SimpleGrid
+            cols={{ base: 1, sm: 2 }}
+            spacing="lg"
+          >
+            {/* Card: HORAISE Editor */}
+            <Paper
+              shadow="lg"
+              p="xl"
+              radius="lg"
+              style={{
+                background: "rgba(255, 255, 255, 0.98)",
+                cursor: "pointer",
+                transition: "all 0.3s ease",
+                border: "2px solid transparent",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-4px)";
+                e.currentTarget.style.borderColor = "var(--primary)";
+                e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.borderColor = "transparent";
+                e.currentTarget.style.boxShadow = "";
+              }}
+              onClick={() => router.push("/horaise-editor")}
+            >
+              <Stack gap="md" align="center" ta="center">
+                <ThemeIcon
+                  size={80}
+                  radius="xl"
+                  variant="light"
+                  color="var(--primary)"
+                >
+                  <IconEdit size={40} />
+                </ThemeIcon>
+                <Box>
+                  <Title order={2} size="h3" style={{ color: "var(--primary)" }}>
+                    HORAISE Editor
+                  </Title>
+                  <Text size="sm" c="dimmed" mt="xs">
+                    Edite seus horários de disponibilidade
+                  </Text>
+                </Box>
+                <Group gap="xs" mt="sm">
+                  <Text size="sm" fw={600} c="var(--primary)">
+                    Acessar Editor
+                  </Text>
+                  <IconArrowRight size={18} color="var(--primary)" />
+                </Group>
+              </Stack>
+            </Paper>
+
+            {/* Card: HORAISE Scheduler (Placeholder) */}
+            <Paper
+              shadow="lg"
+              p="xl"
+              radius="lg"
+              style={{
+                background: "rgba(255, 255, 255, 0.98)",
+                cursor: "pointer",
+                transition: "all 0.3s ease",
+                border: "2px solid transparent",
+                position: "relative",
+                overflow: "hidden",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-4px)";
+                e.currentTarget.style.borderColor = "#868e96";
+                e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.borderColor = "transparent";
+                e.currentTarget.style.boxShadow = "";
+              }}
+            >
+              {/* Badge "Em Breve" */}
+              <Box
+                style={{
+                  position: "absolute",
+                  top: 16,
+                  right: 16,
+                  background: "#ffc107",
+                  color: "#000",
+                  padding: "4px 12px",
+                  borderRadius: "12px",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                }}
+              >
+                EM BREVE
+              </Box>
+
+              <Stack gap="md" align="center" ta="center" style={{ opacity: 0.7 }}>
+                <ThemeIcon
+                  size={80}
+                  radius="xl"
+                  variant="light"
+                  color="gray"
+                >
+                  <IconCalendarEvent size={40} />
+                </ThemeIcon>
+                <Box>
+                  <Title order={2} size="h3" c="dimmed">
+                    HORAISE Scheduler
+                  </Title>
+                  <Text size="sm" c="dimmed" mt="xs">
+                    Agende reuniões com a equipe
+                  </Text>
+                </Box>
+                <Text size="xs" c="dimmed" mt="sm" style={{ fontStyle: "italic" }}>
+                  Funcionalidade em desenvolvimento
+                </Text>
+              </Stack>
+            </Paper>
+          </SimpleGrid>
+
+          {/* Footer */}
+          <Box ta="center">
+            <Text size="xs" c="rgba(255, 255, 255, 0.8)">
+              © 2025 AISE Lab - PUC-Rio
+            </Text>
+          </Box>
+        </Stack>
       </Container>
     </Box>
   );
