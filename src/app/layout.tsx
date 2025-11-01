@@ -38,11 +38,8 @@ export default function RootLayout({
 }>) {
   return (
     <html {...mantineHtmlProps} lang="en" className={montserrat.variable}>
-      <head>
-        <ColorSchemeScript />
-      </head>
       <body className={`${montserrat.variable}`}>
-        <MantineProvider theme={theme} defaultColorScheme="light">
+        <MantineProvider theme={theme}>
           <Notifications position="top-right" />
           {children}
         </MantineProvider>

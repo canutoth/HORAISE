@@ -18,11 +18,11 @@ export type ScheduleStatus = "presencial" | "ocupado" | "online" | "reuniao" | "
 
 // Cores para cada status (RGB)
 const STATUS_COLORS: Record<Exclude<ScheduleStatus, null>, string> = {
-  aula: "rgb(0, 255, 251)",
-  ocupado: "rgb(255, 0, 0)",
-  online: "rgb(242, 227, 7)",
-  presencial: "rgb(0, 255, 0)",
-  reuniao: "rgb(0, 0, 255)",
+  aula: "#A561FF",
+  ocupado: "#850C10",
+  online: "#D2DB6E",
+  presencial: "#619A42",
+  reuniao: " #3AC5E4",
 };
 
 const STATUS_LABELS: Record<Exclude<ScheduleStatus, null>, string> = {
@@ -94,7 +94,7 @@ export function ScheduleLegend({ selectedStatus, onSelectStatus, schedule }: Sch
               style={{
                 padding: "8px 12px",
                 borderRadius: "8px",
-                border: selectedStatus === status ? "3px solid #228BE6" : "2px solid #e9ecef",
+                border: selectedStatus === status ? "3px solid var(--primary)" : "2px solid #e9ecef",
                 background: selectedStatus === status ? "#f8f9fa" : "white",
                 cursor: "pointer",
                 transition: "all 0.2s",
@@ -201,25 +201,22 @@ export default function ScheduleCalendar({
 
   // Atualiza uma célula específica
   const handleCellClick = (day: number, hour: number) => {
-    const newSchedule = { ...schedule };
-    if (!newSchedule[day]) {
-      newSchedule[day] = {};
-    }
-    
-    // Sempre aplica o status selecionado (não faz toggle)
-    newSchedule[day][hour] = selectedStatus;
-    
+    // Imutável: cria novo objeto de dia
+    const dayMap = { ...(schedule[day] || {}) };
+    dayMap[hour] = selectedStatus;
+    const newSchedule: ScheduleData = { ...schedule, [day]: dayMap };
     onChange(newSchedule);
   };
 
   // Limpa uma célula
   const handleClearCell = (day: number, hour: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    const newSchedule = { ...schedule };
-    if (newSchedule[day]) {
-      newSchedule[day][hour] = null;
+    if (schedule[day]) {
+      const dayMap = { ...(schedule[day] || {}) };
+      dayMap[hour] = null;
+      const newSchedule: ScheduleData = { ...schedule, [day]: dayMap };
+      onChange(newSchedule);
     }
-    onChange(newSchedule);
   };
 
   // Pega o status de uma célula
@@ -250,7 +247,7 @@ export default function ScheduleCalendar({
                 style={{
                   padding: "12px 8px",
                   textAlign: "center",
-                  background: "#228BE6",
+                  background: "var(--primary)",
                   color: "white",
                   fontWeight: 600,
                   fontSize: "14px",
@@ -419,7 +416,7 @@ export default function ScheduleCalendar({
                 style={{
                   padding: "12px 8px",
                   textAlign: "center",
-                  background: "#228BE6",
+                  background: "var(--primary)",
                   color: "white",
                   fontWeight: 600,
                   fontSize: "14px",

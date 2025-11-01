@@ -63,6 +63,32 @@ export default function EditContentPage() {
 
   // Sem reserva extra: sticky ocupa o próprio espaço no fluxo
 
+  // Util: deep clone simples (suficiente para nosso shape { [day]: { [hour]: status|null } })
+  const cloneSchedule = (s: ScheduleData): ScheduleData => JSON.parse(JSON.stringify(s || {}));
+
+  // Util: codifica o schedule num formato canônico ordenado (sem depender da ordem de inserção)
+  // Dias: 0..6 (Dom..Sáb), Horas: 7..19
+  const statusToCode = (st: any): string => {
+    switch (st) {
+      case "aula": return "A";
+      case "presencial": return "P";
+      case "online": return "O";
+      case "ocupado": return "X";
+      case "reuniao": return "R";
+      default: return "";
+    }
+  };
+  const toCanonicalString = (s: ScheduleData): string => {
+    const parts: string[] = [];
+    for (let day = 0; day < 7; day++) {
+      for (let hour = 7; hour <= 19; hour++) {
+        const st = s?.[day]?.[hour] ?? null;
+        parts.push(statusToCode(st));
+      }
+    }
+    return parts.join("|");
+  };
+
   // Carrega os dados do membro
   useEffect(() => {
     const notifiedRef = { current: false } as { current: boolean };
@@ -79,7 +105,7 @@ export default function EditContentPage() {
             setMemberData(member);
             const memberSchedule = member.schedule || {};
             setSchedule(memberSchedule);
-            setSavedSchedule(memberSchedule); // Salva o schedule inicial
+            setSavedSchedule(cloneSchedule(memberSchedule)); // Salva o schedule inicial (deep clone)
             setIsNewMember(true);
             // Limpa o sessionStorage
             sessionStorage.removeItem("newMember");
@@ -97,7 +123,7 @@ export default function EditContentPage() {
           setMemberData(member);
           const memberSchedule = member.schedule || {};
           setSchedule(memberSchedule);
-          setSavedSchedule(memberSchedule); // Salva o schedule inicial
+          setSavedSchedule(cloneSchedule(memberSchedule)); // Salva o schedule inicial (deep clone)
           setIsNewMember(false);
         } else {
           // Se não encontrar e não há dados no sessionStorage,
@@ -110,7 +136,7 @@ export default function EditContentPage() {
           setMemberData(newMember);
           const exampleSchedule = newMember.schedule || {};
           setSchedule(exampleSchedule);
-          setSavedSchedule(exampleSchedule); // Salva o schedule inicial
+          setSavedSchedule(cloneSchedule(exampleSchedule)); // Salva o schedule inicial (deep clone)
           setIsNewMember(true);
 
           // notificação removida conforme solicitado
@@ -143,9 +169,9 @@ export default function EditContentPage() {
     };
   }, [memberData, schedule]);
 
-  // Verifica se há alterações não salvas no schedule
+  // Verifica se há alterações não salvas no schedule (ordem-insensível)
   const hasUnsavedChanges = useMemo(() => {
-    return JSON.stringify(schedule) !== JSON.stringify(savedSchedule);
+    return toCanonicalString(schedule) !== toCanonicalString(savedSchedule);
   }, [schedule, savedSchedule]);
 
   // Validação dos dados
@@ -200,7 +226,7 @@ export default function EditContentPage() {
           icon: <IconCheck />,
         });
         setMemberData(currentData);
-        setSavedSchedule(schedule); // Atualiza o schedule salvo
+  setSavedSchedule(cloneSchedule(schedule)); // Atualiza o schedule salvo (deep clone)
         setIsNewMember(false); // Agora não é mais novo
       } else {
         notifications.show({
@@ -304,7 +330,7 @@ export default function EditContentPage() {
                   Olá, {memberData?.name || personId}
                 </Title>
                 <Text size="sm" c="dimmed">
-                  {isNewMember ? "Novo perfil" : "Editando perfil existente"}:{" "}
+                  Editando perfil de:{" "}
                   {personId}
                 </Text>
               </Box>
@@ -365,7 +391,7 @@ export default function EditContentPage() {
 
         {/* Editor de Horários - Layout Único */}
         <Paper
-          shadow="md"
+          // shadow="md"
           p="md"
           radius="lg"
           mb="md"

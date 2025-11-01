@@ -1,0 +1,59 @@
+import { NextRequest, NextResponse } from "next/server";
+import {
+  readMemberByEmail,
+  readExample,
+  updateMemberRow,
+  saveScheduleRow,
+  loadScheduleRow,
+} from "../../server/sheets";
+
+type Actions =
+  | { action: "read-member"; email: string }
+  | { action: "read-example" }
+  | { action: "update-member"; member: { name: string; email: string; frentes: string }; isNew?: boolean }
+  | { action: "save-schedule"; email: string; scheduleRow: string[] }
+  | { action: "load-schedule"; email: string };
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = (await request.json()) as Actions;
+    switch (body.action) {
+      case "read-member": {
+        if (!body.email) return NextResponse.json({ error: "email é obrigatório" }, { status: 400 });
+        const found = await readMemberByEmail(body.email);
+        if (!found) return NextResponse.json({ message: "not found" }, { status: 404 });
+        return NextResponse.json({ member: found.row, rowNumber: found.rowNumber });
+      }
+      case "read-example": {
+        const row = await readExample();
+        if (!row) return NextResponse.json({ message: "no example row" }, { status: 404 });
+        return NextResponse.json({ member: row });
+      }
+      case "update-member": {
+        if (!body.member) return NextResponse.json({ success: false, message: "member é obrigatório" }, { status: 400 });
+        const result = await updateMemberRow(body.member, Boolean(body.isNew));
+        return NextResponse.json(result, { status: result.success ? 200 : 400 });
+      }
+      case "save-schedule": {
+        if (!body.email || !body.scheduleRow) return NextResponse.json({ success: false, message: "email e scheduleRow são obrigatórios" }, { status: 400 });
+        const result = await saveScheduleRow(body.email, body.scheduleRow);
+        return NextResponse.json(result, { status: result.success ? 200 : 400 });
+      }
+      case "load-schedule": {
+        if (!body.email) return NextResponse.json({ message: "email é obrigatório" }, { status: 400 });
+        const row = await loadScheduleRow(body.email);
+        if (!row) return NextResponse.json({ message: "not found" }, { status: 404 });
+        return NextResponse.json({ scheduleRow: row });
+      }
+      default:
+        return NextResponse.json({ error: "ação inválida" }, { status: 400 });
+    }
+  } catch (error) {
+    console.error("/api error:", error);
+    return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+  }
+}
+
+export async function GET() {
+  return NextResponse.json({ status: "ok" });
+}

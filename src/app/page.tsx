@@ -24,8 +24,9 @@ import {
 } from "../services/googleSheets";
 import Link from "next/link";
 
-// Detecta modo offline
-const OFFLINE_MODE = process.env.NEXT_PUBLIC_OFFLINE_MODE === "true" || !process.env.GOOGLE_SHEETS_ID;
+// Detecta modo offline (apenas via flag pública)
+// Use apenas variável pública para evitar hydration mismatch.
+const OFFLINE_MODE = process.env.NEXT_PUBLIC_OFFLINE_MODE === "true";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -184,14 +185,12 @@ export default function LoginPage() {
                 variant="light"
               >
                 <Text size="sm">
-                  Digite seu email para acessar ou editar seu perfil na
-                  planilha. Se ainda não houver um cadastro com esse email, um
-                  novo registro será criado quando você salvar suas alterações.
+                  Digite seu email para acessar ou editar seus horários no AISELab.
                 </Text>
                 <Text size="sm" mt="sm">
-                  Não tem certeza se já está cadastrado? Consulte a planilha:{" "}
+                  Não possui cadastro? {" "}
                   <Link
-                    href="https://docs.google.com/spreadsheets/d/1ryPjTs8rZURJ6AWeBW-HW40ycUIvgLU0xNm_68tZ0XE/edit?usp=sharing"
+                    href=""
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
@@ -201,15 +200,10 @@ export default function LoginPage() {
                       textDecorationThickness: "1px",
                     }}
                   >
-                    Abrir planilha
+                    Cadastre-se
                   </Link>
                 </Text>
-                <Text size="sm" mt="sm">
-                  Por favor, não edite diretamente a planilha: use o editor
-                  aqui. A única exceção é quando você precisa alterar o email
-                  associado ao seu cadastro; nesse caso, deve editar a planilha
-                  diretamente.{" "}
-                </Text>
+                
               </Alert>
             )}
 

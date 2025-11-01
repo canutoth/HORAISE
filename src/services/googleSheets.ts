@@ -2,8 +2,8 @@
 // Utiliza a Google Sheets API v4
 
 // Modo offline/desenvolvimento: quando true, não faz chamadas reais à API
-// Importante: esta flag roda no cliente; NÃO use variáveis privadas do servidor aqui,
-// pois elas ficam undefined no bundle do navegador e forçam offline indevidamente.
+// Importante: esta flag roda no cliente; use apenas variável pública para evitar
+// mismatch de hidratação entre server/client.
 const OFFLINE_MODE = process.env.NEXT_PUBLIC_OFFLINE_MODE === "true";
 
 export interface ScheduleData {
@@ -85,8 +85,11 @@ export async function getMemberByEmail(
 
   try {
     // Proxy the read through our server-side API to use the service account.
-    const encoded = encodeURIComponent(email);
-    const res = await fetch(`/api/read-member?email=${encoded}`);
+    const res = await fetch(`/api`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "read-member", email }),
+    });
     if (!res.ok) {
       if (res.status === 404) return null;
       throw new Error("Erro ao buscar dados do Google Sheets");
@@ -134,7 +137,11 @@ export async function getExampleData(): Promise<TeamMemberData> {
   }
 
   try {
-    const res = await fetch(`/api/read-example`);
+    const res = await fetch(`/api`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "read-example" }),
+    });
     if (!res.ok) return fallback;
     const payload = await res.json();
     if (!payload || !payload.member) return fallback;
@@ -168,15 +175,10 @@ export async function saveMember(
 
   try {
     // Salva os dados básicos do membro na aba Team
-    const response = await fetch("/api/update-member", {
+    const response = await fetch("/api", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        member,
-        isNew,
-      }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "update-member", member, isNew }),
     });
 
     if (!response.ok) {
@@ -216,8 +218,11 @@ export async function findMemberRow(email: string): Promise<number | null> {
   }
 
   try {
-    const encoded = encodeURIComponent(email);
-    const res = await fetch(`/api/read-member?email=${encoded}`);
+    const res = await fetch(`/api`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "read-member", email }),
+    });
     if (!res.ok) {
       if (res.status === 404) return null;
       throw new Error("Erro ao buscar dados do Google Sheets");
@@ -367,15 +372,10 @@ export async function saveScheduleToSheet(
   try {
     const infoRow = scheduleToInfoRow(schedule);
     
-    const response = await fetch("/api/save-schedule", {
+    const response = await fetch("/api", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        email,
-        scheduleRow: infoRow,
-      }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "save-schedule", email, scheduleRow: infoRow }),
     });
 
     if (!response.ok) {
@@ -408,8 +408,11 @@ export async function loadScheduleFromSheet(
   }
 
   try {
-    const encoded = encodeURIComponent(email);
-    const response = await fetch(`/api/load-schedule?email=${encoded}`);
+    const response = await fetch(`/api`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "load-schedule", email }),
+    });
 
     if (!response.ok) {
       if (response.status === 404) return null;
