@@ -185,6 +185,8 @@ export default function CadastroPage() {
 
             {/* Instruções */}
             <Alert
+              icon={<IconAlertCircle size={18} />}
+              title="Como funciona"
               color="var(--primary)"
               variant="light"
             >

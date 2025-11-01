@@ -77,10 +77,10 @@ export default function HomePage() {
             </Text>
             <Stack gap="xs" mt="md">
               <Text size="sm" c="black">
-                <strong style={{ color: "var(--primary)" }}>HORAISE Editor:</strong> Crie e edite sua disponibilidade semanal
+                <strong style={{ color: "var(--primary)" }}>HORAISE Editor:</strong> Aloque e edite sua disponibilidade semanal e as frentes que você atua
               </Text>
               <Text size="sm" c="black">
-                <strong style={{ color: "var(--primary)" }}>HORAISE Scheduler:</strong> Encontre horários em comum para agendar reuniões com a equipe
+                <strong style={{ color: "var(--primary)" }}>HORAISE Scheduler:</strong> Encontre os melhores horários para agendar reuniões com a equipe
               </Text>
             </Stack>
           </Paper>
@@ -139,7 +139,7 @@ export default function HomePage() {
               </Stack>
             </Paper>
 
-            {/* Card: HORAISE Scheduler (Placeholder) */}
+            {/* Card: HORAISE Scheduler */}
             <Paper
               shadow="lg"
               p="xl"
@@ -149,12 +149,10 @@ export default function HomePage() {
                 cursor: "pointer",
                 transition: "all 0.3s ease",
                 border: "2px solid transparent",
-                position: "relative",
-                overflow: "hidden",
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.transform = "translateY(-4px)";
-                e.currentTarget.style.borderColor = "#868e96";
+                e.currentTarget.style.borderColor = "var(--primary)";
                 e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
               }}
               onMouseLeave={(e) => {
@@ -162,44 +160,31 @@ export default function HomePage() {
                 e.currentTarget.style.borderColor = "transparent";
                 e.currentTarget.style.boxShadow = "";
               }}
+              onClick={() => router.push("/horaise-scheduler")}
             >
-              {/* Badge "Em Breve" */}
-              <Box
-                style={{
-                  position: "absolute",
-                  top: 16,
-                  right: 16,
-                  background: "#ffc107",
-                  color: "#000",
-                  padding: "4px 12px",
-                  borderRadius: "12px",
-                  fontSize: "12px",
-                  fontWeight: 700,
-                }}
-              >
-                EM BREVE
-              </Box>
-
-              <Stack gap="md" align="center" ta="center" style={{ opacity: 0.7 }}>
+              <Stack gap="md" align="center" ta="center">
                 <ThemeIcon
                   size={80}
                   radius="xl"
                   variant="light"
-                  color="gray"
+                  color="var(--primary)"
                 >
                   <IconCalendarEvent size={40} />
                 </ThemeIcon>
                 <Box>
-                  <Title order={2} size="h3" c="dimmed">
+                  <Title order={2} size="h3" style={{ color: "var(--primary)" }}>
                     HORAISE Scheduler
                   </Title>
                   <Text size="sm" c="dimmed" mt="xs">
-                    Agende reuniões com a equipe
+                    Encontre horários em comum para reuniões
                   </Text>
                 </Box>
-                <Text size="xs" c="dimmed" mt="sm" style={{ fontStyle: "italic" }}>
-                  Funcionalidade em desenvolvimento
-                </Text>
+                <Group gap="xs" mt="sm">
+                  <Text size="sm" fw={600} c="var(--primary)">
+                    Acessar Scheduler
+                  </Text>
+                  <IconArrowRight size={18} color="var(--primary)" />
+                </Group>
               </Stack>
             </Paper>
           </SimpleGrid>

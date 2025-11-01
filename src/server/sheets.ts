@@ -113,4 +113,15 @@ export async function loadScheduleRow(email: string): Promise<string[] | null> {
   return res.data.values?.[0] || [];
 }
 
+export async function readAllMembers(): Promise<string[][]> {
+  const { sheets } = await getSheetsClient();
+  const sheetRef = escapeSheetName(SHEET_NAME);
+  // Lê todos os dados de uma vez (A-CN = Nome, Email, Frentes + Schedule)
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetRef}!A2:CN`,
+  });
+  return res.data.values || [];
+}
+
 export const sheetsConstants = { SPREADSHEET_ID, SHEET_NAME };

@@ -5,6 +5,7 @@ import {
   updateMemberRow,
   saveScheduleRow,
   loadScheduleRow,
+  readAllMembers,
 } from "../../server/sheets";
 
 type Actions =
@@ -12,7 +13,8 @@ type Actions =
   | { action: "read-example" }
   | { action: "update-member"; member: { name: string; email: string; frentes: string }; isNew?: boolean }
   | { action: "save-schedule"; email: string; scheduleRow: string[] }
-  | { action: "load-schedule"; email: string };
+  | { action: "load-schedule"; email: string }
+  | { action: "read-all-members" };
 
 export async function POST(request: NextRequest) {
   try {
@@ -44,6 +46,10 @@ export async function POST(request: NextRequest) {
         const row = await loadScheduleRow(body.email);
         if (!row) return NextResponse.json({ message: "not found" }, { status: 404 });
         return NextResponse.json({ scheduleRow: row });
+      }
+      case "read-all-members": {
+        const members = await readAllMembers();
+        return NextResponse.json({ members });
       }
       default:
         return NextResponse.json({ error: "ação inválida" }, { status: 400 });

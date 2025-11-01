@@ -85,22 +85,17 @@ export async function getMemberByEmail(
 
   try {
     // Proxy the read through our server-side API to use the service account.
-    console.log("🔍 Fazendo fetch para /api com email:", email);
     const res = await fetch(`/api`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "read-member", email }),
     });
-    console.log("📡 Resposta da API - Status:", res.status, "OK:", res.ok);
     if (!res.ok) {
       if (res.status === 404) return null;
-      const errorText = await res.text();
-      console.error("❌ Erro na resposta da API:", errorText);
       throw new Error("Erro ao buscar dados do Google Sheets");
     }
 
     const payload = await res.json();
-    console.log("✅ Payload recebido:", payload);
     // payload.member is an array (row) from the backend
     if (!payload || !payload.member) return null;
     const row: string[] = payload.member;
@@ -309,19 +304,27 @@ const CODE_TO_STATUS: Record<string, "presencial" | "ocupado" | "online" | "reun
 };
 
 /**
- * Converte o objeto ScheduleData para array de códigos (uma linha da planilha HORAISE)
- * Formato: [Dom7-8, Dom8-9, ..., Sab18-19] = 91 colunas (7 dias x 13 horas)
+ * Converte objeto ScheduleData para array de códigos (linha da planilha HORAISE)
+ * Planilha: A-C (dados), D-P (Dom), Q-AC (Seg), AD-AP (Ter), AQ-BC (Qua), BD-BP (Qui), BQ-CC (Sex), CD-CP (Sab)
+ * Schedule usa apenas Seg-Sex (5 dias x 13 horas = 65 colunas), mas na planilha são 91 colunas totais (7 dias)
+ * Dias: 0=Segunda, 1=Terça, 2=Quarta, 3=Quinta, 4=Sexta
+ * Horas: índice 0-12 representa 7h-20h (0=7h, 1=8h, ..., 12=19h)
  */
 export function scheduleToInfoRow(schedule: ScheduleData): string[] {
-  const row: string[] = [];
+  // Cria array com 91 colunas (7 dias x 13 horas)
+  const row: string[] = new Array(91).fill("");
 
-  // Para cada dia da semana (0=Segunda até 4=Quinta)
+  // Pula Domingo (13 colunas), começa na coluna 13 (Segunda)
+  let colIndex = 13;
+
+  // Para cada dia da semana útil (0=Segunda até 4=Sexta)
   for (let day = 0; day < 5; day++) {
-    // Para cada horário (7h até 19h = 13 horários)
-    for (let hour = 7; hour <= 19; hour++) {
-      const status = schedule[day]?.[hour];
+    // Para cada horário (índice 0-12 representando 7h-20h)
+    for (let hourIndex = 0; hourIndex < 13; hourIndex++) {
+      const status = schedule[day]?.[hourIndex];
       const code = status ? STATUS_TO_CODE[status] || "" : "";
-      row.push(code);
+      row[colIndex] = code;
+      colIndex++;
     }
   }
   
@@ -330,23 +333,29 @@ export function scheduleToInfoRow(schedule: ScheduleData): string[] {
 
 /**
  * Converte array de códigos (linha da planilha HORAISE) para objeto ScheduleData
- * Formato: [Dom7-8, Dom8-9, ..., Sab18-19] = 91 colunas (7 dias x 13 horas)
+ * Planilha: A-C (dados), D-P (Dom), Q-AC (Seg), AD-AP (Ter), AQ-BC (Qua), BD-BP (Qui), BQ-CC (Sex), CD-CP (Sab)
+ * Schedule usa apenas Seg-Sex: índice 13-77 da array (5 dias x 13 horas = 65 posições)
+ * Dias: 0=Segunda, 1=Terça, 2=Quarta, 3=Quinta, 4=Sexta
+ * Horas: índice 0-12 representa 7h-20h (0=7h, 1=8h, ..., 12=19h)
  */
 export function infoRowToSchedule(infoRow: string[]): ScheduleData {
   const schedule: ScheduleData = {};
-  let colIndex = 0;
+  
+  // Pula Domingo (13 colunas), começa na coluna 13 (Segunda = coluna Q)
+  let colIndex = 13;
 
-  // Para cada dia da semana (0=Segunda até 4=Sexta)
+  // Para cada dia da semana útil (0=Segunda até 4=Sexta)
   for (let day = 0; day < 5; day++) {
-    // Para cada horário (7h até 19h = 13 horários)
-    for (let hour = 7; hour <= 19; hour++) {
+    // Para cada horário (índice 0-12 representando 7h-20h)
+    for (let hourIndex = 0; hourIndex < 13; hourIndex++) {
       const code = infoRow[colIndex]?.trim().toUpperCase();
       
       if (code && CODE_TO_STATUS[code]) {
         if (!schedule[day]) {
           schedule[day] = {};
         }
-        schedule[day][hour] = CODE_TO_STATUS[code];
+        // Usa hourIndex (0-12) como chave, não a hora real (7-20)
+        schedule[day][hourIndex] = CODE_TO_STATUS[code];
       }
       
       colIndex++;
@@ -431,5 +440,54 @@ export async function loadScheduleFromSheet(
   } catch (error) {
     console.error("Erro ao carregar schedule:", error);
     return null;
+  }
+}
+
+/**
+ * Busca todos os membros da planilha
+ */
+export async function getAllMembers(): Promise<TeamMemberData[]> {
+  // Modo offline: retorna dados do storage local
+  if (OFFLINE_MODE) {
+    console.log("🔌 MODO OFFLINE: Retornando membros do storage local");
+    return Array.from(offlineStorage.values());
+  }
+
+  try {
+    const res = await fetch(`/api`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "read-all-members" }),
+    });
+    
+    if (!res.ok) {
+      throw new Error("Erro ao buscar todos os membros");
+    }
+
+    const payload = await res.json();
+    if (!payload || !payload.members) return [];
+    
+    // Converte cada linha para TeamMemberData
+    // Agora cada row já vem com: [Nome, Email, Frentes, ...scheduleColumns]
+    const members: TeamMemberData[] = [];
+    for (const row of payload.members) {
+      const memberData = rowToTeamMember(row);
+      
+      // Extrai o schedule das colunas D em diante (índice 3+)
+      const scheduleRow = row.slice(3); // Pega da coluna D (índice 3) até CN
+      if (scheduleRow && scheduleRow.length > 0) {
+        const schedule = infoRowToSchedule(scheduleRow);
+        if (schedule) {
+          memberData.schedule = schedule;
+        }
+      }
+      
+      members.push(memberData);
+    }
+    
+    return members;
+  } catch (error) {
+    console.error("Erro ao buscar todos os membros:", error);
+    throw error;
   }
 }

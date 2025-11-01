@@ -240,7 +240,7 @@ export default function EditorLoginPage() {
                     background: "var(--primary)",
                     opacity: 0.9,
                   },
-                  "&[data-disabled]": {
+                  "&[dataDisabled]": {
                     background: "var(--primary)",
                     opacity: 0.6,
                   },
