@@ -17,6 +17,8 @@ import {
   Grid,
   Divider,
   Badge,
+  MultiSelect,
+  ActionIcon,
 } from "@mantine/core";
 import {
   IconDeviceFloppy,
@@ -25,6 +27,7 @@ import {
   IconCheck,
   IconX,
   IconArrowLeft,
+  IconPencil,
 } from "@tabler/icons-react";
 import { useRouter, useParams } from "next/navigation";
 import { notifications } from "@mantine/notifications";
@@ -39,6 +42,25 @@ import {
 import ProfileInstructions from "../../../components/Rules";
 import Schedule from "../../../components/Schedule";
 
+// Mapeamento de frentes para emojis
+const FRENTE_EMOJIS: Record<string, string> = {
+  "StoneLab": "💚",
+  "AISE_Website": "🌐",
+  "EyesOnSmells": "👁️",
+  "IA4Law": "⚖️",
+  "LLMs4SA": "🧠",
+  "ML4NFR": "🤖",
+  "ML4Smells": "👃",
+  "ML4SPL": "🧩",
+  "SM&P": "🤯",
+  "SE4Finance": "💵",
+  "SLR_ML4SPL": "📚",
+  "Diversity4SE": "🫶",
+  "AI4Health": "💉",
+  "EcoSustain": "🌱",
+  "Annotaise": "📝",
+};
+
 export default function EditContentPage() {
   const router = useRouter();
   const params = useParams();
@@ -51,6 +73,27 @@ export default function EditContentPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isNewMember, setIsNewMember] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [isEditingFrentes, setIsEditingFrentes] = useState(false);
+  const [editedFrentes, setEditedFrentes] = useState<string[]>([]);
+
+  // Lista de frentes disponíveis (mesma do cadastro)
+  const FRENTES_OPTIONS = [
+    "AI4Health",
+    "AISE_Website",
+    "Annotaise",
+    "Diversity4SE",
+    "EcoSustain",
+    "EyesOnSmells",
+    "IA4Law",
+    "LLMs4SA",
+    "ML4NFR",
+    "ML4Smells",
+    "ML4SPL",
+    "SE4Finance",
+    "SLR_ML4SPL",
+    "SM&P",
+    "StoneLab",
+  ];
 
   // Detecta mobile apenas para layout; não altera desktop
   useEffect(() => {
@@ -179,6 +222,75 @@ export default function EditContentPage() {
     if (!currentData) return { valid: false, errors: ["Dados inválidos"] };
     return validateMemberData(currentData);
   }, [currentData]);
+
+  // Função para iniciar edição de frentes
+  const handleStartEditFrentes = () => {
+    if (memberData?.frentes) {
+      const currentFrentes = memberData.frentes
+        .split(",")
+        .map((f) => f.trim())
+        .filter(Boolean);
+      setEditedFrentes(currentFrentes);
+      setIsEditingFrentes(true);
+    }
+  };
+
+  // Função para salvar frentes editadas
+  const handleSaveFrentes = async () => {
+    if (editedFrentes.length === 0) {
+      notifications.show({
+        title: "Erro",
+        message: "Você deve ter pelo menos uma frente selecionada",
+        color: "red",
+        icon: <IconX />,
+      });
+      return;
+    }
+
+    if (!memberData) return;
+
+    try {
+      const updatedMember: TeamMemberData = {
+        ...memberData,
+        frentes: editedFrentes.join(", "),
+        schedule,
+      };
+
+      const result = await saveMember(updatedMember, false);
+
+      if (result.success) {
+        setMemberData(updatedMember);
+        setIsEditingFrentes(false);
+        notifications.show({
+          title: "Sucesso!",
+          message: "Frentes atualizadas com sucesso",
+          color: "green",
+          icon: <IconCheck />,
+        });
+      } else {
+        notifications.show({
+          title: "Erro",
+          message: result.message || "Erro ao atualizar frentes",
+          color: "red",
+          icon: <IconX />,
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao salvar frentes:", error);
+      notifications.show({
+        title: "Erro",
+        message: "Erro ao atualizar frentes",
+        color: "red",
+        icon: <IconX />,
+      });
+    }
+  };
+
+  // Função para cancelar edição de frentes
+  const handleCancelEditFrentes = () => {
+    setIsEditingFrentes(false);
+    setEditedFrentes([]);
+  };
 
   // Salvar alterações
   const handleSave = async () => {
@@ -402,6 +514,90 @@ export default function EditContentPage() {
             </Stack>
           </Box>
         </Paper>
+
+        {/* Frentes do Membro */}
+        {memberData?.frentes && (
+          <Paper
+            shadow="md"
+            p="md"
+            radius="lg"
+            mb="md"
+            style={{
+              background: "rgba(255, 255, 255, 0.98)",
+            }}
+          >
+            <Group justify="space-between" mb="sm">
+              <Group gap="xs">
+                <Title order={3} size="h4" style={{ color: "var(--primary)" }}>
+                  Minhas Frentes
+                </Title>
+                {!isEditingFrentes && (
+                  <ActionIcon
+                    variant="subtle"
+                    color="var(--primary)"
+                    onClick={handleStartEditFrentes}
+                    size="sm"
+                  >
+                    <IconPencil size={16} />
+                  </ActionIcon>
+                )}
+              </Group>
+            </Group>
+            {isEditingFrentes ? (
+              <Stack gap="md">
+                <MultiSelect
+                  data={FRENTES_OPTIONS}
+                  value={editedFrentes}
+                  onChange={setEditedFrentes}
+                  placeholder={editedFrentes.length === 0 ? "Selecione suas frentes" : ""}
+                  searchable
+                  clearable={false}
+                  error={editedFrentes.length === 0 ? "Selecione pelo menos uma frente" : undefined}
+                />
+                <Group gap="xs">
+                  <Button
+                    leftSection={<IconCheck size={16} />}
+                    color="green"
+                    onClick={handleSaveFrentes}
+                    disabled={editedFrentes.length === 0}
+                  >
+                    Salvar
+                  </Button>
+                  <Button
+                    leftSection={<IconX size={16} />}
+                    variant="light"
+                    color="gray"
+                    onClick={handleCancelEditFrentes}
+                  >
+                    Cancelar
+                  </Button>
+                </Group>
+              </Stack>
+            ) : (
+              <Group gap="xs">
+                {memberData.frentes
+                  .split(",")
+                  .map((f) => f.trim())
+                  .filter(Boolean)
+                  .sort((a, b) => a.localeCompare(b))
+                  .map((frente, idx) => {
+                    const emoji = FRENTE_EMOJIS[frente] || "📌";
+                    return (
+                      <Badge
+                        key={idx}
+                        size="lg"
+                        variant="light"
+                        color="indigo"
+                        style={{ cursor: "default" }}
+                      >
+                        {emoji} {frente}
+                      </Badge>
+                    );
+                  })}
+              </Group>
+            )}
+          </Paper>
+        )}
 
         {/* Instruções de Preenchimento */}
         <ProfileInstructions />

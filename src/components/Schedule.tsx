@@ -57,7 +57,7 @@ interface ScheduleCalendarProps {
 }
 
 interface ScheduleLegendProps {
-  selectedStatus: Exclude<ScheduleStatus, null>;
+  selectedStatus: Exclude<ScheduleStatus, null> | null;
   onSelectStatus: (status: Exclude<ScheduleStatus, null>) => void;
   schedule: ScheduleData;
 }
@@ -163,7 +163,7 @@ export default function ScheduleCalendar({
   schedule,
   onChange,
 }: ScheduleCalendarProps) {
-  const [selectedStatus, setSelectedStatus] = useState<Exclude<ScheduleStatus, null>>("presencial");
+  const [selectedStatus, setSelectedStatus] = useState<Exclude<ScheduleStatus, null> | null>(null);
   const [hoveredCell, setHoveredCell] = useState<{ day: number; hour: number } | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   // Mobile header alignment helpers
@@ -201,6 +201,9 @@ export default function ScheduleCalendar({
 
   // Atualiza uma célula específica
   const handleCellClick = (day: number, hour: number) => {
+    // Se nenhum status está selecionado, não faz nada
+    if (!selectedStatus) return;
+    
     // Imutável: cria novo objeto de dia
     const dayMap = { ...(schedule[day] || {}) };
     dayMap[hour] = selectedStatus;
