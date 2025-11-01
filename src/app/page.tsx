@@ -63,23 +63,11 @@ export default function LoginPage() {
         const encodedEmail = encodeURIComponent(email);
         router.push(`/edit-content/${encodedEmail}`);
       } else {
-        // Membro não encontrado - cria novo com dados de exemplo
-        console.log("Novo membro - criando perfil com dados de exemplo");
-        const exampleData = await getExampleData();
-        const newMember: TeamMemberData = {
-          ...exampleData,
-          email: email, // Mantém o email fornecido
-        };
-
-        // Salva o novo membro em sessionStorage para uso na página de edição
-        if (typeof window !== "undefined") {
-          sessionStorage.setItem("newMember", JSON.stringify(newMember));
-          sessionStorage.setItem("isNewMember", "true");
-        }
-
-        // Redireciona para página de edição
-        const encodedEmail = encodeURIComponent(email);
-        router.push(`/edit-content/${encodedEmail}`);
+        // Membro não encontrado - redireciona para cadastro
+        console.log("Membro não encontrado - redirecionando para cadastro");
+        setError("Email não encontrado. Por favor, cadastre-se primeiro.");
+        setLoading(false);
+        return;
       }
     } catch (err) {
       console.error("Erro ao fazer login:", err);
@@ -190,9 +178,7 @@ export default function LoginPage() {
                 <Text size="sm" mt="sm">
                   Não possui cadastro? {" "}
                   <Link
-                    href=""
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    href="/cadastro"
                     style={{
                       color: "var(--primary)",
                       fontWeight: 600,
@@ -200,7 +186,7 @@ export default function LoginPage() {
                       textDecorationThickness: "1px",
                     }}
                   >
-                    Cadastre-se
+                    Cadastre-se aqui
                   </Link>
                 </Text>
                 

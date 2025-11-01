@@ -315,18 +315,83 @@ export default function EditContentPage() {
             background: "rgba(255, 255, 255, 0.98)",
           }}
         >
-          <Group justify="space-between" wrap="nowrap">
-            <Group>
-              <Button
-                leftSection={<IconArrowLeft size={18} />}
+          {/* Desktop: Layout original */}
+          <Box
+            style={{
+              display: "none",
+            }}
+            sx={{
+              "@media (min-width: 768px)": {
+                display: "block",
+              },
+            }}
+          >
+            <Group justify="space-between" wrap="nowrap">
+              <Group>
+                <Button
+                  leftSection={<IconArrowLeft size={18} />}
+                  variant="light"
+                  color="var(--primary)"
+                  onClick={() => router.push("/")}
+                >
+                  Voltar
+                </Button>
+                <Box>
+                  <Title order={2} size="h3" style={{ color: "var(--primary)" }}>
+                    Olá, {memberData?.name || personId}
+                  </Title>
+                  <Text size="sm" c="dimmed">
+                    Editando perfil de:{" "}
+                    {personId}
+                  </Text>
+                </Box>
+              </Group>
+              <Badge
+                size="lg"
                 variant="light"
-                color="var(--primary)"
-                onClick={() => router.push("/")}
+                color={hasUnsavedChanges ? "orange" : "green"}
+                leftSection={
+                  hasUnsavedChanges ? <IconAlertCircle size={16} /> : <IconCheck size={16} />
+                }
               >
-                Voltar
-              </Button>
+                {hasUnsavedChanges ? "Desincronizado" : "Sincronizado"}
+              </Badge>
+            </Group>
+          </Box>
+
+          {/* Mobile: Badge na mesma linha do Voltar */}
+          <Box
+            sx={{
+              "@media (min-width: 768px)": {
+                display: "none",
+              },
+            }}
+          >
+            <Stack gap="sm">
+              <Group justify="space-between" wrap="nowrap" align="center">
+                <Button
+                  leftSection={<IconArrowLeft size={18} />}
+                  variant="light"
+                  color="var(--primary)"
+                  onClick={() => router.push("/")}
+                  size="sm"
+                >
+                  Voltar
+                </Button>
+                <Badge
+                  size="md"
+                  variant="light"
+                  color={hasUnsavedChanges ? "orange" : "green"}
+                  leftSection={
+                    hasUnsavedChanges ? <IconAlertCircle size={14} /> : <IconCheck size={14} />
+                  }
+                  style={{ flexShrink: 0 }}
+                >
+                  {hasUnsavedChanges ? "Desincronizado" : "Sincronizado"}
+                </Badge>
+              </Group>
               <Box>
-                <Title order={2} size="h3" style={{ color: "var(--primary)" }}>
+                <Title order={2} size="h4" style={{ color: "var(--primary)" }}>
                   Olá, {memberData?.name || personId}
                 </Title>
                 <Text size="sm" c="dimmed">
@@ -334,18 +399,8 @@ export default function EditContentPage() {
                   {personId}
                 </Text>
               </Box>
-            </Group>
-            <Badge
-              size="lg"
-              variant="light"
-              color={hasUnsavedChanges ? "orange" : "green"}
-              leftSection={
-                hasUnsavedChanges ? <IconAlertCircle size={16} /> : <IconCheck size={16} />
-              }
-            >
-              {hasUnsavedChanges ? "Desincronizado" : "Sincronizado"}
-            </Badge>
-          </Group>
+            </Stack>
+          </Box>
         </Paper>
 
         {/* Instruções de Preenchimento */}
