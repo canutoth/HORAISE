@@ -14,18 +14,20 @@ import {
 import { IconX } from "@tabler/icons-react";
 
 // Tipos de status para cada célula
-export type ScheduleStatus = "presencial" | "ocupado" | "online" | "reuniao" | "aula" | null;
+export type ScheduleStatus = "presencial" | "ocupado" | "online" | "reuniao" | "aula" | "almoss" | null;
 
 // Cores para cada status (RGB)
 const STATUS_COLORS: Record<Exclude<ScheduleStatus, null>, string> = {
-  aula: "#A561FF",
+  almoss: "#FFA500",
+  aula: "#A561FF",
   ocupado: "#850C10",
   online: "#D2DB6E",
   presencial: "#619A42",
-  reuniao: " #3AC5E4",
+  reuniao: "#3AC5E4",
 };
 
 const STATUS_LABELS: Record<Exclude<ScheduleStatus, null>, string> = {
+  almoss: "Almoss",
   aula: "Aula",
   ocupado: "Ocupado",
   online: "Online",
@@ -139,7 +141,7 @@ export function ScheduleLegend({ selectedStatus, onSelectStatus, schedule, readO
         </Text>
         <Stack gap={4}>
           {(Object.keys(STATUS_COLORS) as Array<Exclude<ScheduleStatus, null>>)
-            .filter((status) => status !== "ocupado")
+            .filter((status) => status !== "ocupado" && status !== "almoss")
             .map((status) => {
               const hours = calculateHours(status);
               return (

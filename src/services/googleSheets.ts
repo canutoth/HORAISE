@@ -293,14 +293,16 @@ const STATUS_TO_CODE: Record<string, string> = {
   "online": "O",
   "ocupado": "X",
   "reuniao": "R",
+  "almoss": "L",
 };
 
-const CODE_TO_STATUS: Record<string, "presencial" | "ocupado" | "online" | "reuniao" | "aula"> = {
+const CODE_TO_STATUS: Record<string, "presencial" | "ocupado" | "online" | "reuniao" | "aula" | "almoss"> = {
   "A": "aula",
   "P": "presencial",
   "O": "online",
   "X": "ocupado",
   "R": "reuniao",
+  "L": "almoss",
 };
 
 /**
