@@ -54,16 +54,23 @@ export interface ScheduleData {
 interface ScheduleCalendarProps {
   schedule: ScheduleData;
   onChange: (schedule: ScheduleData) => void;
+  readOnly?: boolean; // quando true, desativa interações
+  hideLegend?: boolean; // quando true, oculta a legenda
+  legendWidth?: number; // largura da coluna da legenda (desktop)
+  spacerWidth?: number; // largura do espaço entre legenda e calendário
+  compactLegend?: boolean; // usa legenda mais fina
 }
 
 interface ScheduleLegendProps {
   selectedStatus: Exclude<ScheduleStatus, null> | null;
   onSelectStatus: (status: Exclude<ScheduleStatus, null>) => void;
   schedule: ScheduleData;
+  readOnly?: boolean;
+  compact?: boolean; // legenda mais fina
 }
 
 // Componente de Legenda (vai à esquerda)
-export function ScheduleLegend({ selectedStatus, onSelectStatus, schedule }: ScheduleLegendProps) {
+export function ScheduleLegend({ selectedStatus, onSelectStatus, schedule, readOnly = false, compact = false }: ScheduleLegendProps) {
   // Calcula o total de horas para cada tipo (exceto ocupado)
   const calculateHours = (status: Exclude<ScheduleStatus, null>): number => {
     let count = 0;
@@ -76,27 +83,31 @@ export function ScheduleLegend({ selectedStatus, onSelectStatus, schedule }: Sch
   };
   return (
     <Stack gap="md">
-        <Paper p="sm" radius="md" style={{ background: "#f8f9fa" }}>
-        <Text size="xs" c="dimmed">
-            <strong>Como usar:</strong> Selecione um tipo abaixo e clique nas células do
-            calendário à direita. Passe o mouse sobre células preenchidas para limpar.
-        </Text>
-        </Paper>
+        {!readOnly && !compact && (
+          <Paper p="sm" radius="md" style={{ background: "#f8f9fa" }}>
+            <Text size="xs" c="dimmed">
+              <strong>Como usar:</strong> Selecione um tipo abaixo e clique nas células do
+              calendário à direita. Passe o mouse sobre células preenchidas para limpar.
+            </Text>
+          </Paper>
+        )}
       <Box>
-        <Text size="sm" fw={600} mb="xs" c="black">
-          Selecione o tipo de horário:
-        </Text>
+        {!readOnly && !compact && (
+          <Text size="sm" fw={600} mb="xs" c="black">
+            Selecione o tipo de horário:
+          </Text>
+        )}
         <Stack gap="xs">
           {(Object.keys(STATUS_COLORS) as Array<Exclude<ScheduleStatus, null>>).map((status) => (
             <UnstyledButton
               key={status}
-              onClick={() => onSelectStatus(status)}
+              onClick={() => { if (!readOnly) onSelectStatus(status); }}
               style={{
-                padding: "8px 12px",
-                borderRadius: "8px",
-                border: selectedStatus === status ? "3px solid var(--primary)" : "2px solid #e9ecef",
-                background: selectedStatus === status ? "#f8f9fa" : "white",
-                cursor: "pointer",
+                padding: compact ? "6px 10px" : "8px 12px",
+                borderRadius: compact ? "10px" : "8px",
+                border: readOnly ? "1px solid #e9ecef" : (selectedStatus === status ? "3px solid var(--primary)" : "2px solid #e9ecef"),
+                background: readOnly ? "white" : (selectedStatus === status ? "#f8f9fa" : "white"),
+                cursor: readOnly ? "default" : "pointer",
                 transition: "all 0.2s",
                 display: "flex",
                 alignItems: "center",
@@ -105,14 +116,14 @@ export function ScheduleLegend({ selectedStatus, onSelectStatus, schedule }: Sch
             >
               <Box
                 style={{
-                  width: "20px",
-                  height: "20px",
-                  borderRadius: "4px",
+                  width: compact ? "16px" : "20px",
+                  height: compact ? "16px" : "20px",
+                  borderRadius: compact ? "3px" : "4px",
                   background: STATUS_COLORS[status],
                   border: "1px solid #dee2e6",
                 }}
               />
-              <Text size="sm" fw={selectedStatus === status ? 600 : 400} c="black">
+              <Text size={compact ? "sm" : "sm"} fw={selectedStatus === status ? 600 : 400} c="black">
                 {STATUS_LABELS[status]}
               </Text>
             </UnstyledButton>
@@ -162,6 +173,11 @@ export function ScheduleLegend({ selectedStatus, onSelectStatus, schedule }: Sch
 export default function ScheduleCalendar({
   schedule,
   onChange,
+  readOnly = false,
+  hideLegend = false,
+  legendWidth = 250,
+  spacerWidth = 120,
+  compactLegend = false,
 }: ScheduleCalendarProps) {
   const [selectedStatus, setSelectedStatus] = useState<Exclude<ScheduleStatus, null> | null>(null);
   const [hoveredCell, setHoveredCell] = useState<{ day: number; hour: number } | null>(null);
@@ -212,7 +228,7 @@ export default function ScheduleCalendar({
   // Atualiza uma célula específica
   const handleCellClick = (day: number, hour: number) => {
     // Se nenhum status está selecionado, não faz nada
-    if (!selectedStatus) return;
+    if (readOnly || !selectedStatus) return;
     
     // Imutável: cria novo objeto de dia
     const dayMap = { ...(schedule[day] || {}) };
@@ -224,6 +240,7 @@ export default function ScheduleCalendar({
   // Limpa uma célula
   const handleClearCell = (day: number, hour: number, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (readOnly) return;
     if (schedule[day]) {
       const dayMap = { ...(schedule[day] || {}) };
       dayMap[hour] = null;
@@ -310,7 +327,7 @@ export default function ScheduleCalendar({
                   <UnstyledButton
                     key={dayIdx}
                     onClick={() => handleCellClick(dayIdx, hour)}
-                    onMouseEnter={() => setHoveredCell({ day: dayIdx, hour })}
+                    onMouseEnter={() => !readOnly && setHoveredCell({ day: dayIdx, hour })}
                     onMouseLeave={() => setHoveredCell(null)}
                     style={{
                       position: "relative",
@@ -321,10 +338,11 @@ export default function ScheduleCalendar({
                       cursor: "pointer",
                       transition: "all 0.15s",
                       opacity: status ? 0.8 : 1,
+                      pointerEvents: readOnly ? "none" : "auto",
                     }}
                   >
                     {/* Botão de limpar */}
-                    {status && isHovered && (
+                    {status && isHovered && !readOnly && (
                       <Box
                         onClick={(e) => handleClearCell(dayIdx, hour, e)}
                         style={{
@@ -372,12 +390,7 @@ export default function ScheduleCalendar({
         />
         {/* Linhas de horários */}
         {HOURS.map((hour) => (
-          <Box
-            key={hour}
-            style={{
-              marginBottom: "2px",
-            }}
-          >
+          <Box key={hour} style={{ marginBottom: "2px" }}>
             <Box
               style={{
                 height: `${ROW_HEIGHT}px`,
@@ -460,7 +473,7 @@ export default function ScheduleCalendar({
                   <UnstyledButton
                     key={dayIdx}
                     onClick={() => handleCellClick(dayIdx, hour)}
-                    onMouseEnter={() => setHoveredCell({ day: dayIdx, hour })}
+                    onMouseEnter={() => !readOnly && setHoveredCell({ day: dayIdx, hour })}
                     onMouseLeave={() => setHoveredCell(null)}
                     style={{
                       position: "relative",
@@ -471,9 +484,10 @@ export default function ScheduleCalendar({
                       cursor: "pointer",
                       transition: "all 0.15s",
                       opacity: status ? 0.8 : 1,
+                      pointerEvents: readOnly ? "none" : "auto",
                     }}
                   >
-                    {status && isHovered && (
+                    {status && isHovered && !readOnly && (
                       <Box
                         onClick={(e) => handleClearCell(dayIdx, hour, e)}
                         style={{
@@ -510,22 +524,46 @@ export default function ScheduleCalendar({
         // Layout Mobile: Empilhado verticalmente com coluna de horários fixa
         <Stack gap="lg">
           {/* Legenda em cima */}
-          <Box>
-            <ScheduleLegend selectedStatus={selectedStatus} onSelectStatus={setSelectedStatus} schedule={schedule} />
-          </Box>
+          {!hideLegend && (
+            <Box>
+              <ScheduleLegend
+                selectedStatus={selectedStatus}
+                onSelectStatus={(s) => {
+                  if (readOnly) return;
+                  setSelectedStatus(s);
+                }}
+                schedule={schedule}
+                readOnly={readOnly}
+                compact={compactLegend}
+              />
+            </Box>
+          )}
           {/* Calendário embaixo com scroll lateral apenas nos dias */}
           {renderMobileCalendar()}
         </Stack>
       ) : (
         // Layout Desktop: Centralizado e estável
         <Box style={{ width: "100%", maxWidth: "1150px", margin: "0 auto" }}>
-          <Box style={{ display: "grid", gridTemplateColumns: "250px 120px 1fr", alignItems: "start" }}>
+          <Box style={{ display: "grid", gridTemplateColumns: hideLegend ? "1fr" : `${legendWidth}px ${spacerWidth}px 1fr`, alignItems: "start" }}>
             {/* Painel Esquerdo - Legenda e Distribuição */}
-            <Box style={{ width: "250px" }}>
-              <ScheduleLegend selectedStatus={selectedStatus} onSelectStatus={setSelectedStatus} schedule={schedule} />
-            </Box>
-            {/* Espaçador */}
-            <Box />
+            {!hideLegend && (
+              <>
+                <Box style={{ width: `${legendWidth}px` }}>
+                  <ScheduleLegend
+                    selectedStatus={selectedStatus}
+                    onSelectStatus={(s) => {
+                      if (readOnly) return;
+                      setSelectedStatus(s);
+                    }}
+                    schedule={schedule}
+                    readOnly={readOnly}
+                    compact={compactLegend}
+                  />
+                </Box>
+                {/* Espaçador */}
+                <Box style={{ width: `${spacerWidth}px` }} />
+              </>
+            )}
             {/* Painel Direito - Calendário Interativo (sem scroll no desktop) */}
             <Box style={{ overflow: "visible" }}>
               <Box style={{ width: `${CALENDAR_WIDTH}px`, margin: "0 auto" }}>

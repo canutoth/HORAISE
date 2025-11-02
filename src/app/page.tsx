@@ -17,6 +17,7 @@ import {
   IconAlertCircle,
   IconEdit,
   IconCalendarEvent,
+  IconEye,
   IconArrowRight,
 } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
@@ -82,12 +83,15 @@ export default function HomePage() {
               <Text size="sm" c="black">
                 <strong style={{ color: "var(--primary)" }}>HORAISE Scheduler:</strong> Encontre os melhores horários para agendar reuniões com a equipe
               </Text>
+              <Text size="sm" c="black">
+                <strong style={{ color: "var(--primary)" }}>HORAISE Viewer:</strong> Visualize os horários de todos os membros
+              </Text>
             </Stack>
           </Paper>
 
           {/* Cards das Ferramentas */}
           <SimpleGrid
-            cols={{ base: 1, sm: 2 }}
+            cols={{ base: 1, sm: 2, md: 3 }}
             spacing="lg"
           >
             {/* Card: HORAISE Editor */}
@@ -182,6 +186,55 @@ export default function HomePage() {
                 <Group gap="xs" mt="sm">
                   <Text size="sm" fw={600} c="var(--primary)">
                     Acessar Scheduler
+                  </Text>
+                  <IconArrowRight size={18} color="var(--primary)" />
+                </Group>
+              </Stack>
+            </Paper>
+
+            {/* Card: HORAISE Visualizador */}
+            <Paper
+              shadow="lg"
+              p="xl"
+              radius="lg"
+              style={{
+                background: "rgba(255, 255, 255, 0.98)",
+                cursor: "pointer",
+                transition: "all 0.3s ease",
+                border: "2px solid transparent",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-4px)";
+                e.currentTarget.style.borderColor = "var(--primary)";
+                e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.borderColor = "transparent";
+                e.currentTarget.style.boxShadow = "";
+              }}
+              onClick={() => router.push("/horaise-viewer")}
+            >
+              <Stack gap="md" align="center" ta="center">
+                <ThemeIcon
+                  size={80}
+                  radius="xl"
+                  variant="light"
+                  color="var(--primary)"
+                >
+                  <IconEye size={40} />
+                </ThemeIcon>
+                <Box>
+                  <Title order={2} size="h3" style={{ color: "var(--primary)" }}>
+                    HORAISE Viewer
+                  </Title>
+                  <Text size="sm" c="dimmed" mt="xs">
+                    Visualize os horários de todos os membros
+                  </Text>
+                </Box>
+                <Group gap="xs" mt="sm">
+                  <Text size="sm" fw={600} c="var(--primary)">
+                    Acessar Visualizador
                   </Text>
                   <IconArrowRight size={18} color="var(--primary)" />
                 </Group>
