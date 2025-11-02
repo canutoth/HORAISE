@@ -50,10 +50,19 @@ const FRENTES_LIST = [
   "StoneLab",
 ];
 
-// Mapeamento de horários (7h às 19h) e dias úteis (Segunda=1 .. Sexta=5)
+// Mapeamento de horários (7h às 19h) e dias úteis
 const HOURS = Array.from({ length: 13 }, (_, i) => i + 7);
-const DAYS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"]; // nomes para exibição
-const WEEKDAY_UI_INDICES = [1, 2, 3, 4, 5]; // No Schedule, 0=Dom .. 6=Sab
+// Novo padrão: planilha e schedule usam ordem Segunda(0) .. Domingo(6)
+const DAY_LABELS_FULL = [
+  "Segunda",
+  "Terça",
+  "Quarta",
+  "Quinta",
+  "Sexta",
+  "Sábado",
+  "Domingo",
+];
+const WEEKDAY_UI_INDICES = [0, 1, 2, 3, 4]; // Segunda..Sexta no índice 0..4
 
 interface TimeSlot {
   day: number;
@@ -211,7 +220,7 @@ export default function SchedulerPage() {
       return {
         level: 3,
         slots: level3Slots,
-        message: `⚠️ Encontrei ${level3Slots.length} horário(s), mas algumas pessoas podem estar em reunião. Vale conversar!`,
+        message: `⚠️ Encontrei ${level3Slots.length} horário(s), mas algumas pessoas estão em reunião. Vale conversar!`,
       };
     }
 
@@ -228,7 +237,7 @@ export default function SchedulerPage() {
       return {
         level: 4,
         slots: level4Slots,
-        message: `⚠️ Encontrei ${level4Slots.length} horário(s), mas algumas pessoas podem estar em aula. Vale conversar!`,
+        message: `⚠️ Encontrei ${level4Slots.length} horário(s), mas algumas pessoas estão em aula. Vale conversar!`,
       };
     }
 
@@ -248,7 +257,7 @@ export default function SchedulerPage() {
   ): TimeSlot[] => {
     const validSlots: TimeSlot[] = [];
 
-    // Percorre segunda a sexta (apenas dias úteis)
+  // Percorre segunda a sexta (apenas dias úteis)
     for (const day of WEEKDAY_UI_INDICES) {
       // Percorre os horários reais (7..19), verificando blocos consecutivos
       for (let startRealHour = 7; startRealHour <= 19 - (durationHours - 1); startRealHour++) {
@@ -281,7 +290,7 @@ export default function SchedulerPage() {
           validSlots.push({
             day,
             hour: startRealHour,
-            dayName: DAYS[day - 1],
+            dayName: DAY_LABELS_FULL[day],
             hourLabel: `${startRealHour}h - ${startRealHour + durationHours}h`,
             memberStatuses: slotStatuses,
           });
@@ -594,54 +603,54 @@ export default function SchedulerPage() {
                     </Text>
                   </Alert>
 
-                  {/* Status de cada membro (se houver diferentes tipos de ocupação) */}
-                  {result.slots.length > 0 && result.slots[0].memberStatuses && (
+                  {/* Status dos membros: mostrar apenas em casos especiais */}
+                  {(result.level === 1 || result.level === 2.5) && result.slots.length > 0 && (
                     <>
                       <Divider />
                       <Box>
                         <Text size="sm" fw={600} c="black" mb="xs">
                           Status dos membros:
                         </Text>
-                        <Group gap="xs">
-                          {result.slots[0].memberStatuses.map((memberStatus, idx) => {
-                            const firstName = memberStatus.name.split(" ")[0];
-                            const statusLabel = memberStatus.status === null
-                              ? "livre"
-                              : memberStatus.status === "presencial"
-                              ? "presencial"
-                              : memberStatus.status === "online"
-                              ? "online"
-                              : memberStatus.status === "reuniao"
-                              ? "reunião"
-                              : memberStatus.status === "aula"
-                              ? "aula"
-                              : memberStatus.status;
-                            
-                            return (
-                              <Badge
-                                key={idx}
-                                size="md"
-                                variant="dot"
-                                color={
-                                  memberStatus.status === null
-                                    ? "gray"
-                                    : memberStatus.status === "presencial" || memberStatus.status === "online"
-                                    ? "green"
-                                    : memberStatus.status === "reuniao"
-                                    ? "orange"
-                                    : "red"
-                                }
-                              >
-                                {firstName}: {statusLabel}
+                        {result.level === 1 && result.slots[0].memberStatuses ? (
+                          <Group gap="xs">
+                            {result.slots[0].memberStatuses.map((memberStatus, idx) => {
+                              const firstName = memberStatus.name.split(" ")[0];
+                              const statusLabel = memberStatus.status === "presencial"
+                                ? "presencial"
+                                : memberStatus.status === "online"
+                                ? "online"
+                                : "trabalhando";
+                              return (
+                                <Badge
+                                  key={idx}
+                                  size="md"
+                                  variant="dot"
+                                  color={
+                                    memberStatus.status === "presencial" || memberStatus.status === "online"
+                                      ? "green"
+                                      : "green"
+                                  }
+                                >
+                                  {firstName}: {statusLabel}
+                                </Badge>
+                              );
+                            })}
+                          </Group>
+                        ) : (
+                          // Nível 2.5: todos livres
+                          <Group gap="xs">
+                            {(result.members || []).map((m, idx) => (
+                              <Badge key={idx} size="md" variant="dot" color="gray">
+                                {m.name.split(" ")[0]}: livre
                               </Badge>
-                            );
-                          })}
-                        </Group>
+                            ))}
+                          </Group>
+                        )}
                       </Box>
                     </>
                   )}
 
-                  {/* Lista de Horários */}
+                  {/* Lista de Horários com status por tipo em cada horário */}
                   {result.slots.length > 0 && (
                     <>
                       <Divider />
@@ -649,19 +658,74 @@ export default function SchedulerPage() {
                         <Text size="sm" fw={600} c="black" mb="sm">
                           Horários disponíveis:
                         </Text>
-                        <Stack gap="xs">
-                          {result.slots.map((slot, index) => (
-                            <Badge
-                              key={index}
-                              size="lg"
-                              variant="light"
-                              color="var(--primary)"
-                              leftSection={<IconClock size={14} />}
-                              style={{ justifyContent: "flex-start" }}
-                            >
-                              {slot.dayName} - {slot.hourLabel}
-                            </Badge>
-                          ))}
+                        <Stack gap="sm">
+                          {result.slots.map((slot, index) => {
+                            const statuses = slot.memberStatuses || [];
+                            // Agrupa por tipo de status
+                            const groups: Record<string, string[]> = {
+                              presencial: [],
+                              online: [],
+                              livre: [], // null
+                              reuniao: [],
+                              aula: [],
+                              ocupado: [],
+                            };
+                            statuses.forEach((ms) => {
+                              const firstName = ms.name.split(" ")[0];
+                              if (ms.status === null) groups.livre.push(firstName);
+                              else if (ms.status === "presencial") groups.presencial.push(firstName);
+                              else if (ms.status === "online") groups.online.push(firstName);
+                              else if (ms.status === "reuniao") groups.reuniao.push(firstName);
+                              else if (ms.status === "aula") groups.aula.push(firstName);
+                              else if (ms.status === "ocupado") groups.ocupado.push(firstName);
+                            });
+
+                            // Ordem amigável de exibição
+                            const order: Array<{
+                              key: keyof typeof groups;
+                              label: string;
+                              color: string;
+                            }> = [
+                              { key: "presencial", label: "Presencial", color: "green" },
+                              { key: "online", label: "Online", color: "teal" },
+                              { key: "livre", label: "Livre", color: "gray" },
+                              { key: "reuniao", label: "Reunião", color: "orange" },
+                              { key: "aula", label: "Aula", color: "red" },
+                              { key: "ocupado", label: "Ocupado", color: "red" },
+                            ];
+
+                            return (
+                              <Paper key={index} p="xs" radius="md" withBorder>
+                                <Stack gap={6}
+                                  style={{
+                                    overflowX: "auto",
+                                  }}
+                                >
+                                  <Group gap="xs" wrap="wrap" align="center">
+                                    <Badge size="sm" variant="light" color="var(--primary)" leftSection={<IconClock size={14} />}>
+                                      {slot.dayName} - {slot.hourLabel}
+                                    </Badge>
+                                  </Group>
+                                  <Group gap="xs" wrap="wrap" align="center">
+                                    {order.map(({ key, label, color }) =>
+                                      groups[key].length > 0 ? (
+                                        <Group key={key} gap={6} wrap="wrap" align="center" style={{ marginRight: 8 }}>
+                                          <Text size="xs" c="dimmed">{label}:</Text>
+                                          <Group gap={4} wrap="wrap" align="center">
+                                            {groups[key].map((name, i) => (
+                                              <Badge key={`${key}-${i}`} size="xs" variant="light" color={color}>
+                                                {name}
+                                              </Badge>
+                                            ))}
+                                          </Group>
+                                        </Group>
+                                      ) : null
+                                    )}
+                                  </Group>
+                                </Stack>
+                              </Paper>
+                            );
+                          })}
                         </Stack>
                       </Box>
                     </>

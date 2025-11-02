@@ -34,7 +34,7 @@ const STATUS_LABELS: Record<Exclude<ScheduleStatus, null>, string> = {
 };
 
 // Dias da semana
-const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+const WEEKDAYS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"];
 
 // Dimensões base do grid
 const TIME_COL_WIDTH = 80; // px

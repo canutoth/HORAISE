@@ -399,7 +399,12 @@ export default function EditContentPage() {
         }}
       >
         <Center>
-          <Loader size="xl" color="white" />
+          <Stack align="center" gap="sm">
+            <Loader size="xl" color="white" />
+            <Text c="white" fw={600}>
+              {memberData?.name ? `Carregando dados de ${memberData.name}…` : "Carregando seu perfil…"}
+            </Text>
+          </Stack>
         </Center>
       </Box>
     );
@@ -428,16 +433,7 @@ export default function EditContentPage() {
           }}
         >
           {/* Desktop: Layout original */}
-          <Box
-            style={{
-              display: "none",
-            }}
-            sx={{
-              "@media (min-width: 768px)": {
-                display: "block",
-              },
-            }}
-          >
+          <Box visibleFrom="sm">
             <Group justify="space-between" wrap="nowrap">
               <Group>
                 <Button
@@ -472,13 +468,7 @@ export default function EditContentPage() {
           </Box>
 
           {/* Mobile: Badge na mesma linha do Voltar */}
-          <Box
-            sx={{
-              "@media (min-width: 768px)": {
-                display: "none",
-              },
-            }}
-          >
+          <Box hiddenFrom="sm">
             <Stack gap="sm">
               <Group justify="space-between" wrap="nowrap" align="center">
                 <Button
