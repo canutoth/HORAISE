@@ -8,7 +8,7 @@ const OFFLINE_MODE = process.env.NEXT_PUBLIC_OFFLINE_MODE === "true";
 
 export interface ScheduleData {
   [day: number]: {
-    [hour: number]: "presencial" | "ocupado" | "online" | "reuniao" | "aula" | null;
+    [hour: number]: "presencial" | "ocupado" | "online" | "reuniao" | "aula" | "almoss" | null;
   };
 }
 

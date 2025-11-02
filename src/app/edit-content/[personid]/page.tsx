@@ -651,7 +651,7 @@ export default function EditContentPage() {
 
           <Box style={{ display: "flex", flexDirection: "column", alignItems: isMobile ? "center" : "stretch", overflow: isMobile ? "visible" : "hidden", paddingBottom: isMobile ? "calc(8px + env(safe-area-inset-bottom))" : undefined }}>
             <Box style={{ width: "100%", overflowX: "visible" }}>
-              <Schedule schedule={schedule} onChange={setSchedule} />
+              <Schedule schedule={schedule} onChange={(newSchedule: ScheduleData) => setSchedule(newSchedule)} />
             </Box>
 
             {/* Botões de ação - Desktop (inalterado) */}
