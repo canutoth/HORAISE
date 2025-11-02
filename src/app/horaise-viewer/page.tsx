@@ -70,9 +70,34 @@ export default function VisualizerPage() {
   }, []);
 
   const current = useMemo(() => (members.length > 0 ? members[currentIndex] : null), [members, currentIndex]);
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
   const goPrev = () => setCurrentIndex((i) => (i > 0 ? i - 1 : i));
   const goNext = () => setCurrentIndex((i) => (i < members.length - 1 ? i + 1 : i));
+
+  // Auto-scroll na lista de membros quando muda o índice
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      const container = scrollContainerRef.current;
+      const buttons = container.querySelectorAll('button');
+      const activeButton = buttons[currentIndex] as HTMLElement;
+      
+      if (activeButton) {
+        const containerRect = container.getBoundingClientRect();
+        const buttonRect = activeButton.getBoundingClientRect();
+        const scrollLeft = container.scrollLeft;
+        
+        // Se o botão estiver fora da visão à direita
+        if (buttonRect.right > containerRect.right) {
+          container.scrollLeft = scrollLeft + (buttonRect.right - containerRect.right) + 20;
+        }
+        // Se o botão estiver fora da visão à esquerda
+        else if (buttonRect.left < containerRect.left) {
+          container.scrollLeft = scrollLeft - (containerRect.left - buttonRect.left) - 20;
+        }
+      }
+    }
+  }, [currentIndex]);
 
   // Enquanto carrega os membros, mostra tela cheia de loading para evitar "layout shift"
   if (loading) {
@@ -100,33 +125,38 @@ export default function VisualizerPage() {
       style={{
         minHeight: "100vh",
         background: "var(--primary)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
         padding: "20px",
       }}
     >
-      <Container size="lg">
+      <Box
+        style={{
+          width: "100%",
+          maxWidth: "1200px",
+          margin: "0 auto",
+        }}
+      >
         <Paper
           p="xl"
           radius="lg"
           style={{
             background: "rgba(255, 255, 255, 0.98)",
             backdropFilter: "blur(10px)",
+            overflow: "hidden",
           }}
         >
           <Stack gap="lg">
             {/* Barra superior */}
-            <Group justify="space-between" wrap="nowrap">
+            <Stack gap="sm">
               <Button
                 leftSection={<IconArrowLeft size={18} />}
                 variant="light"
                 color="var(--primary)"
                 onClick={() => router.push("/")}
+                style={{ alignSelf: "flex-start" }}
               >
                 Voltar
               </Button>
-              <Box ta="center" style={{ flex: 1 }}>
+              <Box ta="center">
                 <Title
                   order={1}
                   size="h2"
@@ -139,10 +169,8 @@ export default function VisualizerPage() {
                 >
                   HORAISE Viewer
                 </Title>
-                {/* <Text size="sm" c="dimmed">Visualize os horários de todos em ordem alfabética</Text> */}
               </Box>
-              <Box style={{ width: 120 }} />
-            </Group>
+            </Stack>
 
             {error && !loading && (
               <Alert icon={<IconAlertCircle size={18} />} title="Erro" color="red" variant="light">
@@ -153,13 +181,78 @@ export default function VisualizerPage() {
             {current && (
               <Stack gap="md">
                 {/* Cabeçalho do membro com setas */}
-                <Group justify="space-between" align="center">
-                  <Button variant="light" color="var(--primary)" onClick={goPrev} disabled={currentIndex === 0} leftSection={<IconChevronLeft size={18} />}></Button>
-                  <Box ta="center">
-                    <Title order={3} size="h4" style={{ color: "var(--primary)" }}>{current.name}</Title>
-                    {/* <Text size="sm" c="dimmed">{current.email}</Text> */}
+                {/* Desktop: tudo em uma linha */}
+                <Box visibleFrom="sm">
+                  <Group justify="space-between" align="center">
+                    <Button
+                      variant="light"
+                      color="var(--primary)"
+                      onClick={goPrev}
+                      disabled={currentIndex === 0}
+                      style={{ minWidth: "auto", padding: "8px 12px" }}
+                    >
+                      <IconChevronLeft size={18} />
+                    </Button>
+                    <Box ta="center" style={{ flex: 1 }}>
+                      <Title order={3} size="h4" style={{ color: "var(--primary)" }}>{current.name}</Title>
+                      {current.frentes && (
+                        <Group gap="xs" justify="center" mt="xs">
+                          {current.frentes
+                            .split(',')
+                            .map((f: string) => f.trim())
+                            .filter(Boolean)
+                            .sort((a: string, b: string) => a.localeCompare(b))
+                            .map((frente: string, idx: number) => {
+                              const emoji = FRENTE_EMOJIS[frente] || "📌";
+                              return (
+                                <Badge key={idx} size="lg" variant="light" color="indigo" style={{ cursor: "default" }}>
+                                  {emoji} {frente}
+                                </Badge>
+                              );
+                            })}
+                        </Group>
+                      )}
+                    </Box>
+                    <Button
+                      variant="light"
+                      color="var(--primary)"
+                      onClick={goNext}
+                      disabled={currentIndex >= members.length - 1}
+                      style={{ minWidth: "auto", padding: "8px 12px" }}
+                    >
+                      <IconChevronRight size={18} />
+                    </Button>
+                  </Group>
+                </Box>
+                
+                {/* Mobile: setas englobam nome e badges */}
+                <Box hiddenFrom="sm">
+                  <Stack gap="sm">
+                    <Group justify="space-between" align="center">
+                      <Button
+                        variant="light"
+                        color="var(--primary)"
+                        onClick={goPrev}
+                        disabled={currentIndex === 0}
+                        style={{ minWidth: "auto", padding: "8px 12px" }}
+                      >
+                        <IconChevronLeft size={18} />
+                      </Button>
+                      <Box ta="center" style={{ flex: 1 }}>
+                        <Title order={3} size="h4" style={{ color: "var(--primary)" }}>{current.name}</Title>
+                      </Box>
+                      <Button
+                        variant="light"
+                        color="var(--primary)"
+                        onClick={goNext}
+                        disabled={currentIndex >= members.length - 1}
+                        style={{ minWidth: "auto", padding: "8px 12px" }}
+                      >
+                        <IconChevronRight size={18} />
+                      </Button>
+                    </Group>
                     {current.frentes && (
-                      <Group gap="xs" justify="center" mt="xs">
+                      <Group gap="xs" justify="center">
                         {current.frentes
                           .split(',')
                           .map((f: string) => f.trim())
@@ -168,20 +261,18 @@ export default function VisualizerPage() {
                           .map((frente: string, idx: number) => {
                             const emoji = FRENTE_EMOJIS[frente] || "📌";
                             return (
-                              <Badge key={idx} size="lg" variant="light" color="indigo" style={{ cursor: "default" }}>
+                              <Badge key={idx} size="md" variant="light" color="indigo" style={{ cursor: "default" }}>
                                 {emoji} {frente}
                               </Badge>
                             );
                           })}
                       </Group>
                     )}
-                  </Box>
-                  <Button variant="light" color="var(--primary)" onClick={goNext} disabled={currentIndex >= members.length - 1} rightSection={<IconChevronRight size={18} />}></Button>
-                </Group>
+                  </Stack>
+                </Box>
 
                 {/* Calendário somente leitura */}
-                <Paper p="md" radius="lg" style={{ background: "rgba(255, 255, 255, 0.98)" }}>
-                  {/* Lendo com legenda visível, porém sem interação (readOnly) e layout compacto */}
+                <Box style={{ width: "100%", overflow: "visible" }}>
                   <Schedule
                     schedule={current.schedule || {}}
                     onChange={() => {}}
@@ -191,7 +282,7 @@ export default function VisualizerPage() {
                     compactLegend
                     centerLegendVertically
                   />
-                </Paper>
+                </Box>
                 {/* Faixa de "abas" no estilo Google Sheets */}
                 <Box>
                   <Text size="sm" fw={600} c="dimmed" mb="xs">Membros ({members.length})</Text>
@@ -206,6 +297,7 @@ export default function VisualizerPage() {
                       <IconChevronLeft size={16} />
                     </Button>
                     <Box
+                      ref={scrollContainerRef}
                       style={{
                         overflowX: "auto",
                         overflowY: "hidden",
@@ -256,7 +348,7 @@ export default function VisualizerPage() {
             © 2025 AISE Lab
           </Text>
         </Center>
-      </Container>
+      </Box>
     </Box>
   );
 }

@@ -194,7 +194,7 @@ export default function SchedulerPage() {
       };
     }
 
-    // Nível 2.5: Todos livres (novo nível)
+    // Nível 2.5: Todos livres
     const level25Slots = findSlotsWithCondition(members, durationHours, (statuses, membersList) => {
       return statuses.every((s) => s === null);
     });
