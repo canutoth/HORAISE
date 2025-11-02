@@ -50,10 +50,10 @@ const FRENTES_LIST = [
   "StoneLab",
 ];
 
-// Mapeamento de horários (7h às 19h)
+// Mapeamento de horários (7h às 19h) e dias úteis (Segunda=1 .. Sexta=5)
 const HOURS = Array.from({ length: 13 }, (_, i) => i + 7);
-const DAYS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"];
-const DAY_INDICES = [0, 1, 2, 3, 4]; // Segunda a Sexta
+const DAYS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"]; // nomes para exibição
+const WEEKDAY_UI_INDICES = [1, 2, 3, 4, 5]; // No Schedule, 0=Dom .. 6=Sab
 
 interface TimeSlot {
   day: number;
@@ -248,26 +248,26 @@ export default function SchedulerPage() {
   ): TimeSlot[] => {
     const validSlots: TimeSlot[] = [];
 
-    // Percorre segunda a sexta
-    for (const day of DAY_INDICES) {
-      // Percorre os horários, verificando blocos consecutivos
-      for (let startHour = 0; startHour <= 13 - durationHours; startHour++) {
+    // Percorre segunda a sexta (apenas dias úteis)
+    for (const day of WEEKDAY_UI_INDICES) {
+      // Percorre os horários reais (7..19), verificando blocos consecutivos
+      for (let startRealHour = 7; startRealHour <= 19 - (durationHours - 1); startRealHour++) {
         let isValid = true;
         let slotStatuses: { name: string; status: string | null }[] = [];
 
         // Verifica se o bloco de durationHours horas consecutivas atende a condição
         for (let offset = 0; offset < durationHours; offset++) {
-          const hour = startHour + offset;
+          const realHour = startRealHour + offset;
           const statuses = members.map((member) => {
             if (!member.schedule || !member.schedule[day]) return null;
-            return member.schedule[day][hour] || null;
+            return member.schedule[day][realHour] || null;
           });
 
           // Guarda os status do primeiro horário do bloco
           if (offset === 0) {
             slotStatuses = members.map((member) => ({
               name: member.name,
-              status: member.schedule?.[day]?.[hour] || null,
+              status: member.schedule?.[day]?.[realHour] || null,
             }));
           }
 
@@ -280,9 +280,9 @@ export default function SchedulerPage() {
         if (isValid) {
           validSlots.push({
             day,
-            hour: startHour + 7, // Converte de índice para hora real (7h = índice 0)
-            dayName: DAYS[day],
-            hourLabel: `${startHour + 7}h - ${startHour + 7 + durationHours}h`,
+            hour: startRealHour,
+            dayName: DAYS[day - 1],
+            hourLabel: `${startRealHour}h - ${startRealHour + durationHours}h`,
             memberStatuses: slotStatuses,
           });
         }

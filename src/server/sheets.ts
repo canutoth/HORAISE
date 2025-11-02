@@ -93,7 +93,8 @@ export async function saveScheduleRow(email: string, scheduleRow: string[]) {
   const sheetRef = escapeSheetName(SHEET_NAME);
   const rowNumber = await findRowByEmail(sheets, email);
   if (!rowNumber) return { success: false, message: `Email ${email} não encontrado` };
-  const range = `${sheetRef}!D${rowNumber}:CN${rowNumber}`;
+  // 7 dias x 13 horas = 91 colunas -> D..CP
+  const range = `${sheetRef}!D${rowNumber}:CP${rowNumber}`;
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
     range,
@@ -108,7 +109,8 @@ export async function loadScheduleRow(email: string): Promise<string[] | null> {
   const sheetRef = escapeSheetName(SHEET_NAME);
   const rowNumber = await findRowByEmail(sheets, email);
   if (!rowNumber) return null;
-  const range = `${sheetRef}!D${rowNumber}:CN${rowNumber}`;
+  // 7 dias x 13 horas = 91 colunas -> D..CP
+  const range = `${sheetRef}!D${rowNumber}:CP${rowNumber}`;
   const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range });
   return res.data.values?.[0] || [];
 }
@@ -119,7 +121,8 @@ export async function readAllMembers(): Promise<string[][]> {
   // Lê todos os dados de uma vez (A-CN = Nome, Email, Frentes + Schedule)
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetRef}!A2:CN`,
+    // Inclui toda a faixa de schedule até CP
+    range: `${sheetRef}!A2:CP`,
   });
   return res.data.values || [];
 }

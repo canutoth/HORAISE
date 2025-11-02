@@ -188,8 +188,8 @@ export async function saveMember(
 
     const result = await response.json();
     
-    // Se houver schedule, salva na planilha HORAISE
-    if (member.schedule && Object.keys(member.schedule).length > 0) {
+    // Sempre salva o schedule quando fornecido, mesmo se vazio, para permitir limpar na planilha
+    if (member.schedule !== undefined) {
       const scheduleResult = await saveScheduleToSheet(member.email, member.schedule);
       if (!scheduleResult.success) {
         console.warn("Dados salvos mas schedule falhou:", scheduleResult.message);
@@ -307,21 +307,21 @@ const CODE_TO_STATUS: Record<string, "presencial" | "ocupado" | "online" | "reun
  * Converte objeto ScheduleData para array de códigos (linha da planilha HORAISE)
  * Planilha: A-C (dados), D-P (Dom), Q-AC (Seg), AD-AP (Ter), AQ-BC (Qua), BD-BP (Qui), BQ-CC (Sex), CD-CP (Sab)
  * Schedule usa apenas Seg-Sex (5 dias x 13 horas = 65 colunas), mas na planilha são 91 colunas totais (7 dias)
- * Dias: 0=Segunda, 1=Terça, 2=Quarta, 3=Quinta, 4=Sexta
- * Horas: índice 0-12 representa 7h-20h (0=7h, 1=8h, ..., 12=19h)
+ * IMPORTANTE: No UI, os dias são 0=Dom, 1=Seg, ..., 6=Sab e as horas são as reais 7..19.
+ * Aqui mapeamos apenas os dias úteis 1..5 (Seg..Sex) e as horas 7..19.
  */
 export function scheduleToInfoRow(schedule: ScheduleData): string[] {
-  // Cria array com 91 colunas (7 dias x 13 horas)
+  // Cria array com 91 colunas (7 dias x 13 horas) mapeando D..CN
   const row: string[] = new Array(91).fill("");
 
-  // Pula Domingo (13 colunas), começa na coluna 13 (Segunda)
-  let colIndex = 13;
+  // Começa no primeiro bloco (Domingo)
+  let colIndex = 0;
 
-  // Para cada dia da semana útil (0=Segunda até 4=Sexta)
-  for (let day = 0; day < 5; day++) {
-    // Para cada horário (índice 0-12 representando 7h-20h)
-    for (let hourIndex = 0; hourIndex < 13; hourIndex++) {
-      const status = schedule[day]?.[hourIndex];
+  // Dias no UI: 0=Dom .. 6=Sab
+  for (let dayUI = 0; dayUI <= 6; dayUI++) {
+    // Para cada horário real (7..19)
+    for (let hour = 7; hour <= 19; hour++) {
+      const status = (schedule as any)[dayUI]?.[hour] as keyof typeof STATUS_TO_CODE | null | undefined;
       const code = status ? STATUS_TO_CODE[status] || "" : "";
       row[colIndex] = code;
       colIndex++;
@@ -335,29 +335,26 @@ export function scheduleToInfoRow(schedule: ScheduleData): string[] {
  * Converte array de códigos (linha da planilha HORAISE) para objeto ScheduleData
  * Planilha: A-C (dados), D-P (Dom), Q-AC (Seg), AD-AP (Ter), AQ-BC (Qua), BD-BP (Qui), BQ-CC (Sex), CD-CP (Sab)
  * Schedule usa apenas Seg-Sex: índice 13-77 da array (5 dias x 13 horas = 65 posições)
- * Dias: 0=Segunda, 1=Terça, 2=Quarta, 3=Quinta, 4=Sexta
- * Horas: índice 0-12 representa 7h-20h (0=7h, 1=8h, ..., 12=19h)
+ * IMPORTANTE: No UI, os dias são 0=Dom..6=Sab e as horas são as reais 7..19.
+ * Aqui populamos apenas day=1..5 (Seg..Sex) e hour=7..19.
  */
 export function infoRowToSchedule(infoRow: string[]): ScheduleData {
   const schedule: ScheduleData = {};
   
-  // Pula Domingo (13 colunas), começa na coluna 13 (Segunda = coluna Q)
-  let colIndex = 13;
+  // Começa no primeiro bloco (Domingo), índice 0
+  let colIndex = 0;
 
-  // Para cada dia da semana útil (0=Segunda até 4=Sexta)
-  for (let day = 0; day < 5; day++) {
-    // Para cada horário (índice 0-12 representando 7h-20h)
-    for (let hourIndex = 0; hourIndex < 13; hourIndex++) {
+  // Dias no UI: 0=Dom .. 6=Sab
+  for (let dayUI = 0; dayUI <= 6; dayUI++) {
+    // Para cada horário real (7..19)
+    for (let hour = 7; hour <= 19; hour++) {
       const code = infoRow[colIndex]?.trim().toUpperCase();
-      
-      if (code && CODE_TO_STATUS[code]) {
-        if (!schedule[day]) {
-          schedule[day] = {};
+      if (code && (CODE_TO_STATUS as any)[code]) {
+        if (!(schedule as any)[dayUI]) {
+          (schedule as any)[dayUI] = {} as any;
         }
-        // Usa hourIndex (0-12) como chave, não a hora real (7-20)
-        schedule[day][hourIndex] = CODE_TO_STATUS[code];
+        (schedule as any)[dayUI][hour] = (CODE_TO_STATUS as any)[code];
       }
-      
       colIndex++;
     }
   }
@@ -384,7 +381,13 @@ export async function saveScheduleToSheet(
   }
 
   try {
-    const infoRow = scheduleToInfoRow(schedule);
+    let infoRow = scheduleToInfoRow(schedule);
+    // Garantia extra: ajusta comprimento para exatamente 91 colunas (7 dias x 13 horas)
+    if (infoRow.length < 91) {
+      infoRow = [...infoRow, ...new Array(91 - infoRow.length).fill("")];
+    } else if (infoRow.length > 91) {
+      infoRow = infoRow.slice(0, 91);
+    }
     
     const response = await fetch("/api", {
       method: "POST",
