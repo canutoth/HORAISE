@@ -59,6 +59,7 @@ interface ScheduleCalendarProps {
   legendWidth?: number; // largura da coluna da legenda (desktop)
   spacerWidth?: number; // largura do espaço entre legenda e calendário
   compactLegend?: boolean; // usa legenda mais fina
+  centerLegendVertically?: boolean; // centraliza verticalmente a legenda no desktop
 }
 
 interface ScheduleLegendProps {
@@ -178,6 +179,7 @@ export default function ScheduleCalendar({
   legendWidth = 250,
   spacerWidth = 120,
   compactLegend = false,
+  centerLegendVertically = false,
 }: ScheduleCalendarProps) {
   const [selectedStatus, setSelectedStatus] = useState<Exclude<ScheduleStatus, null> | null>(null);
   const [hoveredCell, setHoveredCell] = useState<{ day: number; hour: number } | null>(null);
@@ -544,7 +546,7 @@ export default function ScheduleCalendar({
       ) : (
         // Layout Desktop: Centralizado e estável
         <Box style={{ width: "100%", maxWidth: "1150px", margin: "0 auto" }}>
-          <Box style={{ display: "grid", gridTemplateColumns: hideLegend ? "1fr" : `${legendWidth}px ${spacerWidth}px 1fr`, alignItems: "start" }}>
+          <Box style={{ display: "grid", gridTemplateColumns: hideLegend ? "1fr" : `${legendWidth}px ${spacerWidth}px 1fr`, alignItems: centerLegendVertically ? "center" : "start" }}>
             {/* Painel Esquerdo - Legenda e Distribuição */}
             {!hideLegend && (
               <>

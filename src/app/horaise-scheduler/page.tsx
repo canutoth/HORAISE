@@ -292,6 +292,27 @@ export default function SchedulerPage() {
     return validSlots;
   };
 
+  // Enquanto carrega os membros, evita renderizar a página completa para não causar "layout shift"
+  if (loadingMembers) {
+    return (
+      <Box
+        style={{
+          minHeight: "100vh",
+          background: "var(--primary)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "20px",
+        }}
+      >
+        <Stack align="center" gap="sm">
+          <Loader size="lg" color="white" />
+          <Text c="white" fw={600}>Carregando dados do Scheduler…</Text>
+        </Stack>
+      </Box>
+    );
+  }
+
   return (
     <Box
       style={{
@@ -359,17 +380,7 @@ export default function SchedulerPage() {
               </Text>
             </Alert>
 
-            {/* Loading ao carregar membros */}
-            {loadingMembers && (
-              <Alert
-                icon={<Loader size="sm" color="var(--primary)" />}
-                title="Carregando dados..."
-                color="var(--primary)"
-                variant="light"
-              >
-                <Text size="sm">Buscando informações dos membros do laboratório...</Text>
-              </Alert>
-            )}
+            {/* Loading removido do corpo para evitar mudança de layout; já tratamos com tela cheia acima */}
 
             {/* Erro ao carregar */}
             {errorMessage && !loadingMembers && (

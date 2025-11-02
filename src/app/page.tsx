@@ -49,7 +49,7 @@ export default function HomePage() {
                 fontSize: "clamp(2rem, 5vw, 3rem)",
               }}
             >
-              Bem-vindo(a) ao HORAISE!
+              HORAISE
             </Title>
             <Text size="lg" c="rgba(255, 255, 255, 0.9)">
               Framework do AISE para facilitar agendamento de reuniões
@@ -74,7 +74,7 @@ export default function HomePage() {
               </Title>
             </Group>
             <Text size="sm" c="dimmed">
-              O HORAISE oferece duas ferramentas integradas para gerenciar seus horários no Lab:
+              O HORAISE oferece 3 ferramentas integradas para gerenciar seus horários no Lab:
             </Text>
             <Stack gap="xs" mt="md">
               <Text size="sm" c="black">
@@ -234,7 +234,7 @@ export default function HomePage() {
                 </Box>
                 <Group gap="xs" mt="sm">
                   <Text size="sm" fw={600} c="var(--primary)">
-                    Acessar Visualizador
+                    Acessar Viewer
                   </Text>
                   <IconArrowRight size={18} color="var(--primary)" />
                 </Group>

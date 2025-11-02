@@ -74,6 +74,27 @@ export default function VisualizerPage() {
   const goPrev = () => setCurrentIndex((i) => (i > 0 ? i - 1 : i));
   const goNext = () => setCurrentIndex((i) => (i < members.length - 1 ? i + 1 : i));
 
+  // Enquanto carrega os membros, mostra tela cheia de loading para evitar "layout shift"
+  if (loading) {
+    return (
+      <Box
+        style={{
+          minHeight: "100vh",
+          background: "var(--primary)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "20px",
+        }}
+      >
+        <Stack align="center" gap="sm">
+          <Loader size="lg" color="white" />
+          <Text c="white" fw={600}>Carregando dados do Viewer…</Text>
+        </Stack>
+      </Box>
+    );
+  }
+
   return (
     <Box
       style={{
@@ -87,7 +108,6 @@ export default function VisualizerPage() {
     >
       <Container size="lg">
         <Paper
-          shadow="xl"
           p="xl"
           radius="lg"
           style={{
@@ -124,11 +144,6 @@ export default function VisualizerPage() {
               <Box style={{ width: 120 }} />
             </Group>
 
-            {loading && (
-              <Alert icon={<Loader size="sm" color="var(--primary)" />} title="Carregando" color="var(--primary)" variant="light">
-                <Text size="sm">Buscando dados no Google Sheets…</Text>
-              </Alert>
-            )}
             {error && !loading && (
               <Alert icon={<IconAlertCircle size={18} />} title="Erro" color="red" variant="light">
                 <Text size="sm">{error}</Text>
@@ -142,7 +157,7 @@ export default function VisualizerPage() {
                   <Button variant="light" color="var(--primary)" onClick={goPrev} disabled={currentIndex === 0} leftSection={<IconChevronLeft size={18} />}></Button>
                   <Box ta="center">
                     <Title order={3} size="h4" style={{ color: "var(--primary)" }}>{current.name}</Title>
-                    <Text size="sm" c="dimmed">{current.email}</Text>
+                    {/* <Text size="sm" c="dimmed">{current.email}</Text> */}
                     {current.frentes && (
                       <Group gap="xs" justify="center" mt="xs">
                         {current.frentes
@@ -174,9 +189,9 @@ export default function VisualizerPage() {
                     legendWidth={200}
                     spacerWidth={24}
                     compactLegend
+                    centerLegendVertically
                   />
                 </Paper>
-
                 {/* Faixa de "abas" no estilo Google Sheets */}
                 <Box>
                   <Text size="sm" fw={600} c="dimmed" mb="xs">Membros ({members.length})</Text>
