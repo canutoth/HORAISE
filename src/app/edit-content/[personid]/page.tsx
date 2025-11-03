@@ -19,6 +19,7 @@ import {
   Badge,
   MultiSelect,
   ActionIcon,
+  Modal,
 } from "@mantine/core";
 import {
   IconDeviceFloppy,
@@ -75,6 +76,7 @@ export default function EditContentPage() {
   const [isMobile, setIsMobile] = useState(false);
   const [isEditingFrentes, setIsEditingFrentes] = useState(false);
   const [editedFrentes, setEditedFrentes] = useState<string[]>([]);
+  const [confirmExitOpen, setConfirmExitOpen] = useState(false);
 
   // Lista de frentes disponíveis (mesma do cadastro)
   const FRENTES_OPTIONS = [
@@ -118,6 +120,7 @@ export default function EditContentPage() {
       case "online": return "O";
       case "ocupado": return "X";
       case "reuniao": return "R";
+      case "almoss": return "L";
       default: return "";
     }
   };
@@ -301,7 +304,7 @@ export default function EditContentPage() {
         color: "red",
         icon: <IconX />,
       });
-      return;
+      return false;
     }
 
     if (!validation.valid) {
@@ -311,7 +314,7 @@ export default function EditContentPage() {
         color: "red",
         icon: <IconX />,
       });
-      return;
+      return false;
     }
 
     // Verifica se o email é o exemplo (não pode ser salvo)
@@ -322,7 +325,7 @@ export default function EditContentPage() {
         color: "red",
         icon: <IconX />,
       });
-      return;
+      return false;
     }
 
     setIsSaving(true);
@@ -340,6 +343,7 @@ export default function EditContentPage() {
         setMemberData(currentData);
   setSavedSchedule(cloneSchedule(schedule)); // Atualiza o schedule salvo (deep clone)
         setIsNewMember(false); // Agora não é mais novo
+        return true;
       } else {
         notifications.show({
           title: "Erro ao Salvar",
@@ -347,6 +351,7 @@ export default function EditContentPage() {
           color: "red",
           icon: <IconX />,
         });
+        return false;
       }
     } catch (error) {
       console.error("Erro ao salvar:", error);
@@ -356,8 +361,31 @@ export default function EditContentPage() {
         color: "red",
         icon: <IconX />,
       });
+      return false;
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Aviso ao usuário caso tente fechar/atualizar a aba com alterações não salvas
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = "";
+        return "";
+      }
+      return undefined;
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [hasUnsavedChanges]);
+
+  const handleBackClick = () => {
+    if (hasUnsavedChanges) {
+      setConfirmExitOpen(true);
+    } else {
+      router.push("/horaise-editor");
     }
   };
 
@@ -440,7 +468,7 @@ export default function EditContentPage() {
                   leftSection={<IconArrowLeft size={18} />}
                   variant="light"
                   color="var(--primary)"
-                  onClick={() => router.push("/horaise-editor")}
+                  onClick={handleBackClick}
                 >
                   Voltar
                 </Button>
@@ -475,7 +503,7 @@ export default function EditContentPage() {
                   leftSection={<IconArrowLeft size={18} />}
                   variant="light"
                   color="var(--primary)"
-                  onClick={() => router.push("/horaise-editor")}
+                  onClick={handleBackClick}
                   size="sm"
                 >
                   Voltar
@@ -504,6 +532,16 @@ export default function EditContentPage() {
             </Stack>
           </Box>
         </Paper>
+
+        {/* Modal de confirmação ao sair com alterações não salvas */}
+        <Modal opened={confirmExitOpen} onClose={() => setConfirmExitOpen(false)} title="Atenção! Você tem alterações não salvas." centered>
+          {/* <Text>Você tem alterações não salvas.</Text> */}
+          <Group justify="flex-end" mt="md">
+            <Button color="green" loading={isSaving} onClick={async () => { setConfirmExitOpen(false); const ok = await handleSave(); if (ok) router.push("/horaise-editor"); }}>Salvar e sair</Button>
+            <Button variant="light" color="red" onClick={() => { setConfirmExitOpen(false); router.push("/horaise-editor"); }}>Sair sem salvar</Button>
+            <Button variant="default" onClick={() => setConfirmExitOpen(false)}>Cancelar</Button>
+          </Group>
+        </Modal>
 
         {/* Frentes do Membro */}
         {memberData?.frentes && (
