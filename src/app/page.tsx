@@ -128,7 +128,7 @@ export default function HomePage() {
                 </ThemeIcon>
                 <Box>
                   <Title order={2} size="h3" style={{ color: "var(--primary)" }}>
-                    HORAISE Scheduler
+                    HORAISE {<br />} Scheduler
                   </Title>
                   <Text size="sm" c="dimmed" mt="xs">
                     Encontre horários em comum
@@ -177,7 +177,7 @@ export default function HomePage() {
                 </ThemeIcon>
                 <Box>
                   <Title order={2} size="h3" style={{ color: "var(--primary)" }}>
-                    HORAISE Editor
+                    HORAISE {<br />} Editor
                   </Title>
                   <Text size="sm" c="dimmed" mt="xs">
                     Edite sua agenda
@@ -226,7 +226,7 @@ export default function HomePage() {
                 </ThemeIcon>
                 <Box>
                   <Title order={2} size="h3" style={{ color: "var(--primary)" }}>
-                    HORAISE Viewer
+                    HORAISE {<br />} Viewer
                   </Title>
                   <Text size="sm" c="dimmed" mt="xs">
                     Visualize os horários do time
