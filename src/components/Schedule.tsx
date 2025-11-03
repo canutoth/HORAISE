@@ -189,6 +189,10 @@ export default function ScheduleCalendar({
   // Mobile header alignment helpers
   const dayHeaderRef = useRef<HTMLDivElement | null>(null);
   const [mobileHeaderHeight, setMobileHeaderHeight] = useState<number>(46); // Valor inicial fixo (12px padding top + 12px padding bottom + ~22px texto)
+  
+  // Estados para drag (arrastar para marcar)
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStatus, setDragStatus] = useState<Exclude<ScheduleStatus, null> | null>(null);
 
   // Detecta se é mobile
   useEffect(() => {
@@ -242,8 +246,8 @@ export default function ScheduleCalendar({
   };
 
   // Limpa uma célula
-  const handleClearCell = (day: number, hour: number, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleClearCell = (day: number, hour: number, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     if (readOnly) return;
     if (schedule[day]) {
       const dayMap = { ...(schedule[day] || {}) };
@@ -257,6 +261,67 @@ export default function ScheduleCalendar({
   const getCellStatus = (day: number, hour: number): ScheduleStatus => {
     return schedule[day]?.[hour] || null;
   };
+
+  // Inicia o drag
+  const handleMouseDown = (day: number, hour: number) => {
+    if (readOnly) return;
+    
+    setIsDragging(true);
+    const currentStatus = getCellStatus(day, hour);
+    
+    if (currentStatus) {
+      // Se a célula já tem status, modo de limpeza
+      setDragStatus(null);
+      handleClearCell(day, hour);
+    } else if (selectedStatus) {
+      // Se tem status selecionado, modo de pintura
+      setDragStatus(selectedStatus);
+      const dayMap = { ...(schedule[day] || {}) };
+      dayMap[hour] = selectedStatus;
+      const newSchedule: ScheduleData = { ...schedule, [day]: dayMap };
+      onChange(newSchedule);
+    }
+  };
+
+  // Continua o drag sobre outras células
+  const handleMouseEnter = (day: number, hour: number) => {
+    if (!readOnly) {
+      setHoveredCell({ day, hour });
+    }
+    
+    if (isDragging && !readOnly) {
+      const currentStatus = getCellStatus(day, hour);
+      
+      if (dragStatus === null) {
+        // Modo limpeza: remove status de células que têm
+        if (currentStatus) {
+          handleClearCell(day, hour);
+        }
+      } else {
+        // Modo pintura: aplica status apenas em células vazias
+        if (!currentStatus) {
+          const dayMap = { ...(schedule[day] || {}) };
+          dayMap[hour] = dragStatus;
+          const newSchedule: ScheduleData = { ...schedule, [day]: dayMap };
+          onChange(newSchedule);
+        }
+      }
+    }
+  };
+
+  // Finaliza o drag
+  const handleMouseUp = () => {
+    setIsDragging(false);
+    setDragStatus(null);
+  };
+
+  // Adiciona listener global para mouseup (caso solte fora do calendário)
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mouseup', handleMouseUp);
+      return () => window.removeEventListener('mouseup', handleMouseUp);
+    }
+  }, [isDragging]);
 
   // Renderiza o calendário (desktop)
   const renderCalendar = () => (
@@ -331,7 +396,8 @@ export default function ScheduleCalendar({
                   <UnstyledButton
                     key={dayIdx}
                     onClick={() => handleCellClick(dayIdx, hour)}
-                    onMouseEnter={() => !readOnly && setHoveredCell({ day: dayIdx, hour })}
+                    onMouseDown={() => handleMouseDown(dayIdx, hour)}
+                    onMouseEnter={() => handleMouseEnter(dayIdx, hour)}
                     onMouseLeave={() => setHoveredCell(null)}
                     style={{
                       position: "relative",
@@ -339,10 +405,11 @@ export default function ScheduleCalendar({
                       border: "1px solid #dee2e6",
                       borderRadius: "4px",
                       background: status ? STATUS_COLORS[status] : "white",
-                      cursor: "pointer",
+                      cursor: isDragging ? (dragStatus ? "copy" : "not-allowed") : "pointer",
                       transition: "all 0.15s",
                       opacity: status ? 0.8 : 1,
                       pointerEvents: readOnly ? "none" : "auto",
+                      userSelect: "none",
                     }}
                   >
                     {/* Botão de limpar */}
@@ -477,18 +544,36 @@ export default function ScheduleCalendar({
                   <UnstyledButton
                     key={dayIdx}
                     onClick={() => handleCellClick(dayIdx, hour)}
-                    onMouseEnter={() => !readOnly && setHoveredCell({ day: dayIdx, hour })}
+                    onMouseDown={() => handleMouseDown(dayIdx, hour)}
+                    onMouseEnter={() => handleMouseEnter(dayIdx, hour)}
                     onMouseLeave={() => setHoveredCell(null)}
+                    onTouchStart={() => handleMouseDown(dayIdx, hour)}
+                    onTouchMove={(e) => {
+                      // Para touch, precisamos detectar sobre qual célula está
+                      const touch = e.touches[0];
+                      const element = document.elementFromPoint(touch.clientX, touch.clientY);
+                      if (element && element.hasAttribute('data-cell')) {
+                        const cellDay = parseInt(element.getAttribute('data-day') || '0');
+                        const cellHour = parseInt(element.getAttribute('data-hour') || '0');
+                        handleMouseEnter(cellDay, cellHour);
+                      }
+                    }}
+                    onTouchEnd={handleMouseUp}
+                    data-cell="true"
+                    data-day={dayIdx}
+                    data-hour={hour}
                     style={{
                       position: "relative",
                       height: `${ROW_HEIGHT}px`,
                       border: "1px solid #dee2e6",
                       borderRadius: "4px",
                       background: status ? STATUS_COLORS[status] : "white",
-                      cursor: "pointer",
+                      cursor: isDragging ? (dragStatus ? "copy" : "not-allowed") : "pointer",
                       transition: "all 0.15s",
                       opacity: status ? 0.8 : 1,
                       pointerEvents: readOnly ? "none" : "auto",
+                      userSelect: "none",
+                      WebkitTouchCallout: "none",
                     }}
                   >
                     {status && isHovered && !readOnly && (

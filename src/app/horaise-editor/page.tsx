@@ -176,7 +176,7 @@ export default function EditorLoginPage() {
                 variant="light"
               >
                 <Text size="sm">
-                  Digite seu email para acessar ou editar seus horários no AISELab.
+                  Digite seu email para editar seus horários no AISE.
                 </Text>
                 <Text size="sm" mt="sm">
                   Não possui cadastro?{" "}

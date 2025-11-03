@@ -78,10 +78,10 @@ export default function HomePage() {
             </Text>
             <Stack gap="xs" mt="md">
               <Text size="sm" c="black">
-                <strong style={{ color: "var(--primary)" }}>HORAISE Editor:</strong> Aloque e edite sua disponibilidade semanal e as frentes que você atua
+                <strong style={{ color: "var(--primary)" }}>HORAISE Scheduler:</strong> Encontre os melhores horários para agendar reuniões com a equipe
               </Text>
               <Text size="sm" c="black">
-                <strong style={{ color: "var(--primary)" }}>HORAISE Scheduler:</strong> Encontre os melhores horários para agendar reuniões com a equipe
+                <strong style={{ color: "var(--primary)" }}>HORAISE Editor:</strong> Aloque e edite sua disponibilidade semanal e as frentes que você atua
               </Text>
               <Text size="sm" c="black">
                 <strong style={{ color: "var(--primary)" }}>HORAISE Viewer:</strong> Visualize os horários de todos os membros
@@ -94,55 +94,6 @@ export default function HomePage() {
             cols={{ base: 1, sm: 2, md: 3 }}
             spacing="lg"
           >
-            {/* Card: HORAISE Editor */}
-            <Paper
-              shadow="lg"
-              p="xl"
-              radius="lg"
-              style={{
-                background: "rgba(255, 255, 255, 0.98)",
-                cursor: "pointer",
-                transition: "all 0.3s ease",
-                border: "2px solid transparent",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = "translateY(-4px)";
-                e.currentTarget.style.borderColor = "var(--primary)";
-                e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.borderColor = "transparent";
-                e.currentTarget.style.boxShadow = "";
-              }}
-              onClick={() => router.push("/horaise-editor")}
-            >
-              <Stack gap="md" align="center" ta="center">
-                <ThemeIcon
-                  size={80}
-                  radius="xl"
-                  variant="light"
-                  color="var(--primary)"
-                >
-                  <IconEdit size={40} />
-                </ThemeIcon>
-                <Box>
-                  <Title order={2} size="h3" style={{ color: "var(--primary)" }}>
-                    HORAISE Editor
-                  </Title>
-                  <Text size="sm" c="dimmed" mt="xs">
-                    Edite seus horários de disponibilidade
-                  </Text>
-                </Box>
-                <Group gap="xs" mt="sm">
-                  <Text size="sm" fw={600} c="var(--primary)">
-                    Acessar Editor
-                  </Text>
-                  <IconArrowRight size={18} color="var(--primary)" />
-                </Group>
-              </Stack>
-            </Paper>
-
             {/* Card: HORAISE Scheduler */}
             <Paper
               shadow="lg"
@@ -180,7 +131,7 @@ export default function HomePage() {
                     HORAISE Scheduler
                   </Title>
                   <Text size="sm" c="dimmed" mt="xs">
-                    Encontre horários em comum para reuniões
+                    Encontre horários em comum
                   </Text>
                 </Box>
                 <Group gap="xs" mt="sm">
@@ -192,7 +143,56 @@ export default function HomePage() {
               </Stack>
             </Paper>
 
-            {/* Card: HORAISE Visualizador */}
+            {/* Card: HORAISE Editor */}
+            <Paper
+              shadow="lg"
+              p="xl"
+              radius="lg"
+              style={{
+                background: "rgba(255, 255, 255, 0.98)",
+                cursor: "pointer",
+                transition: "all 0.3s ease",
+                border: "2px solid transparent",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-4px)";
+                e.currentTarget.style.borderColor = "var(--primary)";
+                e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.borderColor = "transparent";
+                e.currentTarget.style.boxShadow = "";
+              }}
+              onClick={() => router.push("/horaise-editor")}
+            >
+              <Stack gap="md" align="center" ta="center">
+                <ThemeIcon
+                  size={80}
+                  radius="xl"
+                  variant="light"
+                  color="var(--primary)"
+                >
+                  <IconEdit size={40} />
+                </ThemeIcon>
+                <Box>
+                  <Title order={2} size="h3" style={{ color: "var(--primary)" }}>
+                    HORAISE Editor
+                  </Title>
+                  <Text size="sm" c="dimmed" mt="xs">
+                    Edite sua agenda
+                  </Text>
+                </Box>
+                <Group gap="xs" mt="sm">
+                  <Text size="sm" fw={600} c="var(--primary)">
+                    Acessar Editor
+                  </Text>
+                  <IconArrowRight size={18} color="var(--primary)" />
+                </Group>
+              </Stack>
+            </Paper>
+
+            {/* Card: HORAISE Viewer */}
             <Paper
               shadow="lg"
               p="xl"
@@ -229,7 +229,7 @@ export default function HomePage() {
                     HORAISE Viewer
                   </Title>
                   <Text size="sm" c="dimmed" mt="xs">
-                    Visualize os horários de todos os membros
+                    Visualize os horários do time
                   </Text>
                 </Box>
                 <Group gap="xs" mt="sm">
