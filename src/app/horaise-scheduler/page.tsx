@@ -94,6 +94,11 @@ export default function SchedulerPage() {
   // Duração fixa em 1 hora
   const duration = 1;
 
+  // Define o título da página
+  useEffect(() => {
+    document.title = "HORAISE | Scheduler";
+  }, []);
+
   // Carrega todos os membros ao montar o componente
   useEffect(() => {
     loadAllMembers();
@@ -194,50 +199,33 @@ export default function SchedulerPage() {
       };
     }
 
-    // Nível 2.5: Todos livres
-    const level25Slots = findSlotsWithCondition(members, durationHours, (statuses, membersList) => {
-      return statuses.every((s) => s === null);
-    });
-
-    if (level25Slots.length > 0) {
-      return {
-        level: 2.5,
-        slots: level25Slots,
-        message: `✅ Encontrei ${level25Slots.length} horário(s) em que todos estão livres!`,
-      };
-    }
-
-    // Nível 3: Parte trabalhando (presencial ou online), resto livre (null) ou em reunião
+    // Nível 3: Todos livres
     const level3Slots = findSlotsWithCondition(members, durationHours, (statuses, membersList) => {
-      const hasWorking = statuses.some((s) => s === "presencial" || s === "online");
-      const allWorkingOrFreeOrMeeting = statuses.every(
-        (s) => s === "presencial" || s === "online" || s === null || s === "reuniao"
-      );
-      return hasWorking && allWorkingOrFreeOrMeeting;
+      return statuses.every((s) => s === null);
     });
 
     if (level3Slots.length > 0) {
       return {
         level: 3,
         slots: level3Slots,
-        message: `⚠️ Encontrei ${level3Slots.length} horário(s), mas algumas pessoas estão em reunião. Vale conversar!`,
+        message: `✅ Encontrei ${level3Slots.length} horário(s) em que todos estão livres!`,
       };
     }
 
-    // Nível 4: Parte trabalhando (presencial ou online), resto livre (null) ou em aula
+    // Nível 4: pelo menos uma pessoa em reunião, ninguém ocupado ou em aula, resto pode ser livre ou trabalhando
     const level4Slots = findSlotsWithCondition(members, durationHours, (statuses, membersList) => {
-      const hasWorking = statuses.some((s) => s === "presencial" || s === "online");
-      const allWorkingOrFreeOrClass = statuses.every(
-        (s) => s === "presencial" || s === "online" || s === null || s === "aula"
+      const hasMeeting = statuses.some((s) => s === "reuniao");
+      const noOccupiedOrClass = statuses.every(
+        (s) => s === "presencial" || s === "online" || s === null || s === "reuniao"
       );
-      return hasWorking && allWorkingOrFreeOrClass;
+      return hasMeeting && noOccupiedOrClass;
     });
 
     if (level4Slots.length > 0) {
       return {
         level: 4,
         slots: level4Slots,
-        message: `⚠️ Encontrei ${level4Slots.length} horário(s), mas algumas pessoas estão em aula. Vale conversar!`,
+        message: `⚠️ Encontrei ${level4Slots.length} horário(s), mas algumas pessoas estão em reunião. Vale conversar!`,
       };
     }
 
