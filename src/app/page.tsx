@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import {
   Box,
   Paper,
@@ -23,6 +23,9 @@ import {
 import { useRouter } from "next/navigation";
 
 export default function HomePage() {
+  useEffect(() => {
+    document.title = "HORAISE";
+  }, []);
   const router = useRouter();
 
   return (

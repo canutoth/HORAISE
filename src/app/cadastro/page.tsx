@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Paper,
@@ -55,6 +55,11 @@ export default function CadastroPage() {
   const [errorNome, setErrorNome] = useState("");
   const [errorEmail, setErrorEmail] = useState("");
   const [errorFrente, setErrorFrente] = useState("");
+
+  // Define o título da página
+  useEffect(() => {
+    document.title = "HORAISE | Cadastro";
+  }, []);
 
   const handleCadastro = async () => {
     // Limpa erros anteriores

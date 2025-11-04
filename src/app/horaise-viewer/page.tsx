@@ -52,6 +52,11 @@ export default function VisualizerPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [error, setError] = useState<string>("");
 
+  // Define o título da página
+  useEffect(() => {
+    document.title = "HORAISE | Viewer";
+  }, []);
+
   useEffect(() => {
     (async () => {
       try {

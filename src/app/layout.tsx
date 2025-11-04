@@ -28,9 +28,13 @@ const theme = createTheme({
 });
 
 export const metadata: Metadata = {
-  title: "HORAISE",
+  title: {
+    template: "%s | HORAISE",
+    default: "HORAISE"
+  },
   description: "Editor de horários da equipe AISE - PUC-Rio",
 };
+
 export default function RootLayout({
   children,
 }: Readonly<{

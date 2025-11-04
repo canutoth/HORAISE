@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Paper,
@@ -30,6 +30,11 @@ export default function EditorLoginPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Define o título da página
+  useEffect(() => {
+    document.title = "HORAISE | Editor";
+  }, []);
 
   // Emails de exemplo disponíveis no modo offline
   const offlineEmails = ["exemplo@example.com", "test@test.com"];

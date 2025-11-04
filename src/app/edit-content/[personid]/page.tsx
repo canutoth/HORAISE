@@ -97,6 +97,11 @@ export default function EditContentPage() {
     "StoneLab",
   ];
 
+  // Define o título da página
+  useEffect(() => {
+    document.title = `HORAISE | Editor`;
+  }, []);
+
   // Detecta mobile apenas para layout; não altera desktop
   useEffect(() => {
     const handleResize = () =>
