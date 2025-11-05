@@ -40,6 +40,7 @@ import {
   type TeamMemberData,
   type ScheduleData,
 } from "../../../services/googleSheets";
+import { validateSchedule, type RuleViolation } from "@/rules/scheduleRules";
 import ProfileInstructions from "../../../components/Rules";
 import Schedule from "../../../components/Schedule";
 
@@ -77,6 +78,8 @@ export default function EditContentPage() {
   const [isEditingFrentes, setIsEditingFrentes] = useState(false);
   const [editedFrentes, setEditedFrentes] = useState<string[]>([]);
   const [confirmExitOpen, setConfirmExitOpen] = useState(false);
+  const [rulesModalOpen, setRulesModalOpen] = useState(false);
+  const [rulesViolations, setRulesViolations] = useState<RuleViolation[]>([]);
 
   // Lista de frentes disponíveis (mesma do cadastro)
   const FRENTES_OPTIONS = [
@@ -322,6 +325,14 @@ export default function EditContentPage() {
       return false;
     }
 
+    // Validação de regras do schedule (ex.: almoço nos dias úteis)
+    const scheduleResult = validateSchedule(schedule);
+    if (!scheduleResult.ok) {
+      setRulesViolations(scheduleResult.violations);
+      setRulesModalOpen(true);
+      return false; // bloqueia o save
+    }
+
     // Verifica se o email é o exemplo (não pode ser salvo)
     if (currentData.email === "exemplo@example.com") {
       notifications.show({
@@ -545,6 +556,30 @@ export default function EditContentPage() {
             <Button color="green" loading={isSaving} onClick={async () => { setConfirmExitOpen(false); const ok = await handleSave(); if (ok) router.push("/horaise-editor"); }}>Salvar e sair</Button>
             <Button variant="light" color="red" onClick={() => { setConfirmExitOpen(false); router.push("/horaise-editor"); }}>Sair sem salvar</Button>
             <Button variant="default" onClick={() => setConfirmExitOpen(false)}>Cancelar</Button>
+          </Group>
+        </Modal>
+
+        {/* Modal de Regras do Schedule */}
+        <Modal
+          opened={rulesModalOpen}
+          onClose={() => setRulesModalOpen(false)}
+          title="Ajustes necessários no seu horário"
+          centered
+        >
+          <Alert icon={<IconAlertCircle />} color="orange" variant="light" mb="sm">
+            <Text size="sm">
+              Para salvar seus horários, corrija os itens abaixo:
+            </Text>
+          </Alert>
+          <Stack gap="xs">
+            {rulesViolations.map((v, idx) => (
+              <Box key={idx} style={{ fontFamily: "monospace" }}>
+                <Text size="sm">• {v.message}</Text>
+              </Box>
+            ))}
+          </Stack>
+          <Group justify="flex-end" mt="md">
+            <Button variant="light" onClick={() => setRulesModalOpen(false)} leftSection={<IconCheck size={16} />}>Ok, vou ajustar</Button>
           </Group>
         </Modal>
 
