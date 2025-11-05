@@ -60,6 +60,12 @@ export default function EditorLoginPage() {
       const member = await getMemberByEmail(email);
 
       if (member) {
+        // Verifica permissão de edição
+        if ((member as any).editor !== 1) {
+          setError("Você não possui acesso de edição. Solicite permissão ao administrador.");
+          setLoading(false);
+          return;
+        }
         // Membro encontrado - redireciona para página de edição
         console.log("Membro existente encontrado:", member.name);
         const encodedEmail = encodeURIComponent(email);

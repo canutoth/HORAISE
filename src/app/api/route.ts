@@ -11,7 +11,7 @@ import {
 type Actions =
   | { action: "read-member"; email: string }
   | { action: "read-example" }
-  | { action: "update-member"; member: { name: string; email: string; frentes: string }; isNew?: boolean }
+  | { action: "update-member"; member: { name: string; email: string; frentes: string; editor?: number | string }; isNew?: boolean }
   | { action: "save-schedule"; email: string; scheduleRow: string[] }
   | { action: "load-schedule"; email: string }
   | { action: "read-all-members" };

@@ -8,7 +8,7 @@ export type RuleCode =
 
 export interface RuleViolation {
   code: RuleCode;
-  day: number; // 0=Dom, 1=Seg, ... 6=Sáb (matches Schedule UI)
+  day: number; // 0=Seg, 1=Ter, ... 6=Dom (matches Schedule UI)
   message: string;
   details?: Record<string, unknown>;
 }
@@ -75,4 +75,10 @@ export function validateSchedule(schedule: ScheduleData): ValidationResult {
 // Optional: utility to format violations for UI or toasts
 export function formatViolations(messages: RuleViolation[]): string[] {
   return messages.map((v) => v.message);
+}
+
+// Access control helper for editor flag
+export function hasEditorAccess(editor?: number | string): boolean {
+  const n = typeof editor === "string" ? Number(editor) : editor;
+  return n === 1;
 }

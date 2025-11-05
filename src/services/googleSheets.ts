@@ -17,6 +17,7 @@ export interface TeamMemberData {
   name: string;
   email: string;
   frentes: string;
+  editor?: number; // 1 = pode editar, 0 = sem acesso
   schedule?: ScheduleData;
 }
 
@@ -58,6 +59,7 @@ const rowToTeamMember = (row: string[]): TeamMemberData => {
     name: row[0] || "",
     email: row[1] || "",
     frentes: row[2] || "",
+    editor: Number(row[3] ?? 0) || 0,
   };
 };
 
@@ -68,6 +70,7 @@ const teamMemberToRow = (member: TeamMemberData): string[] => {
     member.name,
     member.email,
     member.frentes,
+    String(member.editor ?? 0),
   ];
 };
 
@@ -96,7 +99,7 @@ export async function getMemberByEmail(
     }
 
     const payload = await res.json();
-    // payload.member is an array (row) from the backend
+  // payload.member is an array (row) from the backend
     if (!payload || !payload.member) return null;
     const row: string[] = payload.member;
     const memberData = rowToTeamMember(row);
@@ -479,7 +482,7 @@ export async function getAllMembers(): Promise<TeamMemberData[]> {
       const memberData = rowToTeamMember(row);
       
       // Extrai o schedule das colunas D em diante (índice 3+)
-      const scheduleRow = row.slice(3); // Pega da coluna D (índice 3) até CN
+      const scheduleRow = row.slice(4); // Agora começa na coluna E (índice 4) por causa do Editor
       if (scheduleRow && scheduleRow.length > 0) {
         const schedule = infoRowToSchedule(scheduleRow);
         if (schedule) {
