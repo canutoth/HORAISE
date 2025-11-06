@@ -46,8 +46,8 @@ export async function readMemberByEmail(email: string): Promise<{ row: string[];
   const sheetRef = escapeSheetName(SHEET_NAME);
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    // Now includes the new Editor column at D
-    range: `${sheetRef}!A${rowNumber}:D${rowNumber}`,
+    // Includes columns A..F (Nome, Email, Frentes, Editor, HP, HO)
+    range: `${sheetRef}!A${rowNumber}:F${rowNumber}`,
   });
   const row = res.data.values?.[0] || [];
   return { row, rowNumber };
@@ -58,21 +58,22 @@ export async function readExample(): Promise<string[] | null> {
   const sheetRef = escapeSheetName(SHEET_NAME);
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetRef}!A2:C2`,
+    // Example now includes HP and HO
+    range: `${sheetRef}!A2:F2`,
   });
   return res.data.values?.[0] || null;
 }
 
-export async function updateMemberRow(member: { name: string; email: string; frentes: string; editor?: number | string }, isNew: boolean) {
+export async function updateMemberRow(member: { name: string; email: string; frentes: string; editor?: number | string; hp?: string; ho?: string }, isNew: boolean) {
   const { sheets } = await getSheetsClient();
   const sheetRef = escapeSheetName(SHEET_NAME);
   const editorFlag = (member.editor ?? 0);
-  const values = [[member.name, member.email, member.frentes, editorFlag]];
+  const values = [[member.name, member.email, member.frentes, editorFlag, member.hp ?? "", member.ho ?? ""]];
   if (isNew) {
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      // Append through Editor column (A..D)
-      range: `${sheetRef}!A:D`,
+      // Append through HO column (A..F)
+      range: `${sheetRef}!A:F`,
       valueInputOption: "RAW",
       requestBody: { values },
     });
@@ -84,8 +85,8 @@ export async function updateMemberRow(member: { name: string; email: string; fre
   }
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
-    // Update A..D (including Editor column)
-    range: `${sheetRef}!A${rowNumber}:D${rowNumber}`,
+    // Update A..F (including Editor, HP, HO)
+    range: `${sheetRef}!A${rowNumber}:F${rowNumber}`,
     valueInputOption: "RAW",
     requestBody: { values },
   });
@@ -97,8 +98,8 @@ export async function saveScheduleRow(email: string, scheduleRow: string[]) {
   const sheetRef = escapeSheetName(SHEET_NAME);
   const rowNumber = await findRowByEmail(sheets, email);
   if (!rowNumber) return { success: false, message: `Email ${email} não encontrado` };
-  // 7 dias x 13 horas = 91 colunas -> agora E..CQ (por causa da coluna Editor)
-  const range = `${sheetRef}!E${rowNumber}:CQ${rowNumber}`;
+  // 7 dias x 13 horas = 91 colunas -> agora G..CS (Editor + HP + HO deslocam)
+  const range = `${sheetRef}!G${rowNumber}:CS${rowNumber}`;
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
     range,
@@ -113,8 +114,8 @@ export async function loadScheduleRow(email: string): Promise<string[] | null> {
   const sheetRef = escapeSheetName(SHEET_NAME);
   const rowNumber = await findRowByEmail(sheets, email);
   if (!rowNumber) return null;
-  // 7 dias x 13 horas = 91 colunas -> agora E..CQ
-  const range = `${sheetRef}!E${rowNumber}:CQ${rowNumber}`;
+  // 7 dias x 13 horas = 91 colunas -> agora G..CS
+  const range = `${sheetRef}!G${rowNumber}:CS${rowNumber}`;
   const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range });
   return res.data.values?.[0] || [];
 }
@@ -122,11 +123,11 @@ export async function loadScheduleRow(email: string): Promise<string[] | null> {
 export async function readAllMembers(): Promise<string[][]> {
   const { sheets } = await getSheetsClient();
   const sheetRef = escapeSheetName(SHEET_NAME);
-  // Lê todos os dados de uma vez (A-CN = Nome, Email, Frentes + Schedule)
+  // Lê todos os dados de uma vez (A-CS = Nome, Email, Frentes, Editor, HP, HO + Schedule)
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    // Inclui toda a faixa até CQ (Editor + 91 colunas de schedule)
-    range: `${sheetRef}!A2:CQ`,
+    // Inclui toda a faixa até CS
+    range: `${sheetRef}!A2:CS`,
   });
   return res.data.values || [];
 }

@@ -1,6 +1,3 @@
-// Centralized schedule validation rules for HORAISE
-// Future: add more rules here and compose them in validateSchedule
-
 import type { ScheduleData } from "../services/googleSheets";
 
 export type RuleCode =

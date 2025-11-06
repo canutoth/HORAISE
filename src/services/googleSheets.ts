@@ -19,6 +19,8 @@ export interface TeamMemberData {
   frentes: string;
   editor?: number; // 1 = pode editar, 0 = sem acesso
   schedule?: ScheduleData;
+  hp?: string; // nova coluna HP
+  ho?: string; // nova coluna HO
 }
 
 // Storage local para modo offline (simula um "banco de dados" em memória)
@@ -53,24 +55,28 @@ const stringToArray = (str: string): string[] => {
 };
 
 // Converte linha do Google Sheets (HORAISE) para objeto TeamMemberData
-// Formato: [Nome, Email, Frentes, ...schedule columns]
+// Formato atual: [Nome, Email, Frentes, Editor, HP, HO, ...schedule columns]
 const rowToTeamMember = (row: string[]): TeamMemberData => {
   return {
     name: row[0] || "",
     email: row[1] || "",
     frentes: row[2] || "",
     editor: Number(row[3] ?? 0) || 0,
+    hp: row[4] || "",
+    ho: row[5] || "",
   };
 };
 
 // Converte objeto TeamMemberData para linha do Google Sheets (HORAISE)
-// Formato: [Nome, Email, Frentes] (schedule é salvo separadamente)
+// Formato atual: [Nome, Email, Frentes, Editor, HP, HO] (schedule é salvo separadamente)
 const teamMemberToRow = (member: TeamMemberData): string[] => {
   return [
     member.name,
     member.email,
     member.frentes,
     String(member.editor ?? 0),
+    member.hp ?? "",
+    member.ho ?? "",
   ];
 };
 
@@ -476,13 +482,13 @@ export async function getAllMembers(): Promise<TeamMemberData[]> {
     if (!payload || !payload.members) return [];
     
     // Converte cada linha para TeamMemberData
-    // Agora cada row já vem com: [Nome, Email, Frentes, ...scheduleColumns]
+    // Cada row vem com: [Nome, Email, Frentes, Editor, HP, HO, ...scheduleColumns]
     const members: TeamMemberData[] = [];
     for (const row of payload.members) {
       const memberData = rowToTeamMember(row);
       
-      // Extrai o schedule das colunas D em diante (índice 3+)
-      const scheduleRow = row.slice(4); // Agora começa na coluna E (índice 4) por causa do Editor
+          // Extrai o schedule a partir da coluna G (índice 6) em diante
+          const scheduleRow = row.slice(6);
       if (scheduleRow && scheduleRow.length > 0) {
         const schedule = infoRowToSchedule(scheduleRow);
         if (schedule) {
