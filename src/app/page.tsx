@@ -1,5 +1,4 @@
 "use client";
-
 import React, { useEffect } from "react";
 import {
   Box,
@@ -21,13 +20,11 @@ import {
   IconArrowRight,
 } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
-
 export default function HomePage() {
   useEffect(() => {
     document.title = "HORAISE";
   }, []);
   const router = useRouter();
-
   return (
     <Box
       style={{
@@ -41,7 +38,7 @@ export default function HomePage() {
     >
       <Container size="md">
         <Stack gap="xl">
-          {/* Header Principal */}
+          {}
           <Box ta="center">
             <Title
               order={1}
@@ -58,8 +55,7 @@ export default function HomePage() {
               Framework do AISE para facilitar agendamento de reuniões
             </Text>
           </Box>
-
-          {/* Como Funciona */}
+          {}
           <Paper
             shadow="md"
             p="lg"
@@ -91,13 +87,12 @@ export default function HomePage() {
               </Text>
             </Stack>
           </Paper>
-
-          {/* Cards das Ferramentas */}
+          {}
           <SimpleGrid
             cols={{ base: 1, sm: 2, md: 3 }}
             spacing="lg"
           >
-            {/* Card: HORAISE Scheduler */}
+            {}
             <Paper
               shadow="lg"
               p="xl"
@@ -145,8 +140,7 @@ export default function HomePage() {
                 </Group>
               </Stack>
             </Paper>
-
-            {/* Card: HORAISE Editor */}
+            {}
             <Paper
               shadow="lg"
               p="xl"
@@ -194,8 +188,7 @@ export default function HomePage() {
                 </Group>
               </Stack>
             </Paper>
-
-            {/* Card: HORAISE Viewer */}
+            {}
             <Paper
               shadow="lg"
               p="xl"
@@ -244,8 +237,7 @@ export default function HomePage() {
               </Stack>
             </Paper>
           </SimpleGrid>
-
-          {/* Footer */}
+          {}
           <Box ta="center">
             <Text size="xs" c="rgba(255, 255, 255, 0.8)">
               © 2025 AISE Lab - PUC-Rio

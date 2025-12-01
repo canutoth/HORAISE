@@ -29,6 +29,7 @@ import {
   IconX,
   IconArrowLeft,
   IconPencil,
+  IconLock,
 } from "@tabler/icons-react";
 import { useRouter, useParams } from "next/navigation";
 import { notifications } from "@mantine/notifications";
@@ -174,6 +175,25 @@ export default function EditContentPage() {
         // Busca membro existente
         const member = await getMemberByEmail(personId);
         if (member) {
+          // Verificar se tem permissão de edição
+          if (member.editor !== 1) {
+            const isPending = member.pending === 1;
+            const errorMsg = isPending
+              ? "Seu cadastro está pendente de aprovação. Aguarde o administrador liberar o acesso."
+              : "Você não tem permissão para editar. Solicite liberação ao administrador.";
+            
+            notifications.show({
+              title: "Acesso Negado",
+              message: errorMsg,
+              color: "red",
+              icon: <IconLock />,
+              autoClose: 5000,
+            });
+            
+            setTimeout(() => router.push("/horaise-editor"), 2000);
+            return;
+          }
+          
           setMemberData(member);
           const memberSchedule = member.schedule || {};
           setSchedule(memberSchedule);
@@ -193,7 +213,6 @@ export default function EditContentPage() {
           setSavedSchedule(cloneSchedule(exampleSchedule)); // Salva o schedule inicial (deep clone)
           setIsNewMember(true);
 
-          // notificação removida conforme solicitado
         }
       } catch (error) {
         console.error("Erro ao carregar dados:", error);
@@ -325,10 +344,66 @@ export default function EditContentPage() {
       return false;
     }
 
+    // Acumula TODAS as violações antes de mostrar o modal
+    const allViolations: RuleViolation[] = [];
+    
+    // Validação de HP/HO (horas presenciais + online)
+    const hp = memberData?.hp ? parseFloat(memberData.hp) : 0;
+    const ho = memberData?.ho ? parseFloat(memberData.ho) : 0;
+    
+    if (hp > 0 && ho > 0) {
+      // Converte schedule para array de códigos (mesmo formato que vai para planilha)
+      const scheduleArray: string[] = [];
+      for (let day = 0; day <= 6; day++) {
+        for (let hour = 7; hour <= 19; hour++) {
+          const status = schedule?.[day]?.[hour];
+          let code = "";
+          if (status === "presencial") code = "P";
+          else if (status === "online") code = "O";
+          else if (status === "reuniao") code = "R";
+          scheduleArray.push(code);
+        }
+      }
+      
+      // Valida horas usando a mesma lógica do backend
+      const hoursValidation = await fetch("/api", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "validate-hours",
+          scheduleRow: scheduleArray,
+          hp,
+          ho
+        })
+      }).then(res => res.json());
+      
+      if (!hoursValidation.isValid) {
+        allViolations.push(
+          {
+            code: "weekday-lunch-11-14" as any, // Usa qualquer code pois é genérico
+            day: -1,
+            message: `❌ ${hoursValidation.message}`
+          },
+          ...(hoursValidation.details ? [
+            {
+              code: "weekday-lunch-11-14" as any,
+              day: -1,
+              message: `📊 Seu horário: ${hoursValidation.details.totalPresencial}h presenciais + ${hoursValidation.details.totalOnline}h online + ${hoursValidation.details.totalReuniao}h reuniões = ${hoursValidation.details.totalGeral}h total`
+            }
+          ] : [])
+        );
+      }
+    }
+    
     // Validação de regras do schedule (ex.: almoço nos dias úteis)
     const scheduleResult = validateSchedule(schedule);
     if (!scheduleResult.ok) {
-      setRulesViolations(scheduleResult.violations);
+      allViolations.push(...scheduleResult.violations);
+    }
+    
+    // Se houver qualquer violação, mostra TODAS no modal
+    if (allViolations.length > 0) {
+      setRulesViolations(allViolations);
       setRulesModalOpen(true);
       return false; // bloqueia o save
     }
@@ -356,17 +431,58 @@ export default function EditContentPage() {
           color: "green",
           icon: <IconCheck />,
         });
-        setMemberData(currentData);
-  setSavedSchedule(cloneSchedule(schedule)); // Atualiza o schedule salvo (deep clone)
-        setIsNewMember(false); // Agora não é mais novo
+        
+        // IMPORTANTE: Recarregar dados da planilha para pegar editor=0 após salvar
+        try {
+          const updatedMember = await getMemberByEmail(personId);
+          if (updatedMember) {
+            setMemberData(updatedMember);
+            setSavedSchedule(cloneSchedule(updatedMember.schedule || {}));
+            
+            // Se editor foi bloqueado (=0), mostrar aviso e redirecionar
+            if (updatedMember.editor === 0) {
+              notifications.show({
+                title: "Acesso Bloqueado",
+                message: "Seus dados foram salvos e seu acesso foi bloqueado. Solicite liberação ao administrador para editar novamente.",
+                color: "yellow",
+                autoClose: 5000,
+              });
+              setTimeout(() => router.push("/horaise-editor"), 3000);
+            }
+          } else {
+            // Fallback: apenas atualiza estado local
+            setMemberData(currentData);
+            setSavedSchedule(cloneSchedule(schedule));
+          }
+        } catch (reloadError) {
+          console.warn("Não foi possível recarregar dados:", reloadError);
+          setMemberData(currentData);
+          setSavedSchedule(cloneSchedule(schedule));
+        }
+        
+        setIsNewMember(false);
         return true;
       } else {
+        // Tratar erros específicos (isPending, isBlocked)
+        const errorMsg = (result as any).isPending 
+          ? "Seu cadastro está pendente de aprovação. Aguarde o administrador liberar o acesso."
+          : (result as any).isBlocked
+          ? "Você não tem permissão para editar. Solicite liberação ao administrador."
+          : result.message;
+        
         notifications.show({
           title: "Erro ao Salvar",
-          message: result.message,
+          message: errorMsg,
           color: "red",
           icon: <IconX />,
+          autoClose: 8000,
         });
+        
+        // Se está bloqueado ou pendente, redirecionar
+        if ((result as any).isPending || (result as any).isBlocked) {
+          setTimeout(() => router.push("/horaise-editor"), 3000);
+        }
+        
         return false;
       }
     } catch (error) {
@@ -565,6 +681,7 @@ export default function EditContentPage() {
           onClose={() => setRulesModalOpen(false)}
           title="Ajustes necessários no seu horário"
           centered
+          size="lg"
         >
           <Alert icon={<IconAlertCircle />} color="orange" variant="light" mb="sm">
             <Text size="sm">
@@ -573,8 +690,10 @@ export default function EditContentPage() {
           </Alert>
           <Stack gap="xs">
             {rulesViolations.map((v, idx) => (
-              <Box key={idx} style={{ fontFamily: "monospace" }}>
-                <Text size="sm">• {v.message}</Text>
+              <Box key={idx}>
+                <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
+                  {v.message}
+                </Text>
               </Box>
             ))}
           </Stack>

@@ -1,8 +1,36 @@
 "use client";
-
 import { Box, Title, Text } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
+import { useSearchParams } from "next/navigation";
+import { useEffect } from "react";
 
 export default function HoraiseAdminPage() {
+  const searchParams = useSearchParams();
+  
+  useEffect(() => {
+    // Verifica se há mensagem de sucesso ou erro na URL
+    const success = searchParams.get("success");
+    const error = searchParams.get("error");
+    
+    if (success) {
+      notifications.show({
+        title: "Sucesso!",
+        message: success,
+        color: "green",
+        autoClose: 5000,
+      });
+    }
+    
+    if (error) {
+      notifications.show({
+        title: "Erro",
+        message: error,
+        color: "red",
+        autoClose: 5000,
+      });
+    }
+  }, [searchParams]);
+  
   return (
     <Box
       style={{

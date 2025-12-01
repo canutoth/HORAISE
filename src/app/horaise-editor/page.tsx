@@ -1,5 +1,4 @@
 "use client";
-
 import React, { useState, useEffect } from "react";
 import {
   Box,
@@ -23,10 +22,8 @@ import {
 } from "../../services/googleSheets";
 import Link from "next/link";
 import { PasswordInput, Modal, Group } from "@mantine/core";
-
 // Detecta modo offline (apenas via flag pública)
 const OFFLINE_MODE = process.env.NEXT_PUBLIC_OFFLINE_MODE === "true";
-
 export default function EditorLoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -36,31 +33,24 @@ export default function EditorLoginPage() {
   const [adminPassword, setAdminPassword] = useState("");
   const [adminError, setAdminError] = useState("");
   const [adminSubmitting, setAdminSubmitting] = useState(false);
-
   // Define o título da página
   useEffect(() => {
     document.title = "HORAISE | Editor";
   }, []);
-
   // Emails de exemplo disponíveis no modo offline
   const offlineEmails = ["exemplo@example.com", "test@test.com"];
-
   const handleLogin = async () => {
     setError("");
-
     // Validação básica
     if (!email.trim()) {
       setError("Por favor, insira seu email");
       return;
     }
-
     if (!validateEmail(email)) {
       setError("Por favor, insira um email válido");
       return;
     }
-
     setLoading(true);
-
     try {
       // Pre-check: se for email de admin, abre modal de senha
       try {
@@ -78,10 +68,8 @@ export default function EditorLoginPage() {
           }
         }
       } catch (_) {}
-
       // Busca o membro pelo email
       const member = await getMemberByEmail(email);
-
       if (member) {
         // Verifica permissão de edição
         if ((member as any).editor !== 1) {
@@ -107,7 +95,6 @@ export default function EditorLoginPage() {
       setLoading(false);
     }
   };
-
   const handleAdminLogin = async () => {
     setAdminError("");
     if (!adminPassword.trim()) {
@@ -135,13 +122,11 @@ export default function EditorLoginPage() {
       setAdminSubmitting(false);
     }
   };
-
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       handleLogin();
     }
   };
-
   return (
     <Box
       style={{
@@ -154,7 +139,7 @@ export default function EditorLoginPage() {
       }}
     >
       <Container size="xs">
-        {/* Modal de Acesso de Administrador */}
+        {}
         <Modal
           opened={adminOpen}
           onClose={() => setAdminOpen(false)}
@@ -169,15 +154,7 @@ export default function EditorLoginPage() {
           <Text size="sm" c="dimmed" mb="md">
             Este e-mail pertence a um administrador.<br />Insira sua senha para continuar.
           </Text>
-          {/* <Group gap="xs" mb="md">
-              <ThemeIcon size="lg" variant="light" color="var(--primary)">
-                <IconAlertCircle size={18} />
-              </ThemeIcon>
-              <Title order={3} size="h4" style={{ color: "var(--primary)" }}>
-                Como funciona
-              </Title>
-            </Group> */}
-
+          {}
           <PasswordInput
             label="Senha"
             placeholder="Digite sua senha"
@@ -192,7 +169,6 @@ export default function EditorLoginPage() {
               Login
             </Button>
           </Group>
-          
         </Modal>
         <Paper
           shadow="xl"
@@ -204,7 +180,7 @@ export default function EditorLoginPage() {
           }}
         >
           <Stack gap="lg">
-            {/* Botão Voltar */}
+            {}
             <Box>
               <Button
                 leftSection={<IconArrowLeft size={18} />}
@@ -215,8 +191,7 @@ export default function EditorLoginPage() {
                 Voltar
               </Button>
             </Box>
-
-            {/* Header */}
+            {}
             <Box ta="center">
               <Title
                 order={1}
@@ -234,8 +209,7 @@ export default function EditorLoginPage() {
                 Edite seus horários no Lab
               </Text>
             </Box>
-
-            {/* Modo Offline - Aviso */}
+            {}
             {OFFLINE_MODE && (
               <Alert
                 icon={<IconAlertCircle size={18} />}
@@ -268,8 +242,7 @@ export default function EditorLoginPage() {
                 </Stack>
               </Alert>
             )}
-
-            {/* Instruções */}
+            {}
             {!OFFLINE_MODE && (
               <Alert
                 icon={<IconAlertCircle size={18} />}
@@ -295,8 +268,7 @@ export default function EditorLoginPage() {
                 </Text>
               </Alert>
             )}
-
-            {/* Campo de Email */}
+            {}
             <TextInput
               size="md"
               label="Email"
@@ -320,8 +292,7 @@ export default function EditorLoginPage() {
                 },
               }}
             />
-
-            {/* Botão de Login */}
+            {}
             <Button
               size="md"
               fullWidth
@@ -353,8 +324,7 @@ export default function EditorLoginPage() {
             </Button>
           </Stack>
         </Paper>
-
-        {/* Footer */}
+        {}
         <Center mt="xl">
           <Text size="xs" c="white" ta="center">
             © 2025 AISE Lab

@@ -1,5 +1,4 @@
 "use client";
-
 import React, { useState, useEffect } from "react";
 import {
   Box,
@@ -30,7 +29,6 @@ import {
 } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
 import { getAllMembers } from "../../services/googleSheets";
-
 // Lista de frentes disponíveis
 const FRENTES_LIST = [
   "AI4Health",
@@ -49,7 +47,6 @@ const FRENTES_LIST = [
   "SM&P",
   "StoneLab",
 ];
-
 // Mapeamento de horários (7h às 19h) e dias úteis
 const HOURS = Array.from({ length: 13 }, (_, i) => i + 7);
 // Novo padrão: planilha e schedule usam ordem Segunda(0) .. Domingo(6)
@@ -63,7 +60,6 @@ const DAY_LABELS_FULL = [
   "Domingo",
 ];
 const WEEKDAY_UI_INDICES = [0, 1, 2, 3, 4]; // Segunda..Sexta no índice 0..4
-
 interface TimeSlot {
   day: number;
   hour: number;
@@ -71,14 +67,12 @@ interface TimeSlot {
   hourLabel: string;
   memberStatuses?: { name: string; status: string | null }[]; // Status de cada membro nesse horário
 }
-
 interface CompatibilityResult {
   level: number; // 1-5 conforme as opções de busca
   slots: TimeSlot[];
   message: string;
   members?: any[]; // Membros analisados
 }
-
 export default function SchedulerPage() {
   const router = useRouter();
   const [searchMode, setSearchMode] = useState<"frente" | "pessoas">("frente");
@@ -90,27 +84,22 @@ export default function SchedulerPage() {
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [result, setResult] = useState<CompatibilityResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>("");
-
   // Duração fixa em 1 hora
   const duration = 1;
-
   // Define o título da página
   useEffect(() => {
     document.title = "HORAISE | Scheduler";
   }, []);
-
   // Carrega todos os membros ao montar o componente
   useEffect(() => {
     loadAllMembers();
   }, []);
-
   const loadAllMembers = async () => {
     const timeoutId = setTimeout(() => {
       console.log("⏰ Timeout: Forçando fim do loading após 5 segundos");
       setLoadingMembers(false);
       setErrorMessage("Timeout ao carregar dados. Você pode buscar por frente usando a lista pré-definida.");
     }, 5000);
-
     try {
       setLoadingMembers(true);
       setErrorMessage("");
@@ -129,15 +118,12 @@ export default function SchedulerPage() {
       console.log("✅ Loading finalizado");
     }
   };
-
   const handleSearch = async () => {
     setLoading(true);
     setResult(null);
-
     try {
       // Filtra membros com base no modo de busca
       let membersToAnalyze: any[] = [];
-
       if (searchMode === "frente" && selectedFrente) {
         membersToAnalyze = allMembers.filter((member) =>
           member.frentes.split(",").map((f: string) => f.trim()).includes(selectedFrente) &&
@@ -148,7 +134,6 @@ export default function SchedulerPage() {
           selectedPeople.includes(member.email)
         );
       }
-
       if (membersToAnalyze.length === 0) {
         setResult({
           level: 0,
@@ -159,7 +144,6 @@ export default function SchedulerPage() {
         setLoading(false);
         return;
       }
-
       // Analisa compatibilidade (sempre 1 hora)
       const compatibility = findCompatibleSlots(membersToAnalyze, duration);
       setResult({ ...compatibility, members: membersToAnalyze });
@@ -169,13 +153,11 @@ export default function SchedulerPage() {
       setLoading(false);
     }
   };
-
   const findCompatibleSlots = (members: any[], durationHours: number): CompatibilityResult => {
     // Nível 1: Todos trabalhando (presencial ou online)
     const level1Slots = findSlotsWithCondition(members, durationHours, (statuses, membersList) => {
       return statuses.every((s) => s === "presencial" || s === "online");
     });
-
     if (level1Slots.length > 0) {
       return {
         level: 1,
@@ -183,14 +165,12 @@ export default function SchedulerPage() {
         message: `🎉 Ótima notícia! Encontrei ${level1Slots.length} horário(s) em que todos estão trabalhando!`,
       };
     }
-
     // Nível 2: Parte trabalhando (presencial ou online), resto livre (null)
     const level2Slots = findSlotsWithCondition(members, durationHours, (statuses, membersList) => {
       const hasWorking = statuses.some((s) => s === "presencial" || s === "online");
       const allWorkingOrFree = statuses.every((s) => s === "presencial" || s === "online" || s === null);
       return hasWorking && allWorkingOrFree;
     });
-
     if (level2Slots.length > 0) {
       return {
         level: 2,
@@ -198,12 +178,10 @@ export default function SchedulerPage() {
         message: `✅ Encontrei ${level2Slots.length} horário(s) em que parte está trabalhando e o resto está livre!`,
       };
     }
-
     // Nível 3: Todos livres
     const level3Slots = findSlotsWithCondition(members, durationHours, (statuses, membersList) => {
       return statuses.every((s) => s === null);
     });
-
     if (level3Slots.length > 0) {
       return {
         level: 3,
@@ -211,7 +189,6 @@ export default function SchedulerPage() {
         message: `✅ Encontrei ${level3Slots.length} horário(s) em que todos estão livres!`,
       };
     }
-
     // Nível 4: pelo menos uma pessoa em reunião, ninguém ocupado ou em aula, resto pode ser livre ou trabalhando
     const level4Slots = findSlotsWithCondition(members, durationHours, (statuses, membersList) => {
       const hasMeeting = statuses.some((s) => s === "reuniao");
@@ -220,7 +197,6 @@ export default function SchedulerPage() {
       );
       return hasMeeting && noOccupiedOrClass;
     });
-
     if (level4Slots.length > 0) {
       return {
         level: 4,
@@ -228,7 +204,6 @@ export default function SchedulerPage() {
         message: `⚠️ Encontrei ${level4Slots.length} horário(s), mas algumas pessoas estão em reunião. Vale conversar!`,
       };
     }
-
     // Nenhuma compatibilidade encontrada
     return {
       level: 0,
@@ -237,21 +212,18 @@ export default function SchedulerPage() {
         "😅 Ops! Parece que os horários não batem... Que tal conversar com o pessoal para ver se alguém consegue flexibilizar a agenda? 🤝",
     };
   };
-
   const findSlotsWithCondition = (
     members: any[],
     durationHours: number,
     condition: (statuses: (string | null)[], members: any[]) => boolean
   ): TimeSlot[] => {
     const validSlots: TimeSlot[] = [];
-
   // Percorre segunda a sexta (apenas dias úteis)
     for (const day of WEEKDAY_UI_INDICES) {
       // Percorre os horários reais (7..19), verificando blocos consecutivos
       for (let startRealHour = 7; startRealHour <= 19 - (durationHours - 1); startRealHour++) {
         let isValid = true;
         let slotStatuses: { name: string; status: string | null }[] = [];
-
         // Verifica se o bloco de durationHours horas consecutivas atende a condição
         for (let offset = 0; offset < durationHours; offset++) {
           const realHour = startRealHour + offset;
@@ -259,7 +231,6 @@ export default function SchedulerPage() {
             if (!member.schedule || !member.schedule[day]) return null;
             return member.schedule[day][realHour] || null;
           });
-
           // Guarda os status do primeiro horário do bloco
           if (offset === 0) {
             slotStatuses = members.map((member) => ({
@@ -267,13 +238,11 @@ export default function SchedulerPage() {
               status: member.schedule?.[day]?.[realHour] || null,
             }));
           }
-
           if (!condition(statuses, members)) {
             isValid = false;
             break;
           }
         }
-
         if (isValid) {
           validSlots.push({
             day,
@@ -285,10 +254,8 @@ export default function SchedulerPage() {
         }
       }
     }
-
     return validSlots;
   };
-
   // Enquanto carrega os membros, evita renderizar a página completa para não causar "layout shift"
   if (loadingMembers) {
     return (
@@ -309,7 +276,6 @@ export default function SchedulerPage() {
       </Box>
     );
   }
-
   return (
     <Box
       style={{
@@ -333,7 +299,7 @@ export default function SchedulerPage() {
           }}
         >
           <Stack gap="lg">
-            {/* Botão Voltar */}
+            {}
             <Box>
               <Button
                 leftSection={<IconArrowLeft size={18} />}
@@ -344,8 +310,7 @@ export default function SchedulerPage() {
                 Voltar
               </Button>
             </Box>
-
-            {/* Header */}
+            {}
             <Box ta="center">
               <Title
                 order={1}
@@ -363,8 +328,7 @@ export default function SchedulerPage() {
                 Encontre horários em comum para reuniões
               </Text>
             </Box>
-
-            {/* Instruções */}
+            {}
             <Alert
               icon={<IconAlertCircle size={18} />}
               title="Como funciona"
@@ -376,10 +340,8 @@ export default function SchedulerPage() {
                 O sistema analisa automaticamente a melhor combinação de horários disponíveis.
               </Text>
             </Alert>
-
-            {/* Loading removido do corpo para evitar mudança de layout; já tratamos com tela cheia acima */}
-
-            {/* Erro ao carregar */}
+            {}
+            {}
             {errorMessage && !loadingMembers && (
               <Alert
                 icon={<IconAlertCircle size={18} />}
@@ -390,8 +352,7 @@ export default function SchedulerPage() {
                 <Text size="sm">{errorMessage}</Text>
               </Alert>
             )}
-
-            {/* Modo de Busca */}
+            {}
             <Stack gap="sm">
               <Text size="sm" fw={600} style={{ color: "var(--primary)" }}>
                 Buscar por:
@@ -403,8 +364,7 @@ export default function SchedulerPage() {
                 </Group>
               </Radio.Group>
             </Stack>
-
-            {/* Seleção de Frente */}
+            {}
             {searchMode === "frente" && (
               <Stack gap="sm">
                 <Select
@@ -430,8 +390,7 @@ export default function SchedulerPage() {
                     },
                   }}
                 />
-                
-                {/* Membros da Frente com opção de remover */}
+                {}
                 {selectedFrente && !loadingMembers && (
                   <Box>
                     <Text size="sm" fw={600} c="dimmed" mb="xs">
@@ -479,8 +438,7 @@ export default function SchedulerPage() {
                 )}
               </Stack>
             )}
-
-            {/* Seleção de Pessoas */}
+            {}
             {searchMode === "pessoas" && (
               <MultiSelect
                 label="Selecione as pessoas"
@@ -506,8 +464,7 @@ export default function SchedulerPage() {
                 }}
               />
             )}
-
-            {/* Botão de Busca */}
+            {}
             <Button
               size="md"
               fullWidth
@@ -537,8 +494,7 @@ export default function SchedulerPage() {
             >
               {loading ? "Buscando..." : "Buscar Horários"}
             </Button>
-
-            {/* Resultados */}
+            {}
             {result && (
               <Paper
                 p="md"
@@ -564,7 +520,7 @@ export default function SchedulerPage() {
                 }}
               >
                 <Stack gap="md">
-                  {/* Mensagem */}
+                  {}
                   <Alert
                     icon={
                       result.level === 0 ? (
@@ -590,8 +546,7 @@ export default function SchedulerPage() {
                       {result.message}
                     </Text>
                   </Alert>
-
-                  {/* Status dos membros: mostrar apenas em casos especiais */}
+                  {}
                   {(result.level === 1 || result.level === 2.5) && result.slots.length > 0 && (
                     <>
                       <Divider />
@@ -637,8 +592,7 @@ export default function SchedulerPage() {
                       </Box>
                     </>
                   )}
-
-                  {/* Lista de Horários com status por tipo em cada horário */}
+                  {}
                   {result.slots.length > 0 && (
                     <>
                       <Divider />
@@ -667,7 +621,6 @@ export default function SchedulerPage() {
                               else if (ms.status === "aula") groups.aula.push(firstName);
                               else if (ms.status === "ocupado") groups.ocupado.push(firstName);
                             });
-
                             // Ordem amigável de exibição
                             const order: Array<{
                               key: keyof typeof groups;
@@ -681,7 +634,6 @@ export default function SchedulerPage() {
                               { key: "aula", label: "Aula", color: "red" },
                               { key: "ocupado", label: "Ocupado", color: "red" },
                             ];
-
                             return (
                               <Paper key={index} p="xs" radius="md" withBorder>
                                 <Stack gap={6}
@@ -723,8 +675,7 @@ export default function SchedulerPage() {
             )}
           </Stack>
         </Paper>
-
-        {/* Footer */}
+        {}
         <Center mt="xl">
           <Text size="xs" c="white" ta="center">
             © 2025 AISE Lab

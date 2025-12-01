@@ -1,5 +1,4 @@
 "use client";
-
 import { useState, useEffect, useRef } from "react";
 import {
   Box,
@@ -12,10 +11,8 @@ import {
   Badge,
 } from "@mantine/core";
 import { IconX } from "@tabler/icons-react";
-
 // Tipos de status para cada célula
 export type ScheduleStatus = "presencial" | "ocupado" | "online" | "reuniao" | "aula" | "almoss" | null;
-
 // Cores para cada status (RGB)
 const STATUS_COLORS: Record<Exclude<ScheduleStatus, null>, string> = {
   almoss: "#FFA500",
@@ -25,7 +22,6 @@ const STATUS_COLORS: Record<Exclude<ScheduleStatus, null>, string> = {
   presencial: "#619A42",
   reuniao: "#3AC5E4",
 };
-
 const STATUS_LABELS: Record<Exclude<ScheduleStatus, null>, string> = {
   almoss: "Almoss",
   aula: "Aula",
@@ -34,25 +30,20 @@ const STATUS_LABELS: Record<Exclude<ScheduleStatus, null>, string> = {
   presencial: "Presencial",
   reuniao: "Reunião",
 };
-
 // Dias da semana
 const WEEKDAYS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"];
-
 // Dimensões base do grid
 const TIME_COL_WIDTH = 80; // px
 const DAY_COL_WIDTH = 100; // px
 const CALENDAR_WIDTH = TIME_COL_WIDTH + 7 * DAY_COL_WIDTH; // 780px
 const ROW_HEIGHT = 32; // px - altura uniforme das linhas no mobile
-
 // Horários (7h às 20h) - representando intervalos
 const HOURS = Array.from({ length: 13 }, (_, i) => i + 7); // 7 a 19
-
 export interface ScheduleData {
   [day: number]: {
     [hour: number]: ScheduleStatus;
   };
 }
-
 interface ScheduleCalendarProps {
   schedule: ScheduleData;
   onChange: (schedule: ScheduleData) => void;
@@ -63,7 +54,6 @@ interface ScheduleCalendarProps {
   compactLegend?: boolean; // usa legenda mais fina
   centerLegendVertically?: boolean; // centraliza verticalmente a legenda no desktop
 }
-
 interface ScheduleLegendProps {
   selectedStatus: Exclude<ScheduleStatus, null> | null;
   onSelectStatus: (status: Exclude<ScheduleStatus, null>) => void;
@@ -71,7 +61,6 @@ interface ScheduleLegendProps {
   readOnly?: boolean;
   compact?: boolean; // legenda mais fina
 }
-
 // Componente de Legenda (vai à esquerda)
 export function ScheduleLegend({ selectedStatus, onSelectStatus, schedule, readOnly = false, compact = false }: ScheduleLegendProps) {
   // Calcula o total de horas para cada tipo (exceto ocupado)
@@ -133,8 +122,7 @@ export function ScheduleLegend({ selectedStatus, onSelectStatus, schedule, readO
           ))}
         </Stack>
       </Box>
-
-      {/* Total de horas por tipo */}
+      {}
       <Box>
         <Text size="sm" fw={600} mb="xs" c="black">
           Distribuição de horas:
@@ -168,11 +156,9 @@ export function ScheduleLegend({ selectedStatus, onSelectStatus, schedule, readO
             })}
         </Stack>
       </Box>
-
     </Stack>
   );
 }
-
 export default function ScheduleCalendar({
   schedule,
   onChange,
@@ -189,23 +175,18 @@ export default function ScheduleCalendar({
   // Mobile header alignment helpers
   const dayHeaderRef = useRef<HTMLDivElement | null>(null);
   const [mobileHeaderHeight, setMobileHeaderHeight] = useState<number>(46); // Valor inicial fixo (12px padding top + 12px padding bottom + ~22px texto)
-  
   // Estados para drag (arrastar para marcar)
   const [isDragging, setIsDragging] = useState(false);
   const [dragStatus, setDragStatus] = useState<Exclude<ScheduleStatus, null> | null>(null);
-
   // Detecta se é mobile
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
     };
-    
     checkMobile();
     window.addEventListener("resize", checkMobile);
-    
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
-
   // Measure the mobile days header height to align the fixed time header
   useEffect(() => {
     const measure = () => {
@@ -216,15 +197,12 @@ export default function ScheduleCalendar({
         }
       }
     };
-    
     // Aguarda a renderização completa
     if (isMobile) {
       measure(); // Medição imediata
       const raf = requestAnimationFrame(measure); // Após paint
       const timeout = setTimeout(measure, 100); // Garantia extra
-      
       window.addEventListener("resize", measure);
-      
       return () => {
         cancelAnimationFrame(raf);
         clearTimeout(timeout);
@@ -232,19 +210,16 @@ export default function ScheduleCalendar({
       };
     }
   }, [isMobile]);
-
   // Atualiza uma célula específica
   const handleCellClick = (day: number, hour: number) => {
     // Se nenhum status está selecionado, não faz nada
     if (readOnly || !selectedStatus) return;
-    
     // Imutável: cria novo objeto de dia
     const dayMap = { ...(schedule[day] || {}) };
     dayMap[hour] = selectedStatus;
     const newSchedule: ScheduleData = { ...schedule, [day]: dayMap };
     onChange(newSchedule);
   };
-
   // Limpa uma célula
   const handleClearCell = (day: number, hour: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -256,19 +231,15 @@ export default function ScheduleCalendar({
       onChange(newSchedule);
     }
   };
-
   // Pega o status de uma célula
   const getCellStatus = (day: number, hour: number): ScheduleStatus => {
     return schedule[day]?.[hour] || null;
   };
-
   // Inicia o drag
   const handleMouseDown = (day: number, hour: number) => {
     if (readOnly) return;
-    
     setIsDragging(true);
     const currentStatus = getCellStatus(day, hour);
-    
     if (currentStatus) {
       // Se a célula já tem status, modo de limpeza
       setDragStatus(null);
@@ -282,16 +253,13 @@ export default function ScheduleCalendar({
       onChange(newSchedule);
     }
   };
-
   // Continua o drag sobre outras células
   const handleMouseEnter = (day: number, hour: number) => {
     if (!readOnly) {
       setHoveredCell({ day, hour });
     }
-    
     if (isDragging && !readOnly) {
       const currentStatus = getCellStatus(day, hour);
-      
       if (dragStatus === null) {
         // Modo limpeza: remove status de células que têm
         if (currentStatus) {
@@ -308,13 +276,11 @@ export default function ScheduleCalendar({
       }
     }
   };
-
   // Finaliza o drag
   const handleMouseUp = () => {
     setIsDragging(false);
     setDragStatus(null);
   };
-
   // Adiciona listener global para mouseup (caso solte fora do calendário)
   useEffect(() => {
     if (isDragging) {
@@ -322,11 +288,10 @@ export default function ScheduleCalendar({
       return () => window.removeEventListener('mouseup', handleMouseUp);
     }
   }, [isDragging]);
-
   // Renderiza o calendário (desktop)
   const renderCalendar = () => (
     <Box style={{ minWidth: `${CALENDAR_WIDTH}px`, maxWidth: `${CALENDAR_WIDTH}px` }}>
-          {/* Cabeçalho dos dias */}
+          {}
           <Box
             style={{
               display: "grid",
@@ -339,7 +304,7 @@ export default function ScheduleCalendar({
               zIndex: 10,
             }}
           >
-            <Box /> {/* Célula vazia no canto */}
+            <Box /> {}
             {WEEKDAYS.map((day, idx) => (
               <Box
                 key={idx}
@@ -357,8 +322,7 @@ export default function ScheduleCalendar({
               </Box>
             ))}
           </Box>
-
-          {/* Linhas de horários */}
+          {}
           {HOURS.map((hour) => (
             <Box
               key={hour}
@@ -369,7 +333,7 @@ export default function ScheduleCalendar({
                 marginBottom: "2px",
               }}
             >
-              {/* Célula de horário */}
+              {}
               <Box
                 style={{
                   padding: "8px",
@@ -386,12 +350,10 @@ export default function ScheduleCalendar({
               >
                 {String(hour).padStart(2, '0')}h-{String(hour + 1).padStart(2, '0')}h
               </Box>
-
-              {/* Células dos dias */}
+              {}
               {WEEKDAYS.map((_, dayIdx) => {
                 const status = getCellStatus(dayIdx, hour);
                 const isHovered = hoveredCell?.day === dayIdx && hoveredCell?.hour === hour;
-
                 return (
                   <UnstyledButton
                     key={dayIdx}
@@ -412,7 +374,7 @@ export default function ScheduleCalendar({
                       userSelect: "none",
                     }}
                   >
-                    {/* Botão de limpar */}
+                    {}
                     {status && isHovered && !readOnly && (
                       <Box
                         onClick={(e) => handleClearCell(dayIdx, hour, e)}
@@ -441,13 +403,12 @@ export default function ScheduleCalendar({
           ))}
         </Box>
   );
-
   // Renderiza o calendário para mobile com coluna de horário fixa
   const renderMobileCalendar = () => (
     <Box style={{ display: "flex", width: "100%" }}>
-      {/* Coluna fixa de horários */}
+      {}
       <Box style={{ width: `${TIME_COL_WIDTH}px`, flex: "0 0 auto" }}>
-        {/* Cabeçalho vazio alinhado com os dias */}
+        {}
         <Box
           style={{
             padding: "12px 8px",
@@ -459,7 +420,7 @@ export default function ScheduleCalendar({
             marginBottom: "2px",
           }}
         />
-        {/* Linhas de horários */}
+        {}
         {HOURS.map((hour) => (
           <Box key={hour} style={{ marginBottom: "2px" }}>
             <Box
@@ -482,8 +443,7 @@ export default function ScheduleCalendar({
           </Box>
         ))}
       </Box>
-
-      {/* Grid scrollável dos dias */}
+      {}
       <Box
         style={{
           overflowX: "auto",
@@ -493,7 +453,7 @@ export default function ScheduleCalendar({
         }}
       >
         <Box style={{ minWidth: `${7 * DAY_COL_WIDTH}px` }}>
-          {/* Cabeçalho dos dias */}
+          {}
           <Box
             style={{
               display: "grid",
@@ -524,8 +484,7 @@ export default function ScheduleCalendar({
               </Box>
             ))}
           </Box>
-
-          {/* Linhas de horários (apenas dias, sem coluna de hora) */}
+          {}
           {HOURS.map((hour) => (
             <Box
               key={hour}
@@ -539,7 +498,6 @@ export default function ScheduleCalendar({
               {WEEKDAYS.map((_, dayIdx) => {
                 const status = getCellStatus(dayIdx, hour);
                 const isHovered = hoveredCell?.day === dayIdx && hoveredCell?.hour === hour;
-
                 return (
                   <UnstyledButton
                     key={dayIdx}
@@ -606,13 +564,12 @@ export default function ScheduleCalendar({
       </Box>
     </Box>
   );
-
   return (
     <Box>
       {isMobile ? (
         // Layout Mobile: Empilhado verticalmente com coluna de horários fixa
         <Stack gap="lg">
-          {/* Legenda em cima */}
+          {}
           {!hideLegend && (
             <Box>
               <ScheduleLegend
@@ -627,14 +584,14 @@ export default function ScheduleCalendar({
               />
             </Box>
           )}
-          {/* Calendário embaixo com scroll lateral apenas nos dias */}
+          {}
           {renderMobileCalendar()}
         </Stack>
       ) : (
         // Layout Desktop: Centralizado e estável
         <Box style={{ width: "100%", maxWidth: "1150px", margin: "0 auto" }}>
           <Box style={{ display: "grid", gridTemplateColumns: hideLegend ? "1fr" : `${legendWidth}px ${spacerWidth}px 1fr`, alignItems: centerLegendVertically ? "center" : "start" }}>
-            {/* Painel Esquerdo - Legenda e Distribuição */}
+            {}
             {!hideLegend && (
               <>
                 <Box style={{ width: `${legendWidth}px` }}>
@@ -649,11 +606,11 @@ export default function ScheduleCalendar({
                     compact={compactLegend}
                   />
                 </Box>
-                {/* Espaçador */}
+                {}
                 <Box style={{ width: `${spacerWidth}px` }} />
               </>
             )}
-            {/* Painel Direito - Calendário Interativo (sem scroll no desktop) */}
+            {}
             <Box style={{ overflow: "visible" }}>
               <Box style={{ width: `${CALENDAR_WIDTH}px`, margin: "0 auto" }}>
                 {renderCalendar()}

@@ -1,5 +1,4 @@
 "use client";
-
 import React, { useState, useEffect } from "react";
 import {
   Box,
@@ -17,16 +16,15 @@ import {
 } from "@mantine/core";
 import { IconUser, IconMail, IconAlertCircle, IconDeviceFloppy, IconArrowLeft } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
+import { notifications } from "@mantine/notifications";
 import {
   saveMember,
   validateEmail,
   getMemberByEmail,
   type TeamMemberData,
 } from "../../services/googleSheets";
-
 // Detecta modo offline
 const OFFLINE_MODE = process.env.NEXT_PUBLIC_OFFLINE_MODE === "true";
-
 // Lista de frentes disponíveis
 const FRENTES_OPTIONS = [
   "AI4Health",
@@ -45,7 +43,6 @@ const FRENTES_OPTIONS = [
   "SM&P",
   "StoneLab",
 ];
-
 export default function CadastroPage() {
   const router = useRouter();
   const [nome, setNome] = useState("");
@@ -55,51 +52,40 @@ export default function CadastroPage() {
   const [errorNome, setErrorNome] = useState("");
   const [errorEmail, setErrorEmail] = useState("");
   const [errorFrente, setErrorFrente] = useState("");
-
   // Define o título da página
   useEffect(() => {
     document.title = "HORAISE | Cadastro";
   }, []);
-
   const handleCadastro = async () => {
     // Limpa erros anteriores
     setErrorNome("");
     setErrorEmail("");
     setErrorFrente("");
-
     // Validações
     let hasError = false;
-
     if (!nome.trim()) {
       setErrorNome("Por favor, insira nome + sobrenome");
       hasError = true;
     }
-
     if (!email.trim() || !validateEmail(email)) {
       setErrorEmail("Por favor, insira um email válido");
       hasError = true;
     }
-
     if (!frentes || frentes.length === 0) {
       setErrorFrente("Por favor, selecione pelo menos uma frente");
       hasError = true;
     }
-
     if (hasError) return;
-
     setLoading(true);
-
     try {
       // Verifica se o email já está cadastrado
       const emailLower = email.trim().toLowerCase();
       const existingMember = await getMemberByEmail(emailLower);
-      
       if (existingMember) {
         setErrorEmail("Este email já está cadastrado. Use a página de login para acessar.");
         setLoading(false);
         return;
       }
-
       // Cria o novo membro
       const newMember: TeamMemberData = {
         name: nome.trim(),
@@ -107,15 +93,21 @@ export default function CadastroPage() {
         frentes: frentes.join(", "), // Junta as frentes com vírgula
         schedule: {}, // Schedule vazio
       };
-
       // Salva no Google Sheets
       const result = await saveMember(newMember, true);
-
       if (result.success) {
-        // Sucesso - redireciona para o editor
+        // Sucesso - mostra mensagem de pendente SEM redirecionar
         console.log("Cadastro realizado com sucesso:", newMember.name);
-        const encodedEmail = encodeURIComponent(newMember.email);
-        router.push(`/edit-content/${encodedEmail}`);
+        notifications.show({
+          title: "Cadastro Pendente",
+          message: "Seu cadastro está pendente de aprovação. Aguarde o administrador configurar suas horas e liberar o acesso.",
+          color: "yellow",
+          autoClose: false, // Não fecha automaticamente
+        });
+        // Limpa o formulário
+        setNome("");
+        setEmail("");
+        setFrente([]);
       } else {
         setErrorEmail(result.message || "Erro ao realizar cadastro");
       }
@@ -128,13 +120,11 @@ export default function CadastroPage() {
       setLoading(false);
     }
   };
-
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       handleCadastro();
     }
   };
-
   return (
     <Box
       style={{
@@ -157,7 +147,7 @@ export default function CadastroPage() {
           }}
         >
           <Stack gap="lg">
-            {/* Header */}
+            {}
             <Box ta="center">
               <Title
                 order={1}
@@ -171,10 +161,8 @@ export default function CadastroPage() {
               >
                 Cadastro HORAISE
               </Title>
-              
             </Box>
-
-            {/* Modo Offline - Aviso */}
+            {}
             {OFFLINE_MODE && (
               <Alert
                 icon={<IconAlertCircle size={18} />}
@@ -187,8 +175,7 @@ export default function CadastroPage() {
                 </Text>
               </Alert>
             )}
-
-            {/* Instruções */}
+            {}
             <Alert
               icon={<IconAlertCircle size={18} />}
               title="Como funciona"
@@ -199,8 +186,7 @@ export default function CadastroPage() {
                 Preencha os campos abaixo para criar seu perfil e começar a editar seus horários no Lab.
               </Text>
             </Alert>
-
-            {/* Campo de Nome */}
+            {}
             <TextInput
               size="md"
               label="Nome"
@@ -225,8 +211,7 @@ export default function CadastroPage() {
                 },
               }}
             />
-
-            {/* Campo de Email */}
+            {}
             <TextInput
               size="md"
               label="Email"
@@ -251,8 +236,7 @@ export default function CadastroPage() {
                 },
               }}
             />
-
-            {/* Campo de Frente */}
+            {}
             <MultiSelect
               size="md"
               label="Frente(s)"
@@ -274,10 +258,8 @@ export default function CadastroPage() {
                 },
               }}
             />
-
-            {/* Mensagens de erro agora são exibidas inline em cada campo */}
-
-            {/* Botões de ação */}
+            {}
+            {}
             <Stack gap="xs">
               <Button
                 size="md"
@@ -308,7 +290,6 @@ export default function CadastroPage() {
               >
                 {loading ? "Cadastrando..." : "Criar Cadastro"}
               </Button>
-
               <Button
                 size="md"
                 fullWidth
@@ -321,8 +302,7 @@ export default function CadastroPage() {
                 Voltar para Login
               </Button>
             </Stack>
-
-            {/* Informações adicionais */}
+            {}
             <Box ta="center">
               <Text size="xs" c="dimmed">
                 {OFFLINE_MODE
@@ -332,8 +312,7 @@ export default function CadastroPage() {
             </Box>
           </Stack>
         </Paper>
-
-        {/* Footer */}
+        {}
         <Center mt="xl">
           <Text size="xs" c="white" ta="center">
             © 2025 AISE Lab

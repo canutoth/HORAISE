@@ -1,5 +1,4 @@
 "use client";
-
 import {
   Paper,
   Group,
@@ -11,7 +10,6 @@ import {
 import {
   IconAlertTriangle,
 } from "@tabler/icons-react";
-
 export default function ProfileInstructions() {
   return (
     <Paper
@@ -34,8 +32,7 @@ export default function ProfileInstructions() {
           Regras
         </Title>
       </Group>
-
-      {/* Horários */}
+      {}
       <Box>
         <List size="sm" spacing={6}>
           <List.Item>

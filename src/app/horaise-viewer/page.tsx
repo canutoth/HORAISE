@@ -1,5 +1,4 @@
 "use client";
-
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
@@ -25,7 +24,6 @@ import {
 import { useRouter } from "next/navigation";
 import { getAllMembers } from "../../services/googleSheets";
 import Schedule from "../../components/Schedule";
-
 // Mapeamento de frentes para emojis (mesmo do Editor)
 const FRENTE_EMOJIS: Record<string, string> = {
   "StoneLab": "💚",
@@ -44,19 +42,16 @@ const FRENTE_EMOJIS: Record<string, string> = {
   "EcoSustain": "🌱",
   "Annotaise": "📝",
 };
-
 export default function VisualizerPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [members, setMembers] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [error, setError] = useState<string>("");
-
   // Define o título da página
   useEffect(() => {
     document.title = "HORAISE | Viewer";
   }, []);
-
   useEffect(() => {
     (async () => {
       try {
@@ -73,25 +68,20 @@ export default function VisualizerPage() {
       }
     })();
   }, []);
-
   const current = useMemo(() => (members.length > 0 ? members[currentIndex] : null), [members, currentIndex]);
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
-
   const goPrev = () => setCurrentIndex((i) => (i > 0 ? i - 1 : i));
   const goNext = () => setCurrentIndex((i) => (i < members.length - 1 ? i + 1 : i));
-
   // Auto-scroll na lista de membros quando muda o índice
   useEffect(() => {
     if (scrollContainerRef.current) {
       const container = scrollContainerRef.current;
       const buttons = container.querySelectorAll('button');
       const activeButton = buttons[currentIndex] as HTMLElement;
-      
       if (activeButton) {
         const containerRect = container.getBoundingClientRect();
         const buttonRect = activeButton.getBoundingClientRect();
         const scrollLeft = container.scrollLeft;
-        
         // Se o botão estiver fora da visão à direita
         if (buttonRect.right > containerRect.right) {
           container.scrollLeft = scrollLeft + (buttonRect.right - containerRect.right) + 20;
@@ -103,7 +93,6 @@ export default function VisualizerPage() {
       }
     }
   }, [currentIndex]);
-
   // Enquanto carrega os membros, mostra tela cheia de loading para evitar "layout shift"
   if (loading) {
     return (
@@ -124,7 +113,6 @@ export default function VisualizerPage() {
       </Box>
     );
   }
-
   return (
     <Box
       style={{
@@ -150,7 +138,7 @@ export default function VisualizerPage() {
           }}
         >
           <Stack gap="lg">
-            {/* Barra superior */}
+            {}
             <Stack gap="sm">
               <Button
                 leftSection={<IconArrowLeft size={18} />}
@@ -176,17 +164,15 @@ export default function VisualizerPage() {
                 </Title>
               </Box>
             </Stack>
-
             {error && !loading && (
               <Alert icon={<IconAlertCircle size={18} />} title="Erro" color="red" variant="light">
                 <Text size="sm">{error}</Text>
               </Alert>
             )}
-
             {current && (
               <Stack gap="md">
-                {/* Cabeçalho do membro com setas */}
-                {/* Desktop: tudo em uma linha */}
+                {}
+                {}
                 <Box visibleFrom="sm">
                   <Group justify="space-between" align="center">
                     <Button
@@ -229,8 +215,7 @@ export default function VisualizerPage() {
                     </Button>
                   </Group>
                 </Box>
-                
-                {/* Mobile: setas englobam nome e badges */}
+                {}
                 <Box hiddenFrom="sm">
                   <Stack gap="sm">
                     <Group justify="space-between" align="center">
@@ -275,8 +260,7 @@ export default function VisualizerPage() {
                     )}
                   </Stack>
                 </Box>
-
-                {/* Calendário somente leitura */}
+                {}
                 <Box style={{ width: "100%", overflow: "visible" }}>
                   <Schedule
                     schedule={current.schedule || {}}
@@ -288,7 +272,7 @@ export default function VisualizerPage() {
                     centerLegendVertically
                   />
                 </Box>
-                {/* Faixa de "abas" no estilo Google Sheets */}
+                {}
                 <Box>
                   <Text size="sm" fw={600} c="dimmed" mb="xs">Membros ({members.length})</Text>
                   <Box
@@ -346,8 +330,7 @@ export default function VisualizerPage() {
             )}
           </Stack>
         </Paper>
-
-        {/* Footer */}
+        {}
         <Center mt="xl">
           <Text size="xs" c="white" ta="center">
             © 2025 AISE Lab
