@@ -30,7 +30,57 @@ export async function sendAdminNotification(newMemberName: string, newMemberEmai
           <li>Liberar acesso ao editor</li>
         </ul>
         <br/>
-        <a href="${BASE_URL}/horaise-admin" style="background: #52afe1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Acessar Painel Admin</a>
+        <a href="${BASE_URL}/horaise-editor" style="background: #52afe1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Preencher Horários</a>
+      </div>
+    `,
+  };
+  await transporter.sendMail(mailOptions);
+}
+
+export async function sendScheduleEditedToAdmin(userName: string, userEmail: string) {
+  const adminEmail = process.env.EMAIL_ADMIN;
+  const approveKeepUrl = `${BASE_URL}/api?action=approve-schedule-keep-editor&email=${encodeURIComponent(userEmail)}`;
+  const approveRemoveUrl = `${BASE_URL}/api?action=approve-schedule-remove-editor&email=${encodeURIComponent(userEmail)}`;
+  
+  const mailOptions = {
+    from: `"HORAISE" <${process.env.SMTP_USER}>`,
+    to: adminEmail,
+    subject: `📅 Schedule Editado - Aguardando Aprovação: ${userName}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; color: #333;">
+        <h2>Schedule Atualizado!</h2>
+        <p><strong>Usuário:</strong> ${userName}</p>
+        <p><strong>Email:</strong> ${userEmail}</p>
+        <p>Este usuário editou seus horários e está aguardando sua aprovação.</p>
+        <br/>
+        <div style="background: #e7f3ff; padding: 15px; border-left: 5px solid #52afe1; margin: 20px 0;">
+          <strong>Escolha uma opção:</strong>
+          <ul style="margin-top: 10px;">
+            <li><strong>Aprovar e Manter Editor:</strong> O usuário poderá continuar editando</li>
+            <li><strong>Aprovar e Remover Editor:</strong> Schedule é aprovado mas usuário perde acesso de edição</li>
+          </ul>
+        </div>
+        <br/>
+        <a href="${approveKeepUrl}" style="background: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; margin-right: 10px;">Aprovar e Manter Editor</a>
+        <a href="${approveRemoveUrl}" style="background: #ffc107; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; margin-right: 10px;">Aprovar e Remover Editor</a>
+        <a href="${BASE_URL}/horaise-admin" style="background: #52afe1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Ver Painel Admin</a>
+      </div>
+    `,
+  };
+  await transporter.sendMail(mailOptions);
+}
+
+export async function sendScheduleApprovedToUser(userEmail: string, userName: string, keepEditor: boolean) {
+  const mailOptions = {
+    from: `"HORAISE" <${process.env.SMTP_USER}>`,
+    to: userEmail,
+    subject: `✅ Seus horários foram aprovados!`,
+    html: `
+      <div style="font-family: Arial, sans-serif; color: #333;">
+        <h3>Olá, ${userName}!</h3>
+        <p>Seu schedule foi aprovado pelo administrador.</p>
+        <br/>
+        <a href="${BASE_URL}/horaise-viewer" style="background: #52afe1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Ver Meu Schedule</a>
       </div>
     `,
   };

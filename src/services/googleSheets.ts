@@ -16,7 +16,8 @@ export interface TeamMemberData {
   frentes: string;
   bolsa?: string; // nova coluna Bolsa
   editor?: number; // 1 = pode editar, 0 = sem acesso
-  pending?: number; // 1 = pendente aprovação, 0 = aprovado
+  pendingAccess?: number; // 1 = pendente aprovação de cadastro, 0 = aprovado
+  pendingTimeTable?: number; // 1 = horário pendente aprovação, 0 = aprovado
   schedule?: ScheduleData;
   hp?: string; // nova coluna HP
   ho?: string; // nova coluna HO
@@ -48,7 +49,7 @@ const stringToArray = (str: string): string[] => {
     .filter(Boolean);
 };
 // Converte linha do Google Sheets (HORAISE) para objeto TeamMemberData
-// Formato atual: [Nome, Email, Frentes, Bolsa, Editor, Pending, HP, HO, ...schedule columns]
+// Formato atual: [Nome, Email, Frentes, Bolsa, Editor, Pending-Access, Pending-TimeTable, HP, HO, ...schedule columns]
 const rowToTeamMember = (row: string[]): TeamMemberData => {
   return {
     name: row[0] || "",
@@ -56,13 +57,14 @@ const rowToTeamMember = (row: string[]): TeamMemberData => {
     frentes: row[2] || "",
     bolsa: row[3] || "",
     editor: Number(row[4] ?? 0) || 0,
-    pending: Number(row[5] ?? 0) || 0,
-    hp: row[6] || "",
-    ho: row[7] || "",
+    pendingAccess: Number(row[5] ?? 0) || 0,
+    pendingTimeTable: Number(row[6] ?? 0) || 0,
+    hp: row[7] || "",
+    ho: row[8] || "",
   };
 };
 // Converte objeto TeamMemberData para linha do Google Sheets (HORAISE)
-// Formato atual: [Nome, Email, Frentes, Bolsa, Editor, Pending, HP, HO] (schedule é salvo separadamente)
+// Formato atual: [Nome, Email, Frentes, Bolsa, Editor, Pending-Access, Pending-TimeTable, HP, HO] (schedule é salvo separadamente)
 const teamMemberToRow = (member: TeamMemberData): string[] => {
   return [
     member.name,
@@ -70,7 +72,8 @@ const teamMemberToRow = (member: TeamMemberData): string[] => {
     member.frentes,
     member.bolsa ?? "",
     String(member.editor ?? 0),
-    String(member.pending ?? 0),
+    String(member.pendingAccess ?? 0),
+    String(member.pendingTimeTable ?? 0),
     member.hp ?? "",
     member.ho ?? "",
   ];
@@ -390,12 +393,12 @@ export async function getAllMembers(): Promise<TeamMemberData[]> {
     const payload = await res.json();
     if (!payload || !payload.members) return [];
     // Converte cada linha para TeamMemberData
-    // Cada row vem com: [Nome, Email, Frentes, Editor, HP, HO, ...scheduleColumns]
+    // Cada row vem com: [Nome, Email, Frentes, Bolsa, Editor, Pending-Access, Pending-TimeTable, HP, HO, ...scheduleColumns]
     const members: TeamMemberData[] = [];
     for (const row of payload.members) {
       const memberData = rowToTeamMember(row);
-          // Extrai o schedule a partir da coluna G (índice 6) em diante
-          const scheduleRow = row.slice(6);
+          // Extrai o schedule a partir da coluna J (índice 9) em diante
+          const scheduleRow = row.slice(9);
       if (scheduleRow && scheduleRow.length > 0) {
         const schedule = infoRowToSchedule(scheduleRow);
         if (schedule) {

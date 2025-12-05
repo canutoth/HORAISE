@@ -7,8 +7,9 @@ import {
   loadScheduleRow,
   readAllMembers,
   updateMemberAccess,
+  approveSchedule,
 } from "../../server/sheets";
-import { sendAdminNotification, sendUserApproval, sendAccessRequestToAdmin } from "../../server/email";
+import { sendAdminNotification, sendUserApproval, sendAccessRequestToAdmin, sendScheduleEditedToAdmin, sendScheduleApprovedToUser } from "../../server/email";
 import { validateScheduleHours, parseHours } from "../../server/hoursValidation";
 type Actions =
   | { action: "read-member"; email: string }
@@ -20,7 +21,9 @@ type Actions =
   | { action: "admin-precheck"; email: string }
   | { action: "admin-login"; email: string; password: string }
   | { action: "validate-hours"; scheduleRow: string[]; hp: number; ho: number }
-  | { action: "request-editor-access"; email: string };
+  | { action: "request-editor-access"; email: string }
+  | { action: "approve-schedule-keep-editor"; email: string }
+  | { action: "approve-schedule-remove-editor"; email: string };
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Actions;
@@ -85,7 +88,14 @@ export async function POST(request: NextRequest) {
           }
         }
         const lockAfterSave = true;
-        const result = await saveScheduleRow(body.email, body.scheduleRow, lockAfterSave);
+        const result = await saveScheduleRow(body.email, body.scheduleRow);
+        
+        // Envia email ao admin notificando sobre schedule editado
+        if (result.success) {
+          const memberName = member.row[0] || "Usuário";
+          sendScheduleEditedToAdmin(memberName, body.email).catch((e: unknown) => console.error("Falha email admin:", e));
+        }
+        
         return NextResponse.json(result, { status: result.success ? 200 : 400 });
       }
       case "load-schedule": {
@@ -156,6 +166,52 @@ export async function POST(request: NextRequest) {
           success: true, 
           message: "Solicitação enviada ao administrador. Aguarde a aprovação." 
         });
+      }
+      case "approve-schedule-keep-editor": {
+        if (!body.email) {
+          return NextResponse.json({ success: false, message: "email é obrigatório" }, { status: 400 });
+        }
+        
+        // Busca dados do membro
+        const member = await readMemberByEmail(body.email);
+        if (!member) {
+          return NextResponse.json({ success: false, message: "Membro não encontrado" }, { status: 404 });
+        }
+        
+        const memberName = member.row[0] || "Usuário";
+        
+        // Aprova mantendo editor
+        const result = await approveSchedule(body.email, true);
+        
+        // Envia email ao usuário notificando aprovação
+        if (result.success) {
+          sendScheduleApprovedToUser(body.email, memberName, true).catch((e: unknown) => console.error("Falha email usuário:", e));
+        }
+        
+        return NextResponse.json(result, { status: result.success ? 200 : 500 });
+      }
+      case "approve-schedule-remove-editor": {
+        if (!body.email) {
+          return NextResponse.json({ success: false, message: "email é obrigatório" }, { status: 400 });
+        }
+        
+        // Busca dados do membro
+        const member = await readMemberByEmail(body.email);
+        if (!member) {
+          return NextResponse.json({ success: false, message: "Membro não encontrado" }, { status: 404 });
+        }
+        
+        const memberName = member.row[0] || "Usuário";
+        
+        // Aprova removendo editor
+        const result = await approveSchedule(body.email, false);
+        
+        // Envia email ao usuário notificando aprovação
+        if (result.success) {
+          sendScheduleApprovedToUser(body.email, memberName, false).catch((e: unknown) => console.error("Falha email usuário:", e));
+        }
+        
+        return NextResponse.json(result, { status: result.success ? 200 : 500 });
       }
       default:
         return NextResponse.json({ error: "ação inválida" }, { status: 400 });
