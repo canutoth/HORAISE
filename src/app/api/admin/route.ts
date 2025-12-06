@@ -7,7 +7,9 @@ import {
 } from "../../../server/sheets";
 import { sendUserApproval, sendAccessGrantedToUser } from "../../../server/email";
 import { validateScheduleHours, parseHours } from "../../../server/hoursValidation";
+
 type AdminActions =
+  | { action: "login"; email: string; password: string }
   | { action: "list-pending-members" }
   | { action: "get-member"; email: string }
   | {
@@ -23,10 +25,34 @@ type AdminActions =
       scheduleRow: string[];
     }
   | { action: "quick-approve-access"; email: string };
+
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as AdminActions;
+
     switch (body.action) {
+      case "login": {
+        // Valida credenciais de admin usando variáveis de ambiente
+        const adminEmail = process.env.EMAIL_ADMIN;
+        const adminPassword = process.env.SENHA_ADMIN;
+
+        if (!adminEmail || !adminPassword) {
+          return NextResponse.json(
+            { error: "Configuração de admin não encontrada" },
+            { status: 500 }
+          );
+        }
+
+        if (body.email !== adminEmail || body.password !== adminPassword) {
+          return NextResponse.json(
+            { error: "Email ou senha incorretos" },
+            { status: 401 }
+          );
+        }
+
+        return NextResponse.json({ success: true, message: "Login realizado com sucesso" });
+      }
+
       case "list-pending-members": {
         // Lista todos os membros com Pending = 1 (pendentes de aprovação)
         const allMembers = await readAllMembers();
@@ -220,9 +246,50 @@ export async function GET(request: NextRequest) {
       // Busca dados do membro
       const member = await readMemberByEmail(email);
       if (!member) {
-        // Erro: redireciona com mensagem de erro
-        return NextResponse.redirect(
-          new URL(`/horaise-admin?error=${encodeURIComponent(`Membro não encontrado: ${email}`)}`, process.env.NEXT_PUBLIC_BASE_URL || request.url)
+        return new NextResponse(
+          `
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="UTF-8">
+              <title>Erro - HORAISE</title>
+              <style>
+                body {
+                  font-family: Arial, sans-serif;
+                  display: flex;
+                  justify-content: center;
+                  align-items: center;
+                  min-height: 100vh;
+                  margin: 0;
+                  background: #f8f9ff;
+                }
+                .message-box {
+                  background: white;
+                  padding: 40px;
+                  border-radius: 12px;
+                  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                  text-align: center;
+                  max-width: 500px;
+                }
+                .icon { font-size: 48px; margin-bottom: 20px; }
+                .error { color: #dc3545; }
+                h1 { color: #0E1862; margin-bottom: 10px; }
+                p { color: #666; }
+              </style>
+            </head>
+            <body>
+              <div class="message-box">
+                <div class="icon error">❌</div>
+                <h1>Erro</h1>
+                <p>Membro não encontrado: ${email}</p>
+              </div>
+            </body>
+          </html>
+          `,
+          {
+            status: 404,
+            headers: { "Content-Type": "text/html; charset=utf-8" },
+          }
         );
       }
       
@@ -231,9 +298,50 @@ export async function GET(request: NextRequest) {
       // Atualiza para Editor=1, Pending=0 (libera acesso)
       const updateResult = await updateMemberAccess(email, 1, 0);
       if (!updateResult.success) {
-        // Erro: redireciona com mensagem de erro
-        return NextResponse.redirect(
-          new URL(`/horaise-admin?error=${encodeURIComponent(updateResult.message)}`, process.env.NEXT_PUBLIC_BASE_URL || request.url)
+        return new NextResponse(
+          `
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="UTF-8">
+              <title>Erro - HORAISE</title>
+              <style>
+                body {
+                  font-family: Arial, sans-serif;
+                  display: flex;
+                  justify-content: center;
+                  align-items: center;
+                  min-height: 100vh;
+                  margin: 0;
+                  background: #f8f9ff;
+                }
+                .message-box {
+                  background: white;
+                  padding: 40px;
+                  border-radius: 12px;
+                  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                  text-align: center;
+                  max-width: 500px;
+                }
+                .icon { font-size: 48px; margin-bottom: 20px; }
+                .error { color: #dc3545; }
+                h1 { color: #0E1862; margin-bottom: 10px; }
+                p { color: #666; }
+              </style>
+            </head>
+            <body>
+              <div class="message-box">
+                <div class="icon error">❌</div>
+                <h1>Erro</h1>
+                <p>${updateResult.message}</p>
+              </div>
+            </body>
+          </html>
+          `,
+          {
+            status: 500,
+            headers: { "Content-Type": "text/html; charset=utf-8" },
+          }
         );
       }
       
@@ -244,19 +352,146 @@ export async function GET(request: NextRequest) {
         console.error("Erro ao enviar email para usuário:", emailError);
       }
       
-      // Sucesso: redireciona com mensagem de sucesso
-      return NextResponse.redirect(
-        new URL(`/horaise-admin?success=${encodeURIComponent(`Acesso liberado para ${memberName}`)}`, process.env.NEXT_PUBLIC_BASE_URL || request.url)
+      // Sucesso: retorna página HTML com mensagem de sucesso
+      return new NextResponse(
+        `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>Sucesso - HORAISE</title>
+            <style>
+              body {
+                font-family: Arial, sans-serif;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                margin: 0;
+                background: #f8f9ff;
+              }
+              .message-box {
+                background: white;
+                padding: 40px;
+                border-radius: 12px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                text-align: center;
+                max-width: 500px;
+              }
+              .icon { font-size: 48px; margin-bottom: 20px; }
+              .success { color: #28a745; }
+              h1 { color: #0E1862; margin-bottom: 10px; }
+              p { color: #666; line-height: 1.6; }
+            </style>
+          </head>
+          <body>
+            <div class="message-box">
+              <div class="icon success">✅</div>
+              <h1>Acesso Liberado!</h1>
+              <p><strong>${memberName}</strong> agora pode editar seus horários.</p>
+              <p style="margin-top: 20px; font-size: 14px; color: #999;">Você pode fechar esta aba.</p>
+            </div>
+          </body>
+        </html>
+        `,
+        {
+          status: 200,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        }
       );
     }
     
-    return NextResponse.redirect(
-      new URL(`/horaise-admin?error=${encodeURIComponent("Ação inválida")}`, process.env.NEXT_PUBLIC_BASE_URL || request.url)
+    return new NextResponse(
+      `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Erro - HORAISE</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              min-height: 100vh;
+              margin: 0;
+              background: #f8f9ff;
+            }
+            .message-box {
+              background: white;
+              padding: 40px;
+              border-radius: 12px;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+              text-align: center;
+              max-width: 500px;
+            }
+            .icon { font-size: 48px; margin-bottom: 20px; }
+            .error { color: #dc3545; }
+            h1 { color: #0E1862; margin-bottom: 10px; }
+            p { color: #666; }
+          </style>
+        </head>
+        <body>
+          <div class="message-box">
+            <div class="icon error">❌</div>
+            <h1>Erro</h1>
+            <p>Ação inválida</p>
+          </div>
+        </body>
+      </html>
+      `,
+      {
+        status: 400,
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      }
     );
   } catch (error) {
     console.error("Erro no GET /api/admin:", error);
-    return NextResponse.redirect(
-      new URL(`/horaise-admin?error=${encodeURIComponent("Erro interno do servidor")}`, process.env.NEXT_PUBLIC_BASE_URL || request.url)
+    return new NextResponse(
+      `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Erro - HORAISE</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              min-height: 100vh;
+              margin: 0;
+              background: #f8f9ff;
+            }
+            .message-box {
+              background: white;
+              padding: 40px;
+              border-radius: 12px;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+              text-align: center;
+              max-width: 500px;
+            }
+            .icon { font-size: 48px; margin-bottom: 20px; }
+            .error { color: #dc3545; }
+            h1 { color: #0E1862; margin-bottom: 10px; }
+            p { color: #666; }
+          </style>
+        </head>
+        <body>
+          <div class="message-box">
+            <div class="icon error">❌</div>
+            <h1>Erro</h1>
+            <p>Erro interno do servidor</p>
+          </div>
+        </body>
+      </html>
+      `,
+      {
+        status: 500,
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      }
     );
   }
 }
