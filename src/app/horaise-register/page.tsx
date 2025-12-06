@@ -7,24 +7,22 @@ import {
   Button,
   Title,
   Text,
-  Container,
   Stack,
-  Alert,
-  Loader,
-  Center,
   MultiSelect,
+  Tooltip,
+  Badge,
+  Group,
 } from "@mantine/core";
-import { IconUser, IconMail, IconAlertCircle, IconDeviceFloppy, IconArrowLeft } from "@tabler/icons-react";
+import { IconUserPlus, IconX, IconMail, IconUser } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
 import { notifications } from "@mantine/notifications";
+import TopNavBar from "@/components/TopNavBar";
 import {
   saveMember,
   validateEmail,
   getMemberByEmail,
   type TeamMemberData,
 } from "../../services/googleSheets";
-// Detecta modo offline
-const OFFLINE_MODE = process.env.NEXT_PUBLIC_OFFLINE_MODE === "true";
 // Lista de frentes disponíveis
 const FRENTES_OPTIONS = [
   "AI4Health",
@@ -125,200 +123,242 @@ export default function CadastroPage() {
       handleCadastro();
     }
   };
+
   return (
-    <Box
-      style={{
-        minHeight: "100vh",
-        background: "var(--primary)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "20px",
-      }}
-    >
-      <Container size="xs">
+    <>
+      <TopNavBar />
+
+      <Box
+        style={{
+          minHeight: "100vh",
+          background: "#F8F9FF",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "20px",
+          paddingTop: "100px",
+        }}
+      >
         <Paper
           shadow="xl"
           p="xl"
           radius="lg"
           style={{
             background: "rgba(255, 255, 255, 0.98)",
-            backdropFilter: "blur(10px)",
+            maxWidth: "450px",
+            width: "100%",
+            border: "2px solid rgba(142, 201, 252, 0.3)",
           }}
         >
-          <Stack gap="lg">
-            {}
-            <Box ta="center">
+          <Stack gap="md" align="center">
+            <Box
+              style={{
+                width: "80px",
+                height: "80px",
+                borderRadius: "16px",
+                backgroundColor: "rgba(142, 201, 252, 0.2)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <IconUserPlus size={40} color="#0E1862" />
+            </Box>
+
+            <Stack gap="xs" align="center">
               <Title
                 order={1}
                 size="h2"
                 style={{
-                  background: "var(--primary)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  marginBottom: 8,
+                  color: "#0E1862",
+                  textAlign: "center",
                 }}
               >
-                Cadastro HORAISE
+                Cadastro
               </Title>
-            </Box>
-            {}
-            {OFFLINE_MODE && (
-              <Alert
-                icon={<IconAlertCircle size={18} />}
-                title="🔌 Modo Offline/Desenvolvimento"
-                color="orange"
-                variant="light"
-              >
-                <Text size="sm">
-                  Você está em modo offline. O cadastro não será salvo no Google Sheets.
-                </Text>
-              </Alert>
-            )}
-            {}
-            <Alert
-              icon={<IconAlertCircle size={18} />}
-              title="Como funciona"
-              color="var(--primary)"
-              variant="light"
-            >
-              <Text size="sm">
+              <Text size="sm" c="dimmed" ta="center">
                 Preencha os campos abaixo para criar seu perfil e começar a editar seus horários no Lab.
               </Text>
-            </Alert>
-            {}
-            <TextInput
-              size="md"
-              label="Nome"
-              placeholder="Seu nome e sobrenome"
-              leftSection={<IconUser size={18} />}
-              value={nome}
-              onChange={(e) => setNome(e.currentTarget.value)}
-              onKeyPress={handleKeyPress}
-              disabled={loading}
-              required
-              error={errorNome}
-              styles={{
-                label: {
-                  color: "#000000",
-                },
-                input: {
-                  color: "#000000",
-                  "::placeholder": {
-                    color: "#000000",
-                    opacity: 0.7,
-                  },
-                },
-              }}
-            />
-            {}
-            <TextInput
-              size="md"
-              label="Email"
-              placeholder="seu.email@exemplo.com"
-              leftSection={<IconMail size={18} />}
-              value={email}
-              onChange={(e) => setEmail(e.currentTarget.value)}
-              onKeyPress={handleKeyPress}
-              disabled={loading}
-              required
-              error={errorEmail}
-              styles={{
-                label: {
-                  color: "#000000",
-                },
-                input: {
-                  color: "#000000",
-                  "::placeholder": {
-                    color: "#000000",
-                    opacity: 0.7,
-                  },
-                },
-              }}
-            />
-            {}
-            <MultiSelect
-              size="md"
-              label="Frente(s)"
-              placeholder={frentes.length === 0 ? "Selecione uma ou mais frentes" : ""}
-              data={FRENTES_OPTIONS}
-              value={frentes}
-              onChange={setFrente}
-              disabled={loading}
-              required
-              searchable
-              clearable
-              error={errorFrente}
-              styles={{
-                label: {
-                  color: "#000000",
-                },
-                input: {
-                  color: "#000000",
-                },
-              }}
-            />
-            {}
-            {}
-            <Stack gap="xs">
-              <Button
+            </Stack>
+
+            <Stack gap="md" style={{ width: "100%" }}>
+              <TextInput
+                placeholder="Digite seu email..."
                 size="md"
-                fullWidth
-                onClick={handleCadastro}
+                value={email}
+                onChange={(e) => setEmail(e.currentTarget.value)}
+                onKeyPress={handleKeyPress}
                 disabled={loading}
-                leftSection={
-                  loading ? (
-                    <Loader size="xs" color="white" />
-                  ) : (
-                    <IconDeviceFloppy size={18} />
-                  )
-                }
+                error={errorEmail}
+                rightSection={<IconMail size={20} color="#ADB5BD" />}
                 styles={{
-                  root: {
-                    background: "var(--primary)",
-                    border: "none",
-                    "&[dataDisabled]": {
-                      background: "var(--primary)",
-                      opacity: 1,
-                      cursor: "not-allowed",
+                  input: {
+                    border: "2px solid #E9ECEF",
+                    "&:focus": {
+                      borderColor: "var(--primary)",
                     },
                   },
-                  label: {
-                    color: "white",
+                }}
+              />
+
+              <TextInput
+                placeholder="Seu nome e sobrenome"
+                size="md"
+                value={nome}
+                onChange={(e) => setNome(e.currentTarget.value)}
+                onKeyPress={handleKeyPress}
+                disabled={loading}
+                error={errorNome}
+                rightSection={<IconUser size={20} color="#ADB5BD" />}
+                styles={{
+                  input: {
+                    border: "2px solid #E9ECEF",
+                    "&:focus": {
+                      borderColor: "var(--primary)",
+                    },
                   },
                 }}
-              >
-                {loading ? "Cadastrando..." : "Criar Cadastro"}
-              </Button>
-              <Button
-                size="md"
-                fullWidth
-                variant="light"
-                color="gray"
-                onClick={() => router.push("/horaise-editor")}
-                disabled={loading}
-                leftSection={<IconArrowLeft size={18} />}
-              >
-                Voltar para Login
-              </Button>
+              />
+
+              <Box style={{ width: "100%" }}>
+                <MultiSelect
+                  placeholder="Selecione uma ou mais frentes"
+                  size="md"
+                  data={FRENTES_OPTIONS}
+                  value={frentes}
+                  onChange={setFrente}
+                  disabled={loading}
+                  searchable={false}
+                  clearable
+                  error={errorFrente}
+                  maxDropdownHeight={200}
+                  hidePickedOptions={false}
+                  styles={{
+                    input: {
+                      border: "2px solid #E9ECEF",
+                      "&:focus": {
+                        borderColor: "var(--primary)",
+                      },
+                      minHeight: "42px",
+                      height: "42px",
+                      cursor: "pointer",
+                    },
+                    pill: {
+                      display: "none",
+                    },
+                  }}
+                  renderOption={({ option, checked }) => (
+                    <Box
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        padding: "4px 0",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        readOnly
+                        style={{ cursor: "pointer" }}
+                      />
+                      <Text size="sm">{option.label}</Text>
+                    </Box>
+                  )}
+                />
+                <Box mt="xs" style={{ minHeight: "32px" }}>
+                  {frentes.length > 0 && (
+                    <Group gap="xs" wrap="wrap">
+                      {frentes.slice(0, 2).map((frente) => (
+                        <Badge
+                          key={frente}
+                          size="lg"
+                          radius="md"
+                          style={{
+                            backgroundColor: "rgba(142, 201, 252, 0.2)",
+                            color: "#0E1862",
+                            paddingRight: "4px",
+                            maxWidth: "140px",
+                          }}
+                          rightSection={
+                            <Box
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setFrente(frentes.filter((f) => f !== frente));
+                              }}
+                              style={{
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                marginLeft: "4px",
+                              }}
+                            >
+                              <IconX size={14} />
+                            </Box>
+                          }
+                        >
+                          <Text
+                            size="xs"
+                            style={{
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {frente}
+                          </Text>
+                        </Badge>
+                      ))}
+                      {frentes.length > 2 && (
+                        <Tooltip
+                          label={
+                            <Stack gap={4}>
+                              {frentes.slice(2).map((frente) => (
+                                <Text key={frente} size="xs">
+                                  {frente}
+                                </Text>
+                              ))}
+                            </Stack>
+                          }
+                          position="bottom"
+                          withArrow
+                        >
+                          <Badge
+                            size="lg"
+                            radius="md"
+                            style={{
+                              backgroundColor: "rgba(142, 201, 252, 0.3)",
+                              color: "#0E1862",
+                              cursor: "help",
+                            }}
+                          >
+                            +{frentes.length - 2}
+                          </Badge>
+                        </Tooltip>
+                      )}
+                    </Group>
+                  )}
+                </Box>
+              </Box>
             </Stack>
-            {}
-            <Box ta="center">
-              <Text size="xs" c="dimmed">
-                {OFFLINE_MODE
-                  ? "Modo offline: cadastro não será salvo permanentemente"
-                  : "Seu cadastro será sincronizado com o Google Sheets"}
-              </Text>
-            </Box>
+
+            <Button
+              fullWidth
+              size="md"
+              onClick={handleCadastro}
+              loading={loading}
+              style={{
+                backgroundColor: "#0E1862",
+                "&:hover": {
+                  backgroundColor: "#0A1145",
+                },
+              }}
+            >
+              Criar Cadastro
+            </Button>
           </Stack>
         </Paper>
-        {}
-        <Center mt="xl">
-          <Text size="xs" c="white" ta="center">
-            © 2025 AISE Lab
-          </Text>
-        </Center>
-      </Container>
-    </Box>
+      </Box>
+    </>
   );
 }
