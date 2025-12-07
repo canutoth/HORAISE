@@ -38,7 +38,6 @@ import {
 import { useRouter } from "next/navigation";
 import { getAllMembers } from "../../services/googleSheets";
 
-// --- CONSTANTES ---
 const FRENTES_LIST = [
   "AI4Health",
   "AISE_Website",
@@ -57,9 +56,11 @@ const FRENTES_LIST = [
   "StoneLab",
 ];
 
-const WEEKDAY_UI_INDICES = [0, 1, 2, 3, 4]; // Segunda..Sexta
+const WEEKDAY_UI_INDICES = [0, 1, 2, 3, 4];
 const DAY_LABELS_SHORT = ["Seg", "Ter", "Qua", "Qui", "Sex"];
-const HOURS_DISPLAY = Array.from({ length: 13 }, (_, i) => i + 7); // 7 a 19
+const HOURS_DISPLAY = Array.from({ length: 13 }, (_, i) => i + 7);
+
+const ROW_HEIGHT = "40px"; 
 
 interface TimeSlot {
   day: number;
@@ -95,7 +96,6 @@ export default function SchedulerPage() {
     loadAllMembers();
   }, []);
 
-  // --- LÓGICA DE CARREGAMENTO ---
   const loadAllMembers = async () => {
     const timeoutId = setTimeout(() => {
       setLoadingMembers(false);
@@ -111,7 +111,7 @@ export default function SchedulerPage() {
       setAllMembers(members);
       clearTimeout(timeoutId);
     } catch (error) {
-      console.error("❌ Erro ao carregar membros:", error);
+      console.error("Erro ao carregar membros:", error);
       setErrorMessage(
         "Erro ao carregar dados do Google Sheets. Você ainda pode buscar por frente usando a lista pré-definida."
       );
@@ -121,7 +121,6 @@ export default function SchedulerPage() {
     }
   };
 
-  // --- LÓGICA DE BUSCA ---
   const handleSearch = async () => {
     setLoading(true);
     setResult(null);
@@ -164,12 +163,10 @@ export default function SchedulerPage() {
     }
   };
 
-  // --- ALGORITMO DE COMPATIBILIDADE ---
   const findCompatibleSlots = (
     members: any[],
     durationHours: number
   ): CompatibilityResult => {
-    // Nível 1: Todos trabalhando
     const level1Slots = findSlotsWithCondition(
       members,
       durationHours,
@@ -181,11 +178,10 @@ export default function SchedulerPage() {
       return {
         level: 1,
         slots: level1Slots,
-        message: `🎉 Encontrei ${level1Slots.length} horários onde TODOS estão trabalhando!`,
+        message: `Encontrei ${level1Slots.length} horários onde TODOS estão trabalhando!`,
       };
     }
 
-    // Nível 2: Parte trabalhando, resto livre
     const level2Slots = findSlotsWithCondition(
       members,
       durationHours,
@@ -203,11 +199,10 @@ export default function SchedulerPage() {
       return {
         level: 2,
         slots: level2Slots,
-        message: `✅ Encontrei ${level2Slots.length} horários (Parte trabalhando / Parte livre).`,
+        message: `Encontrei ${level2Slots.length} horários (Parte trabalhando / Parte livre).`,
       };
     }
 
-    // Nível 3: Todos livres
     const level3Slots = findSlotsWithCondition(
       members,
       durationHours,
@@ -219,11 +214,10 @@ export default function SchedulerPage() {
       return {
         level: 3,
         slots: level3Slots,
-        message: `✅ Encontrei ${level3Slots.length} horários onde TODOS estão livres.`,
+        message: `Encontrei ${level3Slots.length} horários onde TODOS estão livres.`,
       };
     }
 
-    // Nível 4: Conflitos leves (reuniões)
     const level4Slots = findSlotsWithCondition(
       members,
       durationHours,
@@ -243,14 +237,14 @@ export default function SchedulerPage() {
       return {
         level: 4,
         slots: level4Slots,
-        message: `⚠️ Encontrei ${level4Slots.length} horários com conflito de reunião.`,
+        message: `Encontrei ${level4Slots.length} horários com conflito de reunião.`,
       };
     }
 
     return {
       level: 0,
       slots: [],
-      message: "😅 Nenhum horário compatível encontrado.",
+      message: "Nenhum horário compatível encontrado.",
     };
   };
 
@@ -305,10 +299,8 @@ export default function SchedulerPage() {
     return validSlots;
   };
 
-  // --- HELPER PARA RENDERIZAR DETALHES DO HOVER ---
   const renderHoverContent = (slot: TimeSlot) => {
     const statuses = slot.memberStatuses || [];
-    // Agrupa por tipo
     const groups: Record<string, string[]> = {
       presencial: [],
       online: [],
@@ -374,15 +366,16 @@ export default function SchedulerPage() {
           background: "#F8F9FF",
           display: "flex",
           flexDirection: "column",
-          paddingTop: "140px"
+          paddingTop: "140px",
         }}
       >
         <Container size="96%" style={{ width: "100%" }}>
           <Grid gutter={40}>
             <Grid.Col span={{ base: 12, md: 5, lg: 4 }}>
+              
                 <Stack gap="xl">
                   <Box ta="left">
-                    <Title  
+                     <Title  
                       order={1}
                       size="h1" 
                       style={{ marginBottom: 8 }}
@@ -467,7 +460,9 @@ export default function SchedulerPage() {
                               )
                               .map((member) => {
                                 const firstName = member.name.split(" ")[0];
-                                const isExcluded = excludedFromFrente.includes(member.email);
+                                const isExcluded = excludedFromFrente.includes(
+                                  member.email
+                                );
                                 return (
                                   <Badge
                                     key={member.email}
@@ -481,10 +476,15 @@ export default function SchedulerPage() {
                                         onClick={() => {
                                           if (isExcluded) {
                                             setExcludedFromFrente(
-                                              excludedFromFrente.filter((e) => e !== member.email)
+                                              excludedFromFrente.filter(
+                                                (e) => e !== member.email
+                                              )
                                             );
                                           } else {
-                                            setExcludedFromFrente([...excludedFromFrente, member.email]);
+                                            setExcludedFromFrente([
+                                              ...excludedFromFrente,
+                                              member.email,
+                                            ]);
                                           }
                                         }}
                                       />
@@ -492,7 +492,9 @@ export default function SchedulerPage() {
                                     style={{
                                       cursor: "pointer",
                                       opacity: isExcluded ? 0.5 : 1,
-                                      textDecoration: isExcluded ? "line-through" : "none",
+                                      textDecoration: isExcluded
+                                        ? "line-through"
+                                        : "none",
                                     }}
                                   >
                                     {firstName}
@@ -546,7 +548,6 @@ export default function SchedulerPage() {
 
               {result && (
                   <Stack gap="md">
-                    
                     <Table
                       striped
                       highlightOnHover
@@ -555,13 +556,18 @@ export default function SchedulerPage() {
                       style={{
                         textAlign: "center",
                         background: "white",
+                        tableLayout: "fixed" 
                       }}
                     >
                       <Table.Thead bg="gray.1">
                         <Table.Tr>
-                          <Table.Th style={{ width: "80px", textAlign: "center" }}>Horário</Table.Th>
+                          <Table.Th
+                            style={{ width: "80px", textAlign: "center", height: ROW_HEIGHT }}
+                          >
+                            Horário
+                          </Table.Th>
                           {DAY_LABELS_SHORT.map((day) => (
-                            <Table.Th key={day} style={{ textAlign: "center" }}>
+                            <Table.Th key={day} style={{ textAlign: "center", height: ROW_HEIGHT }}>
                               {day}
                             </Table.Th>
                           ))}
@@ -570,40 +576,52 @@ export default function SchedulerPage() {
                       <Table.Tbody>
                         {HOURS_DISPLAY.map((hour) => (
                           <Table.Tr key={hour}>
-                            <Table.Td style={{ fontWeight: 500, color: "#888" }}>
+                            <Table.Td
+                              style={{ fontWeight: 500, color: "#888", height: ROW_HEIGHT }}
+                            >
                               {hour}:00
                             </Table.Td>
                             {WEEKDAY_UI_INDICES.map((dayIndex) => {
-                              // Verifica se este slot específico (dia/hora) existe nos resultados
                               const matchedSlot = result.slots.find(
                                 (s) => s.day === dayIndex && s.hour === hour
                               );
 
                               if (matchedSlot) {
-                                // Define cor baseada no nível de compatibilidade
-                                const cellColor =
-                                  result.level === 1
-                                    ? "green.1" // Todos trabalhando
-                                    : result.level === 2
-                                    ? "teal.1" // Misto
-                                    : result.level === 3
-                                    ? "cyan.1" // Todos livres
-                                    : "yellow.1"; // Com conflito leve
+                                let colorBase = "yellow"; 
+                                if (result.level === 1) colorBase = "green";
+                                else if (result.level === 2) colorBase = "teal";
+                                else if (result.level === 3) colorBase = "cyan";
 
-                                const badgeColor =
-                                  result.level === 1
-                                    ? "green"
-                                    : result.level === 2
-                                    ? "teal"
-                                    : result.level === 3
-                                    ? "cyan"
-                                    : "yellow";
+                                const statuses = matchedSlot.memberStatuses || [];
+                                const total = statuses.length;
+                                const workingCount = statuses.filter(
+                                  (m) =>
+                                    m.status === "presencial" ||
+                                    m.status === "online"
+                                ).length;
+                                const meetingCount = statuses.filter(
+                                  (m) => m.status === "reuniao"
+                                ).length;
+                                const freeCount = statuses.filter(
+                                  (m) => m.status === null
+                                ).length;
+
+                                let badgeLabel = "";
+                                if (workingCount === total && total > 0) {
+                                  badgeLabel = "Todos trabalhando";
+                                } else if (meetingCount > 0) {
+                                  badgeLabel = `${meetingCount} em reunião`;
+                                } else if (freeCount === total && total > 0) {
+                                  badgeLabel = "Todos livres";
+                                } else {
+                                  badgeLabel = `${workingCount} trabalhando`;
+                                }
 
                                 return (
                                   <Table.Td
                                     key={`${dayIndex}-${hour}`}
-                                    bg={cellColor}
-                                    style={{ cursor: "pointer", padding: 0 }}
+                                    p={0}
+                                    style={{ cursor: "pointer", height: ROW_HEIGHT }}
                                   >
                                     <HoverCard
                                       width={280}
@@ -614,17 +632,19 @@ export default function SchedulerPage() {
                                       <HoverCard.Target>
                                         <Box
                                           w="100%"
-                                          h="100%"
-                                          p="xs"
+                                          h="100%" 
+                                          pl="sm"
+                                          bg={`${colorBase}.1`}
                                           style={{
                                             display: "flex",
                                             alignItems: "center",
-                                            justifyContent: "center",
+                                            justifyContent: "flex-start",
+                                            borderLeft: `5px solid var(--mantine-color-${colorBase}-6)`,
                                           }}
                                         >
-                                          <Badge size="xs" color={badgeColor} variant="filled">
-                                            Disp
-                                          </Badge>
+                                          <Text size="sm" c={`${colorBase}.9`} fw={500} style={{ lineHeight: 1.2 }}>
+                                            {badgeLabel}
+                                          </Text>
                                         </Box>
                                       </HoverCard.Target>
                                       <HoverCard.Dropdown>
@@ -636,7 +656,11 @@ export default function SchedulerPage() {
                               }
 
                               return (
-                                <Table.Td key={`${dayIndex}-${hour}`} bg="white" />
+                                <Table.Td
+                                  key={`${dayIndex}-${hour}`}
+                                  bg="white"
+                                  style={{ height: ROW_HEIGHT }}
+                                />
                               );
                             })}
                           </Table.Tr>
