@@ -41,7 +41,8 @@ import {
   IconUsers,
   IconClock,
   IconBan,
-  IconAlertTriangle, 
+  IconAlertTriangle,
+  IconInfoCircle, 
 } from "@tabler/icons-react";
 import { useRouter, useParams } from "next/navigation";
 import { notifications } from "@mantine/notifications";
@@ -105,6 +106,9 @@ export default function EditContentPage() {
     "SE4Finance", "SLR_ML4SPL", "SM&P", "StoneLab",
   ];
 
+  const hp = memberData?.hp ? parseFloat(memberData.hp) : 0;
+  const ho = memberData?.ho ? parseFloat(memberData.ho) : 0;
+
   useEffect(() => {
     document.title = `HORAISE | Editor`;
   }, []);
@@ -140,7 +144,7 @@ export default function EditContentPage() {
     return parts.join("|");
   };
 
-  const applyPaint = (day: number, hour: number) => {
+  const handleCellClick = (day: number, hour: number) => {
     setSchedule((prev) => {
       const newSchedule = JSON.parse(JSON.stringify(prev));
       if (!newSchedule[day]) newSchedule[day] = {};
@@ -149,7 +153,7 @@ export default function EditContentPage() {
       let nextStatus: string | null = null;
 
       if (activeTool) {
-        if (!isDragging && currentStatus === activeTool) {
+        if (currentStatus === activeTool) {
              nextStatus = null; 
         } else {
              nextStatus = activeTool; 
@@ -164,23 +168,30 @@ export default function EditContentPage() {
       return newSchedule;
     });
   };
+  
+  const applyPaint = (day: number, hour: number) => {
+    setSchedule((prev) => {
+        const newSchedule = JSON.parse(JSON.stringify(prev));
+        if (!newSchedule[day]) newSchedule[day] = {};
+        if (activeTool) {
+            newSchedule[day][hour] = activeTool;
+        } else {
+
+        }
+
+        return newSchedule;
+    });
+  };
 
   const handleMouseDown = (day: number, hour: number, e: React.MouseEvent) => {
     e.preventDefault(); 
     setIsDragging(true);
-    applyPaint(day, hour);
+    handleCellClick(day, hour);
   };
 
   const handleMouseEnter = (day: number, hour: number) => {
-    if (isDragging) {
-      if (activeTool) {
-         setSchedule((prev) => {
-            const newSchedule = JSON.parse(JSON.stringify(prev));
-            if (!newSchedule[day]) newSchedule[day] = {};
-            newSchedule[day][hour] = activeTool;
-            return newSchedule;
-         });
-      }
+    if (isDragging && activeTool) {
+         applyPaint(day, hour);
     }
   };
 
@@ -331,8 +342,6 @@ export default function EditContentPage() {
     if (!currentData || !validation.valid) return false;
 
     const allViolations: RuleViolation[] = [];
-    const hp = memberData?.hp ? parseFloat(memberData.hp) : 0;
-    const ho = memberData?.ho ? parseFloat(memberData.ho) : 0;
     
     if (hp > 0 && ho > 0) {
       const scheduleArray: string[] = [];
@@ -434,7 +443,7 @@ export default function EditContentPage() {
     );
   }
 
-  const renderToolButton = (tool: string, label: string, icon: React.ReactNode, color: string, hours: number) => {
+  const renderToolButton = (tool: string, label: string, icon: React.ReactNode, color: string, value: string | number) => {
     const isActive = activeTool === tool;
     return (
       <UnstyledButton
@@ -457,7 +466,7 @@ export default function EditContentPage() {
           </Text>
           {tool !== 'almoss' && tool !== 'ocupado' && (
             <Text size="sm" c="dimmed" fw={600}>
-                {hours}h
+                {value}h 
             </Text>
           )}
         </Group>
@@ -518,7 +527,7 @@ export default function EditContentPage() {
                   <Box mt="xs">
                     <Group justify="space-between" mb="xs">
                       <Text size="sm" fw={600} style={{ textDecoration: 'underline', color: '#4A5568' }}>distribuição de horas:</Text>
-                      <HoverCard width={320} shadow="md" withArrow>
+                      <HoverCard width={320} shadow="md" withArrow position="right">
                         <HoverCard.Target>
                           <ActionIcon variant="subtle" color="gray" size="sm">
                             <IconAlertTriangle size={16} /> 
@@ -545,8 +554,8 @@ export default function EditContentPage() {
                     
                     <SimpleGrid cols={1} spacing="xs" verticalSpacing="xs">
                       {renderToolButton("aula", "Aula", <IconSchool size={14} />, "blue", hourCounts.aula)}
-                      {renderToolButton("online", "Online", <IconDeviceLaptop size={14} />, "teal", hourCounts.online)}
-                      {renderToolButton("presencial", "Presencial", <IconBuildingSkyscraper size={14} />, "green", hourCounts.presencial)}
+                      {renderToolButton("online", "Online", <IconDeviceLaptop size={14} />, "teal", `${hourCounts.online}/${ho}`)}
+                      {renderToolButton("presencial", "Presencial", <IconBuildingSkyscraper size={14} />, "green", `${hourCounts.presencial}/${hp}`)}
                       {renderToolButton("reuniao", "Reunião", <IconUsers size={14} />, "orange", hourCounts.reuniao)}
                       {renderToolButton("almoss", "Almoço", <IconClock size={14} />, "yellow", 0)}
                       {renderToolButton("ocupado", "Ocupado", <IconBan size={14} />, "red", 0)}
