@@ -10,16 +10,21 @@ import {
   Button,
   Stack,
   Group,
-  Textarea,
   Alert,
   Loader,
   Center,
   Grid,
-  Divider,
   Badge,
   MultiSelect,
   ActionIcon,
   Modal,
+  SimpleGrid,
+  ThemeIcon,
+  Table,
+  HoverCard,
+  Divider,
+  UnstyledButton,
+  List, 
 } from "@mantine/core";
 import {
   IconDeviceFloppy,
@@ -30,6 +35,13 @@ import {
   IconArrowLeft,
   IconPencil,
   IconLock,
+  IconSchool,
+  IconDeviceLaptop,
+  IconBuildingSkyscraper,
+  IconUsers,
+  IconClock,
+  IconBan,
+  IconAlertTriangle, 
 } from "@tabler/icons-react";
 import { useRouter, useParams } from "next/navigation";
 import { notifications } from "@mantine/notifications";
@@ -42,11 +54,9 @@ import {
   type ScheduleData,
 } from "../../../services/googleSheets";
 import { validateSchedule, type RuleViolation } from "@/rules/scheduleRules";
-import ProfileInstructions from "../../../components/Rules";
-import Schedule from "../../../components/Schedule";
+import TopNavBar from "@/components/TopNavBar";
 
-// Mapeamento de frentes para emojis
-const FRENTE_EMOJIS: Record<string, string> = {
+const FRENTES_EMOJIS: Record<string, string> = {
   "StoneLab": "💚",
   "AISE_Website": "🌐",
   "EyesOnSmells": "👁️",
@@ -64,6 +74,11 @@ const FRENTE_EMOJIS: Record<string, string> = {
   "Annotaise": "📝",
 };
 
+const WEEKDAY_UI_INDICES = [0, 1, 2, 3, 4, 5, 6];
+const DAY_LABELS_SHORT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+const HOURS_DISPLAY = Array.from({ length: 13 }, (_, i) => i + 7);
+const ROW_HEIGHT = "40px";
+
 export default function EditContentPage() {
   const router = useRouter();
   const params = useParams();
@@ -71,57 +86,37 @@ export default function EditContentPage() {
 
   const [memberData, setMemberData] = useState<TeamMemberData | null>(null);
   const [schedule, setSchedule] = useState<ScheduleData>({});
-  const [savedSchedule, setSavedSchedule] = useState<ScheduleData>({}); // Schedule salvo (para comparação)
+  const [savedSchedule, setSavedSchedule] = useState<ScheduleData>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isNewMember, setIsNewMember] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
   const [isEditingFrentes, setIsEditingFrentes] = useState(false);
   const [editedFrentes, setEditedFrentes] = useState<string[]>([]);
   const [confirmExitOpen, setConfirmExitOpen] = useState(false);
   const [rulesModalOpen, setRulesModalOpen] = useState(false);
   const [rulesViolations, setRulesViolations] = useState<RuleViolation[]>([]);
+  
+  const [activeTool, setActiveTool] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
-  // Lista de frentes disponíveis (mesma do cadastro)
   const FRENTES_OPTIONS = [
-    "AI4Health",
-    "AISE_Website",
-    "Annotaise",
-    "Diversity4SE",
-    "EcoSustain",
-    "EyesOnSmells",
-    "IA4Law",
-    "LLMs4SA",
-    "ML4NFR",
-    "ML4Smells",
-    "ML4SPL",
-    "SE4Finance",
-    "SLR_ML4SPL",
-    "SM&P",
-    "StoneLab",
+    "AI4Health", "AISE_Website", "Annotaise", "Diversity4SE", "EcoSustain",
+    "EyesOnSmells", "IA4Law", "LLMs4SA", "ML4NFR", "ML4Smells", "ML4SPL",
+    "SE4Finance", "SLR_ML4SPL", "SM&P", "StoneLab",
   ];
 
-  // Define o título da página
   useEffect(() => {
     document.title = `HORAISE | Editor`;
   }, []);
 
-  // Detecta mobile apenas para layout; não altera desktop
   useEffect(() => {
-    const handleResize = () =>
-      setIsMobile(typeof window !== "undefined" && window.innerWidth < 768);
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    const handleGlobalMouseUp = () => setIsDragging(false);
+    window.addEventListener("mouseup", handleGlobalMouseUp);
+    return () => window.removeEventListener("mouseup", handleGlobalMouseUp);
   }, []);
 
-  // Sem reserva extra: sticky ocupa o próprio espaço no fluxo
-
-  // Util: deep clone simples (suficiente para nosso shape { [day]: { [hour]: status|null } })
   const cloneSchedule = (s: ScheduleData): ScheduleData => JSON.parse(JSON.stringify(s || {}));
 
-  // Util: codifica o schedule num formato canônico ordenado (sem depender da ordem de inserção)
-  // Dias: 0..6 (Dom..Sáb), Horas: 7..19
   const statusToCode = (st: any): string => {
     switch (st) {
       case "aula": return "A";
@@ -133,6 +128,7 @@ export default function EditContentPage() {
       default: return "";
     }
   };
+
   const toCanonicalString = (s: ScheduleData): string => {
     const parts: string[] = [];
     for (let day = 0; day < 7; day++) {
@@ -144,13 +140,66 @@ export default function EditContentPage() {
     return parts.join("|");
   };
 
-  // Carrega os dados do membro
+  const applyPaint = (day: number, hour: number) => {
+    setSchedule((prev) => {
+      const newSchedule = JSON.parse(JSON.stringify(prev));
+      if (!newSchedule[day]) newSchedule[day] = {};
+      
+      const currentStatus = newSchedule[day][hour];
+      let nextStatus: string | null = null;
+
+      if (activeTool) {
+        if (!isDragging && currentStatus === activeTool) {
+             nextStatus = null; 
+        } else {
+             nextStatus = activeTool; 
+        }
+      } 
+      if (nextStatus) {
+        newSchedule[day][hour] = nextStatus;
+      } else {
+        delete newSchedule[day][hour];
+      }
+      
+      return newSchedule;
+    });
+  };
+
+  const handleMouseDown = (day: number, hour: number, e: React.MouseEvent) => {
+    e.preventDefault(); 
+    setIsDragging(true);
+    applyPaint(day, hour);
+  };
+
+  const handleMouseEnter = (day: number, hour: number) => {
+    if (isDragging) {
+      if (activeTool) {
+         setSchedule((prev) => {
+            const newSchedule = JSON.parse(JSON.stringify(prev));
+            if (!newSchedule[day]) newSchedule[day] = {};
+            newSchedule[day][hour] = activeTool;
+            return newSchedule;
+         });
+      }
+    }
+  };
+
+  const getStatusConfig = (status: string) => {
+    switch (status) {
+      case "presencial": return { color: "green", label: "Presencial" };
+      case "online": return { color: "teal", label: "Online" };
+      case "reuniao": return { color: "orange", label: "Reunião" };
+      case "aula": return { color: "blue", label: "Aula" };
+      case "ocupado": return { color: "red", label: "Ocupado" };
+      case "almoss": return { color: "yellow", label: "Almoço" };
+      default: return null;
+    }
+  };
+
   useEffect(() => {
-    const notifiedRef = { current: false } as { current: boolean };
     const loadMemberData = async () => {
       setIsLoading(true);
       try {
-        // Verifica se há dados de novo membro no sessionStorage
         if (typeof window !== "undefined") {
           const newMemberData = sessionStorage.getItem("newMember");
           const isNew = sessionStorage.getItem("isNewMember") === "true";
@@ -160,199 +209,132 @@ export default function EditContentPage() {
             setMemberData(member);
             const memberSchedule = member.schedule || {};
             setSchedule(memberSchedule);
-            setSavedSchedule(cloneSchedule(memberSchedule)); // Salva o schedule inicial (deep clone)
+            setSavedSchedule(cloneSchedule(memberSchedule));
             setIsNewMember(true);
-            // Limpa o sessionStorage
             sessionStorage.removeItem("newMember");
             sessionStorage.removeItem("isNewMember");
             setIsLoading(false);
-
-            // notificação removida conforme solicitado
             return;
           }
         }
 
-        // Busca membro existente
         const member = await getMemberByEmail(personId);
         if (member) {
-          // Verificar se tem permissão de edição
           if (member.editor !== 1) {
             const isPending = member.pending === 1;
             const errorMsg = isPending
-              ? "Seu cadastro está pendente de aprovação. Aguarde o administrador liberar o acesso."
-              : "Você não tem permissão para editar. Solicite liberação ao administrador.";
+              ? "Seu cadastro está pendente de aprovação."
+              : "Você não tem permissão para editar.";
             
-            notifications.show({
-              title: "Acesso Negado",
-              message: errorMsg,
-              color: "red",
-              icon: <IconLock />,
-              autoClose: 5000,
-            });
-            
+            notifications.show({ title: "Acesso Negado", message: errorMsg, color: "red", icon: <IconLock />, autoClose: 5000 });
             setTimeout(() => router.push("/horaise-editor"), 2000);
             return;
           }
-          
           setMemberData(member);
           const memberSchedule = member.schedule || {};
           setSchedule(memberSchedule);
-          setSavedSchedule(cloneSchedule(memberSchedule)); // Salva o schedule inicial (deep clone)
+          setSavedSchedule(cloneSchedule(memberSchedule));
           setIsNewMember(false);
         } else {
-          // Se não encontrar e não há dados no sessionStorage,
-          // cria um novo perfil com dados de exemplo
           const exampleData = await getExampleData();
-          const newMember: TeamMemberData = {
-            ...exampleData,
-            email: personId, // Usa o email fornecido
-          };
+          const newMember: TeamMemberData = { ...exampleData, email: personId };
           setMemberData(newMember);
           const exampleSchedule = newMember.schedule || {};
           setSchedule(exampleSchedule);
-          setSavedSchedule(cloneSchedule(exampleSchedule)); // Salva o schedule inicial (deep clone)
+          setSavedSchedule(cloneSchedule(exampleSchedule));
           setIsNewMember(true);
-
         }
       } catch (error) {
         console.error("Erro ao carregar dados:", error);
-        notifications.show({
-          title: "Erro",
-          message: "Erro ao carregar dados. Tente novamente.",
-          color: "red",
-        });
-        // Em caso de erro, redireciona para a página inicial
+        notifications.show({ title: "Erro", message: "Erro ao carregar dados.", color: "red" });
         setTimeout(() => router.push("/"), 2000);
       } finally {
         setIsLoading(false);
       }
     };
 
-    if (personId) {
-      loadMemberData();
-    }
+    if (personId) loadMemberData();
   }, [personId, router]);
 
-  // Cria dados atualizados combinando memberData com schedule
   const currentData = useMemo<TeamMemberData | null>(() => {
     if (!memberData) return null;
-    return {
-      ...memberData,
-      schedule,
-    };
+    return { ...memberData, schedule };
   }, [memberData, schedule]);
 
-  // Verifica se há alterações não salvas no schedule (ordem-insensível)
   const hasUnsavedChanges = useMemo(() => {
     return toCanonicalString(schedule) !== toCanonicalString(savedSchedule);
   }, [schedule, savedSchedule]);
 
-  // Validação dos dados
   const validation = useMemo(() => {
     if (!currentData) return { valid: false, errors: ["Dados inválidos"] };
     return validateMemberData(currentData);
   }, [currentData]);
 
-  // Função para iniciar edição de frentes
   const handleStartEditFrentes = () => {
     if (memberData?.frentes) {
-      const currentFrentes = memberData.frentes
-        .split(",")
-        .map((f) => f.trim())
-        .filter(Boolean);
-      setEditedFrentes(currentFrentes);
+      setEditedFrentes(memberData.frentes.split(",").map((f) => f.trim()).filter(Boolean));
       setIsEditingFrentes(true);
     }
   };
 
-  // Função para salvar frentes editadas
   const handleSaveFrentes = async () => {
     if (editedFrentes.length === 0) {
-      notifications.show({
-        title: "Erro",
-        message: "Você deve ter pelo menos uma frente selecionada",
-        color: "red",
-        icon: <IconX />,
-      });
+      notifications.show({ title: "Erro", message: "Selecione pelo menos uma frente", color: "red" });
       return;
     }
-
     if (!memberData) return;
 
     try {
-      const updatedMember: TeamMemberData = {
-        ...memberData,
-        frentes: editedFrentes.join(", "),
-        schedule,
-      };
-
+      const updatedMember: TeamMemberData = { ...memberData, frentes: editedFrentes.join(", "), schedule };
       const result = await saveMember(updatedMember, false);
 
       if (result.success) {
         setMemberData(updatedMember);
         setIsEditingFrentes(false);
-        notifications.show({
-          title: "Sucesso!",
-          message: "Frentes atualizadas com sucesso",
-          color: "green",
-          icon: <IconCheck />,
-        });
+        notifications.show({ title: "Sucesso!", message: "Frentes atualizadas", color: "green", icon: <IconCheck /> });
       } else {
-        notifications.show({
-          title: "Erro",
-          message: result.message || "Erro ao atualizar frentes",
-          color: "red",
-          icon: <IconX />,
-        });
+        notifications.show({ title: "Erro", message: result.message || "Erro ao atualizar", color: "red" });
       }
     } catch (error) {
       console.error("Erro ao salvar frentes:", error);
-      notifications.show({
-        title: "Erro",
-        message: "Erro ao atualizar frentes",
-        color: "red",
-        icon: <IconX />,
-      });
+      notifications.show({ title: "Erro", message: "Erro ao atualizar frentes", color: "red" });
     }
   };
 
-  // Função para cancelar edição de frentes
   const handleCancelEditFrentes = () => {
     setIsEditingFrentes(false);
     setEditedFrentes([]);
   };
 
-  // Salvar alterações
+  const handleReset = async () => {
+    try {
+      const exampleData = await getExampleData();
+      const resetData: TeamMemberData = {
+        ...exampleData,
+        email: memberData?.email || personId, 
+      };
+      setMemberData(resetData);
+      setSchedule(resetData.schedule || {});
+      notifications.show({
+        title: "Resetado",
+        message: "Dados resetados para exemplo",
+        color: "blue",
+        icon: <IconRefresh />,
+      });
+    } catch (error) {
+      console.error("Erro ao resetar:", error);
+      notifications.show({ title: "Erro", message: "Erro ao carregar dados de exemplo", color: "red" });
+    }
+  };
+
   const handleSave = async () => {
-    if (!currentData) {
-      notifications.show({
-        title: "Erro",
-        message: "Dados inválidos. Corrija os erros antes de salvar.",
-        color: "red",
-        icon: <IconX />,
-      });
-      return false;
-    }
+    if (!currentData || !validation.valid) return false;
 
-    if (!validation.valid) {
-      notifications.show({
-        title: "Erro de Validação",
-        message: validation.errors.join(", "),
-        color: "red",
-        icon: <IconX />,
-      });
-      return false;
-    }
-
-    // Acumula TODAS as violações antes de mostrar o modal
     const allViolations: RuleViolation[] = [];
-    
-    // Validação de HP/HO (horas presenciais + online)
     const hp = memberData?.hp ? parseFloat(memberData.hp) : 0;
     const ho = memberData?.ho ? parseFloat(memberData.ho) : 0;
     
     if (hp > 0 && ho > 0) {
-      // Converte schedule para array de códigos (mesmo formato que vai para planilha)
       const scheduleArray: string[] = [];
       for (let day = 0; day <= 6; day++) {
         for (let hour = 7; hour <= 19; hour++) {
@@ -365,141 +347,52 @@ export default function EditContentPage() {
         }
       }
       
-      // Valida horas usando a mesma lógica do backend
       const hoursValidation = await fetch("/api", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "validate-hours",
-          scheduleRow: scheduleArray,
-          hp,
-          ho
-        })
+        body: JSON.stringify({ action: "validate-hours", scheduleRow: scheduleArray, hp, ho })
       }).then(res => res.json());
       
       if (!hoursValidation.isValid) {
-        allViolations.push(
-          {
-            code: "weekday-lunch-11-14" as any, // Usa qualquer code pois é genérico
-            day: -1,
-            message: `❌ ${hoursValidation.message}`
-          },
-          ...(hoursValidation.details ? [
-            {
-              code: "weekday-lunch-11-14" as any,
-              day: -1,
-              message: `📊 Seu horário: ${hoursValidation.details.totalPresencial}h presenciais + ${hoursValidation.details.totalOnline}h online + ${hoursValidation.details.totalReuniao}h reuniões = ${hoursValidation.details.totalGeral}h total`
-            }
-          ] : [])
-        );
+        allViolations.push({ code: "weekday-lunch-11-14" as any, day: -1, message: `❌ ${hoursValidation.message}` });
       }
     }
     
-    // Validação de regras do schedule (ex.: almoço nos dias úteis)
     const scheduleResult = validateSchedule(schedule);
-    if (!scheduleResult.ok) {
-      allViolations.push(...scheduleResult.violations);
-    }
+    if (!scheduleResult.ok) allViolations.push(...scheduleResult.violations);
     
-    // Se houver qualquer violação, mostra TODAS no modal
     if (allViolations.length > 0) {
       setRulesViolations(allViolations);
       setRulesModalOpen(true);
-      return false; // bloqueia o save
+      return false;
     }
 
-    // Verifica se o email é o exemplo (não pode ser salvo)
     if (currentData.email === "exemplo@example.com") {
-      notifications.show({
-        title: "Erro",
-        message: "Não é possível salvar dados de exemplo. Altere o email.",
-        color: "red",
-        icon: <IconX />,
-      });
+      notifications.show({ title: "Erro", message: "Não é possível salvar dados de exemplo.", color: "red" });
       return false;
     }
 
     setIsSaving(true);
-
     try {
       const result = await saveMember(currentData, isNewMember);
-
       if (result.success) {
-        notifications.show({
-          title: "Sucesso!",
-          message: "Dados salvos com sucesso no Google Sheets",
-          color: "green",
-          icon: <IconCheck />,
-        });
-        
-        // IMPORTANTE: Recarregar dados da planilha para pegar editor=0 após salvar
-        try {
-          const updatedMember = await getMemberByEmail(personId);
-          if (updatedMember) {
-            setMemberData(updatedMember);
-            setSavedSchedule(cloneSchedule(updatedMember.schedule || {}));
-            
-            // Se editor foi bloqueado (=0), mostrar aviso e redirecionar
-            if (updatedMember.editor === 0) {
-              notifications.show({
-                title: "Acesso Bloqueado",
-                message: "Seus dados foram salvos e seu acesso foi bloqueado. Solicite liberação ao administrador para editar novamente.",
-                color: "yellow",
-                autoClose: 5000,
-              });
-              setTimeout(() => router.push("/horaise-editor"), 3000);
-            }
-          } else {
-            // Fallback: apenas atualiza estado local
-            setMemberData(currentData);
-            setSavedSchedule(cloneSchedule(schedule));
-          }
-        } catch (reloadError) {
-          console.warn("Não foi possível recarregar dados:", reloadError);
-          setMemberData(currentData);
-          setSavedSchedule(cloneSchedule(schedule));
-        }
-        
+        notifications.show({ title: "Sucesso!", message: "Dados salvos", color: "green", icon: <IconCheck /> });
+        setMemberData(currentData); 
+        setSavedSchedule(cloneSchedule(schedule)); 
         setIsNewMember(false);
         return true;
       } else {
-        // Tratar erros específicos (isPending, isBlocked)
-        const errorMsg = (result as any).isPending 
-          ? "Seu cadastro está pendente de aprovação. Aguarde o administrador liberar o acesso."
-          : (result as any).isBlocked
-          ? "Você não tem permissão para editar. Solicite liberação ao administrador."
-          : result.message;
-        
-        notifications.show({
-          title: "Erro ao Salvar",
-          message: errorMsg,
-          color: "red",
-          icon: <IconX />,
-          autoClose: 8000,
-        });
-        
-        // Se está bloqueado ou pendente, redirecionar
-        if ((result as any).isPending || (result as any).isBlocked) {
-          setTimeout(() => router.push("/horaise-editor"), 3000);
-        }
-        
+        notifications.show({ title: "Erro", message: result.message, color: "red" });
         return false;
       }
     } catch (error) {
-      console.error("Erro ao salvar:", error);
-      notifications.show({
-        title: "Erro",
-        message: "Erro ao salvar dados. Tente novamente.",
-        color: "red",
-        icon: <IconX />,
-      });
+      notifications.show({ title: "Erro", message: "Erro ao salvar.", color: "red" });
       return false;
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Aviso ao usuário caso tente fechar/atualizar a aba com alterações não salvas
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
       if (hasUnsavedChanges) {
@@ -514,424 +407,233 @@ export default function EditContentPage() {
   }, [hasUnsavedChanges]);
 
   const handleBackClick = () => {
-    if (hasUnsavedChanges) {
-      setConfirmExitOpen(true);
-    } else {
-      router.push("/horaise-editor");
-    }
+    if (hasUnsavedChanges) setConfirmExitOpen(true);
+    else router.push("/horaise-editor");
   };
 
-  // Resetar para dados de exemplo
-  const handleReset = async () => {
-    try {
-      const exampleData = await getExampleData();
-      const resetData: TeamMemberData = {
-        ...exampleData,
-        email: memberData?.email || personId, // Mantém o email atual
-      };
-      setMemberData(resetData);
-      setSchedule(resetData.schedule || {});
-      notifications.show({
-        title: "Resetado",
-        message: "Dados resetados para exemplo (email mantido)",
-        color: "blue",
-        icon: <IconRefresh />,
-      });
-    } catch (error) {
-      console.error("Erro ao resetar:", error);
-      notifications.show({
-        title: "Erro",
-        message: "Erro ao carregar dados de exemplo",
-        color: "red",
+  const hourCounts = useMemo(() => {
+    const counts = { aula: 0, online: 0, presencial: 0, reuniao: 0 };
+    if (schedule) {
+      Object.values(schedule).forEach((daySlots: any) => {
+        Object.values(daySlots).forEach((status: any) => {
+          if (status === 'aula') counts.aula++;
+          else if (status === 'online') counts.online++;
+          else if (status === 'presencial') counts.presencial++;
+          else if (status === 'reuniao') counts.reuniao++;
+        });
       });
     }
-  };
+    return counts;
+  }, [schedule]);
 
   if (isLoading) {
     return (
-      <Box
-        style={{
-          minHeight: "100vh",
-          background: "var(--primary)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Center>
-          <Stack align="center" gap="sm">
-            <Loader size="xl" color="white" />
-            <Text c="white" fw={600}>
-              {memberData?.name ? `Carregando dados de ${memberData.name}…` : "Carregando seu perfil…"}
-            </Text>
-          </Stack>
-        </Center>
+      <Box style={{ minHeight: "100vh", background: "#F8F9FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Loader size="xl" color="blue" />
       </Box>
     );
   }
 
-  return (
-    <Box
-      style={{
-        minHeight: "100vh",
-        background: "var(--primary)",
-        padding: "20px",
-        paddingTop: "40px",
-        paddingBottom: "40px",
-        overflowX: "hidden",
-      }}
-    >
-      <Container size="100%" style={{ overflowX: "visible" }}>
-        {/* Header */}
-        <Paper
-          shadow="md"
-          p="md"
-          radius="lg"
-          mb="md"
-          style={{
-            background: "rgba(255, 255, 255, 0.98)",
-          }}
-        >
-          {/* Desktop: Layout original */}
-          <Box visibleFrom="sm">
-            <Group justify="space-between" wrap="nowrap">
-              <Group>
-                <Button
-                  leftSection={<IconArrowLeft size={18} />}
-                  variant="light"
-                  color="var(--primary)"
-                  onClick={handleBackClick}
-                >
-                  Voltar
-                </Button>
-                <Box>
-                  <Title order={2} size="h3" style={{ color: "var(--primary)" }}>
-                    Olá, {memberData?.name || personId}
-                  </Title>
-                  <Text size="sm" c="dimmed">
-                    Editando perfil de:{" "}
-                    {personId}
-                  </Text>
-                </Box>
-              </Group>
-              <Badge
-                size="lg"
-                variant="light"
-                color={hasUnsavedChanges ? "orange" : "green"}
-                leftSection={
-                  hasUnsavedChanges ? <IconAlertCircle size={16} /> : <IconCheck size={16} />
-                }
-              >
-                {hasUnsavedChanges ? "Desincronizado" : "Sincronizado"}
-              </Badge>
-            </Group>
-          </Box>
-
-          {/* Mobile: Badge na mesma linha do Voltar */}
-          <Box hiddenFrom="sm">
-            <Stack gap="sm">
-              <Group justify="space-between" wrap="nowrap" align="center">
-                <Button
-                  leftSection={<IconArrowLeft size={18} />}
-                  variant="light"
-                  color="var(--primary)"
-                  onClick={handleBackClick}
-                  size="sm"
-                >
-                  Voltar
-                </Button>
-                <Badge
-                  size="md"
-                  variant="light"
-                  color={hasUnsavedChanges ? "orange" : "green"}
-                  leftSection={
-                    hasUnsavedChanges ? <IconAlertCircle size={14} /> : <IconCheck size={14} />
-                  }
-                  style={{ flexShrink: 0 }}
-                >
-                  {hasUnsavedChanges ? "Desincronizado" : "Sincronizado"}
-                </Badge>
-              </Group>
-              <Box>
-                <Title order={2} size="h4" style={{ color: "var(--primary)" }}>
-                  Olá, {memberData?.name || personId}
-                </Title>
-                <Text size="sm" c="dimmed">
-                  Editando perfil de:{" "}
-                  {personId}
-                </Text>
-              </Box>
-            </Stack>
-          </Box>
-        </Paper>
-
-        {/* Modal de confirmação ao sair com alterações não salvas */}
-        <Modal opened={confirmExitOpen} onClose={() => setConfirmExitOpen(false)} title="Atenção! Você tem alterações não salvas." centered>
-          {/* <Text>Você tem alterações não salvas.</Text> */}
-          <Group justify="flex-end" mt="md">
-            <Button color="green" loading={isSaving} onClick={async () => { setConfirmExitOpen(false); const ok = await handleSave(); if (ok) router.push("/horaise-editor"); }}>Salvar e sair</Button>
-            <Button variant="light" color="red" onClick={() => { setConfirmExitOpen(false); router.push("/horaise-editor"); }}>Sair sem salvar</Button>
-            <Button variant="default" onClick={() => setConfirmExitOpen(false)}>Cancelar</Button>
-          </Group>
-        </Modal>
-
-        {/* Modal de Regras do Schedule */}
-        <Modal
-          opened={rulesModalOpen}
-          onClose={() => setRulesModalOpen(false)}
-          title="Ajustes necessários no seu horário"
-          centered
-          size="lg"
-        >
-          <Alert icon={<IconAlertCircle />} color="orange" variant="light" mb="sm">
-            <Text size="sm">
-              Para salvar seus horários, corrija os itens abaixo:
+  const renderToolButton = (tool: string, label: string, icon: React.ReactNode, color: string, hours: number) => {
+    const isActive = activeTool === tool;
+    return (
+      <UnstyledButton
+        onClick={() => setActiveTool(isActive ? null : tool)}
+        style={{
+          width: "100%",
+          padding: "8px",
+          borderRadius: "8px",
+          backgroundColor: isActive ? `var(--mantine-color-${color}-1)` : "transparent",
+          border: isActive ? `2px solid var(--mantine-color-${color}-6)` : "1px solid transparent",
+          transition: "all 0.2s",
+        }}
+      >
+        <Group gap="xs" w="100%">
+          <ThemeIcon variant="light" color={color} size="sm">
+            {icon}
+          </ThemeIcon>
+          <Text size="sm" c={isActive ? color : "dimmed"} style={{ flex: 1, fontWeight: isActive ? 700 : 400 }}>
+            {label}
+          </Text>
+          {tool !== 'almoss' && tool !== 'ocupado' && (
+            <Text size="sm" c="dimmed" fw={600}>
+                {hours}h
             </Text>
-          </Alert>
-          <Stack gap="xs">
-            {rulesViolations.map((v, idx) => (
-              <Box key={idx}>
-                <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
-                  {v.message}
-                </Text>
-              </Box>
-            ))}
-          </Stack>
-          <Group justify="flex-end" mt="md">
-            <Button variant="light" onClick={() => setRulesModalOpen(false)} leftSection={<IconCheck size={16} />}>Ok, vou ajustar</Button>
-          </Group>
-        </Modal>
+          )}
+        </Group>
+      </UnstyledButton>
+    );
+  };
 
-        {/* Frentes do Membro */}
-        {memberData?.frentes && (
-          <Paper
-            shadow="md"
-            p="md"
-            radius="lg"
-            mb="md"
-            style={{
-              background: "rgba(255, 255, 255, 0.98)",
-            }}
-          >
-            <Group justify="space-between" mb="sm">
-              <Group gap="xs">
-                <Title order={3} size="h4" style={{ color: "var(--primary)" }}>
-                  Minhas Frentes
-                </Title>
-                {!isEditingFrentes && (
-                  <ActionIcon
-                    variant="subtle"
-                    color="var(--primary)"
-                    onClick={handleStartEditFrentes}
-                    size="sm"
-                  >
-                    <IconPencil size={16} />
-                  </ActionIcon>
-                )}
-              </Group>
-            </Group>
-            {isEditingFrentes ? (
+  return (
+    <>
+      <TopNavBar />
+      <Box style={{ minHeight: "100vh", background: "#F8F9FF", display: "flex", flexDirection: "column", paddingTop: "140px" }}>
+        <Container size="96%" style={{ width: "100%" }}>
+          <Grid gutter={40}>
+            <Grid.Col span={{ base: 12, md: 5, lg: 4 }}>
+              <Stack gap="xl">
+                <Box ta="left">
+                  <Title order={1} size="h1" style={{ marginBottom: 8 }}>
+                    <span style={{ background: "#0E1862", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", fontWeight: 800 }}>HORAISE</span>{" "}
+                    <span style={{ color: "#8EC9FC", fontWeight: 800 }}>EDITOR</span>
+                  </Title>
+                  <Text size="sm" c="dimmed">Edite sua disponibilidade e horários.</Text>
+                </Box>
+
+                {isNewMember && <Alert radius="md" variant="light" color="blue" title="Novo Perfil" icon={<IconAlertCircle />}>Dados de exemplo.</Alert>}
+
+                <Stack gap="md">
+                  <Stack gap={0} align="left">
+                    <Group justify="space-between" align="center">
+                        <Text fw={700} size="lg" c="#0E1862">{memberData?.name || personId}</Text>
+                        <Badge variant="light" color={hasUnsavedChanges ? "orange" : "green"}>{hasUnsavedChanges ? "Não salvo" : "Salvo"}</Badge>
+                    </Group>
+                    <Text size="xs" c="dimmed">{memberData?.email || personId}</Text>
+                  </Stack>
+
+                  <Box>
+                    <Group justify="space-between" mb="xs">
+                        <Text size="sm" fw={600} c="#4A5568">Frentes:</Text>
+                        {!isEditingFrentes && <ActionIcon variant="subtle" color="gray" onClick={handleStartEditFrentes} size="xs"><IconPencil size={14} /></ActionIcon>}
+                    </Group>
+                    {isEditingFrentes ? (
+                        <Stack gap="sm">
+                            <MultiSelect data={FRENTES_OPTIONS} value={editedFrentes} onChange={setEditedFrentes} searchable />
+                            <Group gap="xs">
+                                <Button size="xs" color="green" onClick={handleSaveFrentes}>Salvar</Button>
+                                <Button size="xs" variant="default" onClick={handleCancelEditFrentes}>Cancelar</Button>
+                            </Group>
+                        </Stack>
+                    ) : (
+                        <Group gap="xs">
+                            {memberData?.frentes?.split(',').map(f => f.trim()).filter(Boolean).sort().map((frente, idx) => {
+                                const emoji = FRENTES_EMOJIS[frente] || "📌";
+                                return <Badge key={idx} size="sm" style={{ textTransform: "none" }} styles={{ root: { backgroundColor: 'rgba(142, 201, 252, 0.2)', color: '#1A202C', border: 'none', fontWeight: 600 } }}>{emoji} {frente}</Badge>;
+                            })}
+                        </Group>
+                    )}
+                  </Box>
+
+                  <Box mt="xs">
+                    <Group justify="space-between" mb="xs">
+                      <Text size="sm" fw={600} style={{ textDecoration: 'underline', color: '#4A5568' }}>distribuição de horas:</Text>
+                      <HoverCard width={320} shadow="md" withArrow>
+                        <HoverCard.Target>
+                          <ActionIcon variant="subtle" color="gray" size="sm">
+                            <IconAlertTriangle size={16} /> 
+                          </ActionIcon>
+                        </HoverCard.Target>
+                        <HoverCard.Dropdown>
+                          <Group gap="xs" mb="xs">
+                            <ThemeIcon size="md" variant="light" color="blue">
+                              <IconAlertTriangle size={16} />
+                            </ThemeIcon>
+                            <Text size="sm" fw={700} c="blue">Regras de Preenchimento</Text>
+                          </Group>
+                          <List size="xs" spacing={4} type="ordered">
+                            <List.Item>O horário de aulas deve refletir sua grade no SAU.</List.Item>
+                            <List.Item>É obrigatório 1h de almoço entre 11h e 14h.</List.Item>
+                            <List.Item>Pelo menos 4 slots diários em dias presenciais.</List.Item>
+                            <List.Item>Mínimo aceitável: 2 slots consecutivos.</List.Item>
+                          </List>
+                        </HoverCard.Dropdown>
+                      </HoverCard>
+                    </Group>
+                    
+                    <Text size="xs" c="dimmed" mb="xs">Clique em uma categoria abaixo para ativar o modo de pintura.</Text>
+                    
+                    <SimpleGrid cols={1} spacing="xs" verticalSpacing="xs">
+                      {renderToolButton("aula", "Aula", <IconSchool size={14} />, "blue", hourCounts.aula)}
+                      {renderToolButton("online", "Online", <IconDeviceLaptop size={14} />, "teal", hourCounts.online)}
+                      {renderToolButton("presencial", "Presencial", <IconBuildingSkyscraper size={14} />, "green", hourCounts.presencial)}
+                      {renderToolButton("reuniao", "Reunião", <IconUsers size={14} />, "orange", hourCounts.reuniao)}
+                      {renderToolButton("almoss", "Almoço", <IconClock size={14} />, "yellow", 0)}
+                      {renderToolButton("ocupado", "Ocupado", <IconBan size={14} />, "red", 0)}
+                    </SimpleGrid>
+                  </Box>
+
+                </Stack>
+              </Stack>
+            </Grid.Col>
+
+            <Grid.Col span={{ base: 12, md: 7, lg: 8 }}>
               <Stack gap="md">
-                <MultiSelect
-                  data={FRENTES_OPTIONS}
-                  value={editedFrentes}
-                  onChange={setEditedFrentes}
-                  placeholder={editedFrentes.length === 0 ? "Selecione suas frentes" : ""}
-                  searchable
-                  clearable={false}
-                  error={editedFrentes.length === 0 ? "Selecione pelo menos uma frente" : undefined}
-                />
-                <Group gap="xs">
-                  <Button
-                    leftSection={<IconCheck size={16} />}
-                    color="green"
-                    onClick={handleSaveFrentes}
-                    disabled={editedFrentes.length === 0}
+                <Table
+                    striped
+                    highlightOnHover
+                    withTableBorder
+                    withColumnBorders
+                    style={{ textAlign: "center", background: "white", tableLayout: "fixed" }}
+                    onMouseLeave={() => setIsDragging(false)} 
                   >
-                    Salvar
-                  </Button>
-                  <Button
-                    leftSection={<IconX size={16} />}
-                    variant="light"
-                    color="gray"
-                    onClick={handleCancelEditFrentes}
-                  >
-                    Cancelar
-                  </Button>
+                    <Table.Thead bg="gray.1">
+                      <Table.Tr>
+                        <Table.Th style={{ width: "80px", textAlign: "center", height: ROW_HEIGHT }}>Horário</Table.Th>
+                        {DAY_LABELS_SHORT.map((day) => (<Table.Th key={day} style={{ textAlign: "center", height: ROW_HEIGHT }}>{day}</Table.Th>))}
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {HOURS_DISPLAY.map((hour) => (
+                        <Table.Tr key={hour}>
+                          <Table.Td style={{ fontWeight: 500, color: "#888", height: ROW_HEIGHT }}>{hour}:00</Table.Td>
+                          {WEEKDAY_UI_INDICES.map((dayIndex) => {
+                            const status = schedule?.[dayIndex]?.[hour];
+                            const config = status ? getStatusConfig(status) : null;
+
+                            return (
+                              <Table.Td
+                                key={`${dayIndex}-${hour}`}
+                                p={0}
+                                style={{ cursor: "pointer", height: ROW_HEIGHT }}
+                                onMouseDown={(e) => handleMouseDown(dayIndex, hour, e)}
+                                onMouseEnter={() => handleMouseEnter(dayIndex, hour)}
+                              >
+                                {config ? (
+                                  <HoverCard width={200} shadow="md" position="bottom" withArrow>
+                                    <HoverCard.Target>
+                                      <Box w="100%" h="100%" pl="sm" bg={`${config.color}.1`} style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", borderLeft: `5px solid var(--mantine-color-${config.color}-6)` }}>
+                                        <Text size="xs" c={`${config.color}.9`} fw={500} style={{ lineHeight: 1.2 }}>{config.label}</Text>
+                                      </Box>
+                                    </HoverCard.Target>
+                                  </HoverCard>
+                                ) : (
+                                  <Box w="100%" h="100%" /> 
+                                )}
+                              </Table.Td>
+                            );
+                          })}
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+
+                <Group justify="flex-end" mt="md">
+                    <Button leftSection={<IconRefresh size={18} />} variant="subtle" color="gray" onClick={handleReset}>Resetar</Button>
+                    <Button leftSection={<IconX size={18} />} variant="light" color="red" onClick={() => setSchedule({})}>Limpar</Button>
+                    <Button leftSection={<IconDeviceFloppy size={18} />} color="green" onClick={handleSave} loading={isSaving} disabled={!hasUnsavedChanges && !isNewMember}>Salvar Alterações</Button>
                 </Group>
               </Stack>
-            ) : (
-              <Group gap="xs">
-                {memberData.frentes
-                  .split(",")
-                  .map((f) => f.trim())
-                  .filter(Boolean)
-                  .sort((a, b) => a.localeCompare(b))
-                  .map((frente, idx) => {
-                    const emoji = FRENTE_EMOJIS[frente] || "📌";
-                    return (
-                      <Badge
-                        key={idx}
-                        size="lg"
-                        variant="light"
-                        color="indigo"
-                        style={{ cursor: "default" }}
-                      >
-                        {emoji} {frente}
-                      </Badge>
-                    );
-                  })}
-              </Group>
-            )}
-          </Paper>
-        )}
+            </Grid.Col>
+          </Grid>
 
-        {/* Instruções de Preenchimento */}
-        <ProfileInstructions />
+          <Center mt="xl"><Text size="xs" c="dimmed" ta="center">© 2025 AISE Lab</Text></Center>
+        </Container>
 
-        {/* Alert de novo membro */}
-        {isNewMember && (
-          <Alert
-            radius="lg"
-            variant="white"
-            icon={<IconAlertCircle />}
-            title="Novo Perfil"
-            color="var(--primary)"
-            mb="md"
-          >
-            Este é um novo perfil. Os dados abaixo são de exemplo. Edite-os e
-            clique em "Salvar" para criar seu perfil no Google Sheets.
-          </Alert>
-        )}
+        <Modal opened={confirmExitOpen} onClose={() => setConfirmExitOpen(false)} title="Alterações não salvas" centered>
+          <Text size="sm" mb="md">Deseja sair sem salvar?</Text>
+          <Group justify="flex-end">
+            <Button color="green" onClick={async () => { setConfirmExitOpen(false); const ok = await handleSave(); if (ok) router.push("/horaise-editor"); }}>Salvar e Sair</Button>
+            <Button variant="light" color="red" onClick={() => { setConfirmExitOpen(false); router.push("/horaise-editor"); }}>Sair sem salvar</Button>
+          </Group>
+        </Modal>
 
-        {/* Erros de validação */}
-        {!validation.valid && (
-          <Alert
-            variant="white"
-            radius="lg"
-            icon={<IconAlertCircle />}
-            title={`Erros de Validação (${validation.errors.length})`}
-            color="red"
-            mb="md"
-          >
-            <Text size="sm" mb="xs">
-              Corrija os seguintes erros antes de salvar:
-            </Text>
-            <Stack gap="xs">
-              {validation.errors.map((error, idx) => (
-                <Text key={idx} size="sm" style={{ fontFamily: "monospace" }}>
-                  {error}
-                </Text>
-              ))}
-            </Stack>
-          </Alert>
-        )}
-
-        {/* Editor de Horários - Layout Único */}
-        <Paper
-          // shadow="md"
-          p="md"
-          radius="lg"
-          mb="md"
-          style={{
-            background: "rgba(255, 255, 255, 0.98)",
-          }}
-        >
-          <Title
-            order={3}
-            size="h4"
-            mb="md"
-            style={{ color: "var(--primary)" }}
-          >
-            Editor de Horários
-          </Title>
-
-          <Box style={{ display: "flex", flexDirection: "column", alignItems: isMobile ? "center" : "stretch", overflow: isMobile ? "visible" : "hidden", paddingBottom: isMobile ? "calc(8px + env(safe-area-inset-bottom))" : undefined }}>
-            <Box style={{ width: "100%", overflowX: "visible" }}>
-              <Schedule schedule={schedule} onChange={(newSchedule: ScheduleData) => setSchedule(newSchedule)} />
-            </Box>
-
-            {/* Botões de ação - Desktop (inalterado) */}
-            {!isMobile && (
-              <Box style={{ width: "100%", maxWidth: "1150px", margin: "12px auto 0" }}>
-                <Box
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "250px 120px 1fr",
-                    alignItems: "start",
-                  }}
-                >
-                  <Box />
-                  <Box />
-                  <Box style={{ display: "flex", justifyContent: "center" }}>
-                    <Box style={{ width: "780px", maxWidth: "100%", display: "flex", justifyContent: "center" }}>
-                      <Group gap="md">
-                        <Button
-                          leftSection={<IconX size={18} />}
-                          variant="light"
-                          color="gray"
-                          onClick={() => setSchedule({})}
-                        >
-                          Limpar Calendário
-                        </Button>
-                        <Button
-                          leftSection={<IconDeviceFloppy size={18} />}
-                          color="green"
-                          onClick={handleSave}
-                          disabled={!validation.valid || isSaving}
-                          loading={isSaving}
-                        >
-                          {isSaving ? "Salvando..." : "Salvar Alterações"}
-                        </Button>
-                      </Group>
-                    </Box>
-                  </Box>
-                </Box>
-              </Box>
-            )}
-
-            {/* Botões de ação - Mobile (sempre visíveis dentro do editor) */}
-            {isMobile && (
-              <Box
-                style={{
-                  position: "sticky",
-                  bottom: 0,
-                  width: "100%",
-                  background:
-                    "linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.95) 20%, rgba(255,255,255,0.98) 100%)",
-                  paddingTop: "8px",
-                  paddingBottom: "8px",
-                  zIndex: 2,
-                }}
-              >
-                <Stack gap="xs">
-                  <Button
-                    leftSection={<IconX size={18} />}
-                    variant="light"
-                    color="gray"
-                    onClick={() => setSchedule({})}
-                    fullWidth
-                  >
-                    Limpar Calendário
-                  </Button>
-                  <Button
-                    leftSection={<IconDeviceFloppy size={18} />}
-                    color="green"
-                    onClick={handleSave}
-                    disabled={!validation.valid || isSaving}
-                    loading={isSaving}
-                    fullWidth
-                  >
-                    {isSaving ? "Salvando..." : "Salvar Alterações"}
-                  </Button>
-                </Stack>
-              </Box>
-            )}
-          </Box>
-        </Paper>
-
-
-      </Container>
-    </Box>
+        <Modal opened={rulesModalOpen} onClose={() => setRulesModalOpen(false)} title="Ajustes Necessários" centered size="lg">
+          <Alert icon={<IconAlertCircle />} color="orange" mb="sm">Corrija os itens abaixo:</Alert>
+          <Stack gap="xs" mb="md">{rulesViolations.map((v, idx) => <Text key={idx} size="sm">{v.message}</Text>)}</Stack>
+          <Group justify="flex-end"><Button onClick={() => setRulesModalOpen(false)}>Ok</Button></Group>
+        </Modal>
+      </Box>
+    </>
   );
 }
