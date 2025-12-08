@@ -21,26 +21,9 @@ import {
   saveMember,
   validateEmail,
   getMemberByEmail,
+  getBacklogOptions,
   type TeamMemberData,
 } from "../../services/googleSheets";
-// Lista de frentes disponíveis
-const FRENTES_OPTIONS = [
-  "AI4Health",
-  "AISE_Website",
-  "Annotaise",
-  "Diversity4SE",
-  "EcoSustain",
-  "EyesOnSmells",
-  "IA4Law",
-  "LLMs4SA",
-  "ML4NFR",
-  "ML4Smells",
-  "ML4SPL",
-  "SE4Finance",
-  "SLR_ML4SPL",
-  "SM&P",
-  "StoneLab",
-];
 export default function CadastroPage() {
   const router = useRouter();
   const [nome, setNome] = useState("");
@@ -50,9 +33,24 @@ export default function CadastroPage() {
   const [errorNome, setErrorNome] = useState("");
   const [errorEmail, setErrorEmail] = useState("");
   const [errorFrente, setErrorFrente] = useState("");
+  const [frentesOptions, setFrentesOptions] = useState<string[]>([]);
   // Define o título da página
   useEffect(() => {
     document.title = "HORAISE | Cadastro";
+  }, []);
+
+  // Carrega opções de frentes
+  useEffect(() => {
+    const loadOptions = async () => {
+      try {
+        const options = await getBacklogOptions();
+        // Mapeia para formato de string simples
+        setFrentesOptions(options.frentes.map(f => f.name));
+      } catch (error) {
+        console.error("Erro ao carregar opções:", error);
+      }
+    };
+    loadOptions();
   }, []);
   const handleCadastro = async () => {
     // Limpa erros anteriores
@@ -224,7 +222,7 @@ export default function CadastroPage() {
                 <MultiSelect
                   placeholder="Selecione uma ou mais frentes"
                   size="md"
-                  data={FRENTES_OPTIONS}
+                  data={frentesOptions}
                   value={frentes}
                   onChange={setFrente}
                   disabled={loading}

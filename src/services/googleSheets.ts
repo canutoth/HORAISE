@@ -414,3 +414,50 @@ export async function getAllMembers(): Promise<TeamMemberData[]> {
     throw error;
   }
 }
+
+export async function getBacklogOptions(): Promise<{ 
+  frentes: Array<{ name: string; emoji: string }>; 
+  bolsas: Array<{ name: string; color: string }> 
+}> {
+  // Modo offline: retorna opções fixas
+  if (OFFLINE_MODE) {
+    console.log("🔌 MODO OFFLINE: Retornando opções do backlog fixas");
+    return {
+      frentes: [
+        { name: "Frente Teste 1", emoji: "🧪" },
+        { name: "Frente Teste 2", emoji: "🔬" },
+      ],
+      bolsas: [
+        { name: "PIBIC", color: "#4A90E2" },
+        { name: "STONE", color: "#50C878" },
+        { name: "Voluntário", color: "#FFA500" },
+      ],
+    };
+  }
+  
+  try {
+    const res = await fetch(`/api`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "read-backlog-options" }),
+    });
+    
+    if (!res.ok) {
+      throw new Error("Erro ao buscar opções do backlog");
+    }
+    
+    const payload = await res.json();
+    
+    if (!payload || !payload.frentes || !payload.bolsas) {
+      return { frentes: [], bolsas: [] };
+    }
+    
+    return {
+      frentes: payload.frentes,
+      bolsas: payload.bolsas,
+    };
+  } catch (error) {
+    console.error("Erro ao buscar opções do backlog:", error);
+    return { frentes: [], bolsas: [] };
+  }
+}

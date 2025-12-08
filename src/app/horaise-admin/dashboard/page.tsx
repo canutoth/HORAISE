@@ -63,12 +63,7 @@ const FRENTES_EMOJIS: Record<string, string> = {
   "Annotaise": "📝",
 };
 
-const FRENTES_OPTIONS = Object.keys(FRENTES_EMOJIS).map((key) => ({
-  value: key,
-  label: `${FRENTES_EMOJIS[key]} ${key}`,
-}));
 
-const BOLSA_OPTIONS = ["PIBIC", "STONE", "Voluntário"];
 
 type AdminMember = {
   name: string;
@@ -83,135 +78,167 @@ type AdminMember = {
   rowNumber: number;
 };
 
-// pop up edicao
-const EditMemberPopover = ({ 
-  member, 
-  onSave 
-}: { 
-  member: AdminMember; 
-  onSave: (data: any) => void 
-}) => {
-  const [opened, setOpened] = useState(false);
-  const [frentesSelecionadas, setFrentesSelecionadas] = useState<string[]>(
-    member.frentes ? member.frentes.split(",").map((s) => s.trim()).filter(Boolean) : []
-  );
-  
-  const [bolsasSelecionadas, setBolsasSelecionadas] = useState<string[]>(
-    member.bolsa && member.bolsa !== "nan" && member.bolsa.trim() !== '' 
-      ? member.bolsa.split(",").map((s) => s.trim()).filter(Boolean) 
-      : []
-  );
-
-  const [hours, setHours] = useState({
-    hp: member.hp,
-    ho: member.ho,
-  });
-
-  const handleSave = () => {
-    setOpened(false);
-    onSave({
-      email: member.email,
-      frentes: frentesSelecionadas.join(", "),
-      bolsa: bolsasSelecionadas.join(", "),
-      hp: hours.hp,
-      ho: hours.ho,
-      pending: member.pendingAccess,
-      editor: member.editor
-    });
-  };
-
-  return (
-    <Popover 
-      opened={opened} 
-      onChange={setOpened} 
-      width={300} 
-      position="bottom-end" 
-      withArrow 
-      shadow="md"
-      closeOnClickOutside={true}
-      closeOnEscape={true}
-    >
-      <Popover.Target>
-        <ActionIcon 
-          variant="light" 
-          color="blue" 
-          size="lg"
-          onClick={() => setOpened((o) => !o)}
-        >
-          <IconPencil size={20} />
-        </ActionIcon>
-      </Popover.Target>
-
-      <Popover.Dropdown>
-        <Stack gap="sm">
-          <Text size="sm" fw={700} c="dimmed">Editar Dados</Text>
-          
-          <MultiSelect
-            label="Frente(s)"
-            size="xs"
-            placeholder="Selecione"
-            data={FRENTES_OPTIONS}
-            value={frentesSelecionadas}
-            onChange={setFrentesSelecionadas}
-            hidePickedOptions
-          />
-          
-          <MultiSelect
-            label="Bolsa(s)"
-            size="xs"
-            placeholder="Selecione (opcional)"
-            data={BOLSA_OPTIONS}
-            value={bolsasSelecionadas}
-            onChange={setBolsasSelecionadas}
-            hidePickedOptions
-            clearable
-          />
-
-          <Group grow>
-            <NumberInput
-              label="H. Online"
-              size="xs"
-              value={hours.ho}
-              onChange={(val) => setHours({ ...hours, ho: Number(val) || 0 })}
-              min={0}
-            />
-            <NumberInput
-              label="H. Pres."
-              size="xs"
-              value={hours.hp}
-              onChange={(val) => setHours({ ...hours, hp: Number(val) || 0 })}
-              min={0}
-            />
-          </Group>
-
-          <Button 
-            fullWidth 
-            size="xs" 
-            color="blue" 
-            mt="xs" 
-            leftSection={<IconDeviceFloppy size={14} />}
-            onClick={handleSave}
-          >
-            Salvar
-          </Button>
-        </Stack>
-      </Popover.Dropdown>
-    </Popover>
-  );
-};
-
 export default function AdminDashboard() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [members, setMembers] = useState<AdminMember[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const isMobile = useMediaQuery('(max-width: 768px)');
+  const [frentesOptions, setFrentesOptions] = useState<{ value: string; label: string }[]>([]);
+  const [bolsasOptions, setBolsasOptions] = useState<{ value: string; label: string; color: string }[]>([]);
 
   const [confirmationModal, setConfirmationModal] = useState<{
     type: 'approve' | 'revoke' | null;
     email: string;
     name: string;
   }>({ type: null, email: '', name: '' });
+
+  // Componente interno para ter acesso aos estados
+  const EditMemberPopover = ({ 
+    member, 
+    onSave 
+  }: { 
+    member: AdminMember; 
+    onSave: (data: any) => void 
+  }) => {
+    const [opened, setOpened] = useState(false);
+    const [frentesSelecionadas, setFrentesSelecionadas] = useState<string[]>(
+      member.frentes ? member.frentes.split(",").map((s) => s.trim()).filter(Boolean) : []
+    );
+    
+    const [bolsasSelecionadas, setBolsasSelecionadas] = useState<string[]>(
+      member.bolsa && member.bolsa !== "nan" && member.bolsa.trim() !== '' 
+        ? member.bolsa.split(",").map((s) => s.trim()).filter(Boolean) 
+        : []
+    );
+
+    const [hours, setHours] = useState({
+      hp: member.hp,
+      ho: member.ho,
+    });
+
+    const handleSave = () => {
+      setOpened(false);
+      onSave({
+        email: member.email,
+        frentes: frentesSelecionadas.join(", "),
+        bolsa: bolsasSelecionadas.join(", "),
+        hp: hours.hp,
+        ho: hours.ho,
+        pending: member.pendingAccess,
+        editor: member.editor
+      });
+    };
+
+    return (
+      <Popover 
+        opened={opened} 
+        onChange={setOpened} 
+        width={300} 
+        position="bottom-end" 
+        withArrow 
+        shadow="md"
+        closeOnClickOutside={true}
+        closeOnEscape={true}
+      >
+        <Popover.Target>
+          <ActionIcon 
+            variant="light" 
+            color="blue" 
+            size="lg"
+            onClick={() => setOpened((o) => !o)}
+          >
+            <IconPencil size={20} />
+          </ActionIcon>
+        </Popover.Target>
+
+        <Popover.Dropdown>
+          <Stack gap="sm">
+            <Text size="sm" fw={700} c="dimmed">Editar Dados</Text>
+            
+            <MultiSelect
+              label="Frente(s)"
+              size="xs"
+              placeholder="Selecione"
+              data={frentesOptions}
+              value={frentesSelecionadas}
+              onChange={setFrentesSelecionadas}
+              hidePickedOptions
+            />
+            
+            <MultiSelect
+              label="Bolsa(s)"
+              size="xs"
+              placeholder="Selecione (opcional)"
+              data={bolsasOptions}
+              value={bolsasSelecionadas}
+              onChange={setBolsasSelecionadas}
+              hidePickedOptions
+              clearable
+            />
+
+            <Group grow>
+              <NumberInput
+                label="H. Online"
+                size="xs"
+                value={hours.ho}
+                onChange={(val) => setHours({ ...hours, ho: Number(val) || 0 })}
+                min={0}
+              />
+              <NumberInput
+                label="H. Pres."
+                size="xs"
+                value={hours.hp}
+                onChange={(val) => setHours({ ...hours, hp: Number(val) || 0 })}
+                min={0}
+              />
+            </Group>
+
+            <Button 
+              fullWidth 
+              size="xs" 
+              color="blue" 
+              mt="xs" 
+              leftSection={<IconDeviceFloppy size={14} />}
+              onClick={handleSave}
+            >
+              Salvar
+            </Button>
+          </Stack>
+        </Popover.Dropdown>
+      </Popover>
+    );
+  };
+
+  const fetchBacklogOptions = async () => {
+    try {
+      const response = await fetch("/api", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "read-backlog-options" }),
+      });
+      const data = await response.json();
+      
+      if (response.ok) {
+        // Mapeia frentes com emojis dinâmicos
+        const frentesWithEmojis = (data.frentes || []).map((frente: { name: string; emoji: string }) => ({
+          value: frente.name,
+          label: `${frente.emoji} ${frente.name}`,
+        }));
+        setFrentesOptions(frentesWithEmojis);
+        
+        // Mapeia bolsas com cores dinâmicas
+        const bolsasWithColors = (data.bolsas || []).map((bolsa: { name: string; color: string }) => ({
+          value: bolsa.name,
+          label: bolsa.name,
+          color: bolsa.color,
+        }));
+        setBolsasOptions(bolsasWithColors);
+      }
+    } catch (error) {
+      console.error("Erro ao carregar opções:", error);
+    }
+  };
 
   const fetchMembers = async () => {
     setRefreshing(true);
@@ -248,6 +275,7 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
+    fetchBacklogOptions();
     fetchMembers();
   }, []);
 
@@ -425,17 +453,32 @@ export default function AdminDashboard() {
                         return <Text size="sm" c="dimmed">-</Text>;
                       }
                       
+                      const getBolsaColor = (bolsaName: string) => {
+                        const bolsaOption = bolsasOptions.find(b => b.value === bolsaName);
+                        return bolsaOption?.color || '#888888';
+                      };
+                      
                       if (bolsasList.length === 1) {
-                        return <Badge variant="dot" color="blue">{bolsasList[0]}</Badge>;
+                        const color = getBolsaColor(bolsasList[0]);
+                        return (
+                          <Group gap={6} justify="center" wrap="nowrap">
+                            <Box w={8} h={8} style={{ borderRadius: '50%', backgroundColor: color }} />
+                            <Text size="sm" fw={500}>{bolsasList[0]}</Text>
+                          </Group>
+                        );
                       }
                       
                       const visibleBolsas = bolsasList.slice(0, 1);
                       const hiddenCount = bolsasList.length - 1;
                       const hiddenBolsasList = bolsasList.slice(1).join(', ');
+                      const color = getBolsaColor(visibleBolsas[0]);
                       
                       return (
                         <Group gap={6} justify="center" wrap="nowrap">
-                          <Badge variant="dot" color="blue">{visibleBolsas[0]}</Badge>
+                          <Group gap={4} wrap="nowrap">
+                            <Box w={8} h={8} style={{ borderRadius: '50%', backgroundColor: color }} />
+                            <Text size="sm" fw={500}>{visibleBolsas[0]}</Text>
+                          </Group>
                           <Tooltip label={hiddenBolsasList} withArrow multiline w={200}>
                             <Badge size="sm" variant="light" color="gray" circle style={{ cursor: 'help', minWidth: '24px', height: '24px' }}>
                               +{hiddenCount}

@@ -8,6 +8,7 @@ import {
   readAllMembers,
   updateMemberAccess,
   approveSchedule,
+  readBacklogOptions,
 } from "../../server/sheets";
 import { sendAdminNotification, sendUserApproval, sendAccessRequestToAdmin, sendScheduleEditedToAdmin, sendScheduleApprovedToUser } from "../../server/email";
 import { validateScheduleHours, parseHours } from "../../server/hoursValidation";
@@ -18,6 +19,7 @@ type Actions =
   | { action: "save-schedule"; email: string; scheduleRow: string[] }
   | { action: "load-schedule"; email: string }
   | { action: "read-all-members" }
+  | { action: "read-backlog-options" }
   | { action: "admin-precheck"; email: string }
   | { action: "admin-login"; email: string; password: string }
   | { action: "validate-hours"; scheduleRow: string[]; hp: number; ho: number }
@@ -107,6 +109,15 @@ export async function POST(request: NextRequest) {
       case "read-all-members": {
         const members = await readAllMembers();
         return NextResponse.json({ members });
+      }
+      case "read-backlog-options": {
+        try {
+          const options = await readBacklogOptions();
+          return NextResponse.json({ frentes: options.frentes, bolsas: options.bolsas });
+        } catch (error) {
+          console.error("Erro ao ler backlog options:", error);
+          return NextResponse.json({ frentes: [], bolsas: [] }, { status: 500 });
+        }
       }
       case "admin-precheck": {
         if (!body.email) return NextResponse.json({ ok: false }, { status: 400 });

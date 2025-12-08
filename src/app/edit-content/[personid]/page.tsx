@@ -53,29 +53,12 @@ import {
   getExampleData,
   saveMember,
   validateMemberData,
+  getBacklogOptions,
   type TeamMemberData,
   type ScheduleData,
 } from "../../../services/googleSheets";
 import { validateSchedule, type RuleViolation } from "@/rules/scheduleRules";
 import TopNavBar from "@/components/TopNavBar";
-
-const FRENTES_EMOJIS: Record<string, string> = {
-  "StoneLab": "💚",
-  "AISE_Website": "🌐",
-  "EyesOnSmells": "👁️",
-  "IA4Law": "⚖️",
-  "LLMs4SA": "🧠",
-  "ML4NFR": "🤖",
-  "ML4Smells": "👃",
-  "ML4SPL": "🧩",
-  "SM&P": "🤯",
-  "SE4Finance": "💵",
-  "SLR_ML4SPL": "📚",
-  "Diversity4SE": "🫶",
-  "AI4Health": "💉",
-  "EcoSustain": "🌱",
-  "Annotaise": "📝",
-};
 
 const WEEKDAY_UI_INDICES = [0, 1, 2, 3, 4, 5, 6];
 const DAY_LABELS_SHORT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
@@ -103,18 +86,33 @@ export default function EditContentPage() {
   
   const [activeTool, setActiveTool] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-
-  const FRENTES_OPTIONS = [
-    "AI4Health", "AISE_Website", "Annotaise", "Diversity4SE", "EcoSustain",
-    "EyesOnSmells", "IA4Law", "LLMs4SA", "ML4NFR", "ML4Smells", "ML4SPL",
-    "SE4Finance", "SLR_ML4SPL", "SM&P", "StoneLab",
-  ];
+  const [frentesOptions, setFrentesOptions] = useState<string[]>([]);
+  const [frentesEmojis, setFrentesEmojis] = useState<Record<string, string>>({});
 
   const hp = memberData?.hp ? parseFloat(memberData.hp) : 0;
   const ho = memberData?.ho ? parseFloat(memberData.ho) : 0;
 
   useEffect(() => {
     document.title = `HORAISE | Editor`;
+  }, []);
+
+  useEffect(() => {
+    const loadOptions = async () => {
+      try {
+        const options = await getBacklogOptions();
+        // Mapeia para formato de string simples
+        setFrentesOptions(options.frentes.map(f => f.name));
+        // Cria mapa de emojis
+        const emojiMap: Record<string, string> = {};
+        options.frentes.forEach(f => {
+          emojiMap[f.name] = f.emoji;
+        });
+        setFrentesEmojis(emojiMap);
+      } catch (error) {
+        console.error("Erro ao carregar opções:", error);
+      }
+    };
+    loadOptions();
   }, []);
 
   useEffect(() => {
@@ -243,7 +241,7 @@ export default function EditContentPage() {
         const member = await getMemberByEmail(personId);
         if (member) {
           if (member.editor !== 1) {
-            const isPending = member.pending === 1;
+            const isPending = member.pendingAccess === 1;
             const errorMsg = isPending
               ? "Seu cadastro está pendente de aprovação."
               : "Você não tem permissão para editar.";
@@ -540,7 +538,7 @@ export default function EditContentPage() {
                     </Group>
                     {isEditingFrentes ? (
                         <Stack gap="sm">
-                            <MultiSelect data={FRENTES_OPTIONS} value={editedFrentes} onChange={setEditedFrentes} searchable />
+                            <MultiSelect data={frentesOptions} value={editedFrentes} onChange={setEditedFrentes} searchable />
                             <Group gap="xs">
                                 <Button size="xs" color="green" onClick={handleSaveFrentes}>Salvar</Button>
                                 <Button size="xs" variant="default" onClick={handleCancelEditFrentes}>Cancelar</Button>
@@ -552,7 +550,7 @@ export default function EditContentPage() {
                             <ScrollArea type="never" offsetScrollbars={false}>
                                 <Group gap="xs" wrap="nowrap" pb={4}>
                                     {memberData?.frentes?.split(',').map(f => f.trim()).filter(Boolean).sort().map((frente, idx) => {
-                                        const emoji = FRENTES_EMOJIS[frente] || "📌";
+                                        const emoji = frentesEmojis[frente] || "📌";
                                         return <Badge key={idx} size="sm" style={{ textTransform: "none", flexShrink: 0 }} styles={{ root: { backgroundColor: 'rgba(142, 201, 252, 0.2)', color: '#1A202C', border: 'none', fontWeight: 600 } }}>{emoji} {frente}</Badge>;
                                     })}
                                 </Group>
@@ -560,7 +558,7 @@ export default function EditContentPage() {
                         ) : (
                             <Group gap="xs">
                                 {memberData?.frentes?.split(',').map(f => f.trim()).filter(Boolean).sort().map((frente, idx) => {
-                                    const emoji = FRENTES_EMOJIS[frente] || "📌";
+                                    const emoji = frentesEmojis[frente] || "📌";
                                     return <Badge key={idx} size="sm" style={{ textTransform: "none" }} styles={{ root: { backgroundColor: 'rgba(142, 201, 252, 0.2)', color: '#1A202C', border: 'none', fontWeight: 600 } }}>{emoji} {frente}</Badge>;
                                 })}
                             </Group>

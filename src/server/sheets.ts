@@ -1,6 +1,7 @@
 import { google } from "googleapis";
 const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ID || "";
 const SHEET_NAME = process.env.SHEET_NAME || "INFO";
+const BACKLOG_SHEET_NAME = process.env.BACKLOG_SHEET_NAME || "BACKLOG";
 export function escapeSheetName(name: string): string {
   if (!name) return name;
   return `'${name.replace(/'/g, "''")}'`;
@@ -190,4 +191,48 @@ export async function approveSchedule(email: string, keepEditor: boolean) {
   return { success: true, message: keepEditor ? "Schedule aprovado. Editor mantido." : "Schedule aprovado. Acesso de edição removido." };
 }
 
-export const sheetsConstants = { SPREADSHEET_ID, SHEET_NAME };
+/**
+ * Lê as opções de frentes e bolsas da aba BACKLOG
+ * A aba BACKLOG tem 4 colunas: Frentes (A), Emoji-Frente (B), Bolsa (C), Cor-Bolsa (D)
+ */
+export async function readBacklogOptions(): Promise<{ 
+  frentes: Array<{ name: string; emoji: string }>; 
+  bolsas: Array<{ name: string; color: string }> 
+}> {
+  const { sheets } = await getSheetsClient();
+  const backlogSheetName = escapeSheetName(BACKLOG_SHEET_NAME);
+  
+  try {
+    // Lê todas as linhas das colunas A até D (ignorando a primeira linha que é o cabeçalho)
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${backlogSheetName}!A2:D`,
+    });
+    
+    const rows = res.data.values || [];
+    const frentes: Array<{ name: string; emoji: string }> = [];
+    const bolsas: Array<{ name: string; color: string }> = [];
+    
+    for (const row of rows) {
+      const frenteName = row[0]?.trim();
+      const frenteEmoji = row[1]?.trim() || "📌";
+      const bolsaName = row[2]?.trim();
+      const bolsaColor = row[3]?.trim() || "#888888";
+      
+      if (frenteName && frenteName !== "") {
+        frentes.push({ name: frenteName, emoji: frenteEmoji });
+      }
+      
+      if (bolsaName && bolsaName !== "") {
+        bolsas.push({ name: bolsaName, color: bolsaColor });
+      }
+    }
+    
+    return { frentes, bolsas };
+  } catch (error) {
+    console.error("Erro ao ler aba BACKLOG:", error);
+    return { frentes: [], bolsas: [] };
+  }
+}
+
+export const sheetsConstants = { SPREADSHEET_ID, SHEET_NAME, BACKLOG_SHEET_NAME };

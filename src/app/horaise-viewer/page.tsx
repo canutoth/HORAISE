@@ -36,26 +36,8 @@ import {
   IconToolsKitchen2,
 } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
-import { getAllMembers } from "../../services/googleSheets";
+import { getAllMembers, getBacklogOptions } from "../../services/googleSheets";
 import TopNavBar from "@/components/TopNavBar";
-
-const FRENTES_EMOJIS: Record<string, string> = {
-  "StoneLab": "💚",
-  "AISE_Website": "🌐",
-  "EyesOnSmells": "👁️",
-  "IA4Law": "⚖️",
-  "LLMs4SA": "🧠",
-  "ML4NFR": "🤖",
-  "ML4Smells": "👃",
-  "ML4SPL": "🧩",
-  "SM&P": "🤯",
-  "SE4Finance": "💵",
-  "SLR_ML4SPL": "📚",
-  "Diversity4SE": "🫶",
-  "AI4Health": "💉",
-  "EcoSustain": "🌱",
-  "Annotaise": "📝",
-};
 
 const WEEKDAY_UI_INDICES = [0, 1, 2, 3, 4, 5, 6];
 const DAY_LABELS_SHORT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
@@ -70,9 +52,26 @@ export default function VisualizerPage() {
   const [members, setMembers] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [error, setError] = useState<string>("");
+  const [frentesEmojis, setFrentesEmojis] = useState<Record<string, string>>({});
 
   useEffect(() => {
     document.title = "HORAISE | Viewer";
+  }, []);
+
+  useEffect(() => {
+    const loadEmojis = async () => {
+      try {
+        const options = await getBacklogOptions();
+        const emojiMap: Record<string, string> = {};
+        options.frentes.forEach(f => {
+          emojiMap[f.name] = f.emoji;
+        });
+        setFrentesEmojis(emojiMap);
+      } catch (error) {
+        console.error("Erro ao carregar emojis:", error);
+      }
+    };
+    loadEmojis();
   }, []);
 
   useEffect(() => {
@@ -215,7 +214,7 @@ export default function VisualizerPage() {
                           <ScrollArea type="never">
                             <Group gap="xs" wrap="nowrap">
                               {current.frentes.split(',').map((f: string) => f.trim()).filter(Boolean).sort((a: string, b: string) => a.localeCompare(b)).map((frente: string, idx: number) => {
-                                const emoji = FRENTES_EMOJIS[frente] || "📌";
+                                const emoji = frentesEmojis[frente] || "📌";
                                 return (
                                   <Badge
                                     key={idx}
@@ -232,7 +231,7 @@ export default function VisualizerPage() {
                         ) : (
                           <Group gap="xs">
                             {current.frentes.split(',').map((f: string) => f.trim()).filter(Boolean).sort((a: string, b: string) => a.localeCompare(b)).map((frente: string, idx: number) => {
-                              const emoji = FRENTES_EMOJIS[frente] || "📌";
+                              const emoji = frentesEmojis[frente] || "📌";
                               return (
                                 <Badge
                                   key={idx}
