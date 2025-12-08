@@ -24,8 +24,10 @@ import {
   HoverCard,
   Divider,
   UnstyledButton,
-  List, 
+  List,
+  ScrollArea, // Adicionado para scroll na tabela e toolbar
 } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks"; // Adicionado para responsividade
 import {
   IconDeviceFloppy,
   IconRefresh,
@@ -84,6 +86,9 @@ export default function EditContentPage() {
   const router = useRouter();
   const params = useParams();
   const personId = decodeURIComponent(params?.personid as string);
+  
+  // Detecta telas menores que 768px (Mobile/Tablet Portrait)
+  const isMobile = useMediaQuery('(max-width: 768px)');
 
   const [memberData, setMemberData] = useState<TeamMemberData | null>(null);
   const [schedule, setSchedule] = useState<ScheduleData>({});
@@ -116,7 +121,12 @@ export default function EditContentPage() {
   useEffect(() => {
     const handleGlobalMouseUp = () => setIsDragging(false);
     window.addEventListener("mouseup", handleGlobalMouseUp);
-    return () => window.removeEventListener("mouseup", handleGlobalMouseUp);
+    // Adiciona touchend para mobile
+    window.addEventListener("touchend", handleGlobalMouseUp);
+    return () => {
+      window.removeEventListener("mouseup", handleGlobalMouseUp);
+      window.removeEventListener("touchend", handleGlobalMouseUp);
+    };
   }, []);
 
   const cloneSchedule = (s: ScheduleData): ScheduleData => JSON.parse(JSON.stringify(s || {}));
@@ -197,12 +207,12 @@ export default function EditContentPage() {
 
   const getStatusConfig = (status: string) => {
     switch (status) {
-      case "presencial": return { color: "green", label: "Presencial" };
-      case "online": return { color: "teal", label: "Online" };
-      case "reuniao": return { color: "orange", label: "Reunião" };
-      case "aula": return { color: "blue", label: "Aula" };
-      case "ocupado": return { color: "red", label: "Ocupado" };
-      case "almoss": return { color: "yellow", label: "Almoço" };
+      case "presencial": return { color: "green", label: isMobile ? "P" : "Presencial" }; // Abrevia label no mobile
+      case "online": return { color: "teal", label: isMobile ? "O" : "Online" };
+      case "reuniao": return { color: "orange", label: isMobile ? "R" : "Reunião" };
+      case "aula": return { color: "blue", label: isMobile ? "A" : "Aula" };
+      case "ocupado": return { color: "red", label: isMobile ? "X" : "Ocupado" };
+      case "almoss": return { color: "yellow", label: isMobile ? "L" : "Almoço" };
       default: return null;
     }
   };
@@ -443,47 +453,71 @@ export default function EditContentPage() {
     );
   }
 
+  // --- Função para renderizar os botões de ferramentas (Ajustada para Mobile) ---
   const renderToolButton = (tool: string, label: string, icon: React.ReactNode, color: string, value: string | number) => {
     const isActive = activeTool === tool;
+    
+    // No mobile, o botão é menor e mais compacto
     return (
       <UnstyledButton
         onClick={() => setActiveTool(isActive ? null : tool)}
         style={{
-          width: "100%",
+          width: isMobile ? "auto" : "100%", // Mobile: largura auto para caber no scroll
+          minWidth: isMobile ? "85px" : "auto", // Mobile: tamanho mínimo
           padding: "8px",
           borderRadius: "8px",
-          backgroundColor: isActive ? `var(--mantine-color-${color}-1)` : "transparent",
-          border: isActive ? `2px solid var(--mantine-color-${color}-6)` : "1px solid transparent",
+          backgroundColor: isActive ? `var(--mantine-color-${color}-1)` : "white", // Mobile: fundo branco para contraste
+          border: isActive ? `2px solid var(--mantine-color-${color}-6)` : "1px solid #eee",
           transition: "all 0.2s",
+          flexShrink: 0, // Impede que o botão encolha no scroll horizontal
         }}
       >
-        <Group gap="xs" w="100%">
+        <Group gap="xs" w="100%" wrap="nowrap" justify={isMobile ? "center" : "flex-start"}>
           <ThemeIcon variant="light" color={color} size="sm">
             {icon}
           </ThemeIcon>
-          <Text size="sm" c={isActive ? color : "dimmed"} style={{ flex: 1, fontWeight: isActive ? 700 : 400 }}>
-            {label}
-          </Text>
-          {tool !== 'almoss' && tool !== 'ocupado' && (
-            <Text size="sm" c="dimmed" fw={600}>
-                {value}h 
-            </Text>
-          )}
+          <Stack gap={0} align={isMobile ? "center" : "flex-start"}>
+             <Text size="xs" c={isActive ? color : "dimmed"} style={{ fontWeight: isActive ? 700 : 400, lineHeight: 1.1 }}>
+                {label}
+             </Text>
+             {tool !== 'almoss' && tool !== 'ocupado' && (
+                <Text size={isMobile ? "9px" : "xs"} c="dimmed" fw={600} style={{lineHeight: 1}}>
+                    {value}h 
+                </Text>
+             )}
+          </Stack>
         </Group>
       </UnstyledButton>
     );
   };
 
+  const renderTools = () => (
+    <>
+        {renderToolButton("aula", "Aula", <IconSchool size={14} />, "blue", hourCounts.aula)}
+        {renderToolButton("online", "Online", <IconDeviceLaptop size={14} />, "teal", `${hourCounts.online}/${ho}`)}
+        {renderToolButton("presencial", "Presenc.", <IconBuildingSkyscraper size={14} />, "green", `${hourCounts.presencial}/${hp}`)}
+        {renderToolButton("reuniao", "Reunião", <IconUsers size={14} />, "orange", hourCounts.reuniao)}
+        {renderToolButton("almoss", "Almoço", <IconClock size={14} />, "yellow", 0)}
+        {renderToolButton("ocupado", "Ocupado", <IconBan size={14} />, "red", 0)}
+    </>
+  );
+
   return (
     <>
       <TopNavBar />
-      <Box style={{ minHeight: "100vh", background: "#F8F9FF", display: "flex", flexDirection: "column", paddingTop: "140px" }}>
-        <Container size="96%" style={{ width: "100%" }}>
-          <Grid gutter={40}>
+      <Box style={{ minHeight: "100vh", background: "#F8F9FF", display: "flex", flexDirection: "column", paddingTop: isMobile ? "80px" : "140px", paddingBottom: "40px" }}>
+        {/* Container fluido no mobile para aproveitar 100% da largura */}
+        <Container size={isMobile ? "100%" : "96%"} style={{ width: "100%" }} px={isMobile ? "xs" : "md"}>
+          
+          <Grid gutter={isMobile ? 20 : 40}>
+            {/* --- SEÇÃO LATERAL / SUPERIOR --- */}
             <Grid.Col span={{ base: 12, md: 5, lg: 4 }}>
-              <Stack gap="xl">
+              <Stack gap={isMobile ? "sm" : "xl"}>
+                
+                {/* Cabeçalho */}
                 <Box ta="left">
-                  <Title order={1} size="h1" style={{ marginBottom: 8 }}>
+                  {/* Título menor no mobile */}
+                  <Title order={1} size={isMobile ? "h3" : "h1"} style={{ marginBottom: 4 , paddingTop: isMobile ? "40px" : "0px"}}>
                     <span style={{ background: "#0E1862", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", fontWeight: 800 }}>HORAISE</span>{" "}
                     <span style={{ color: "#8EC9FC", fontWeight: 800 }}>EDITOR</span>
                   </Title>
@@ -492,15 +526,18 @@ export default function EditContentPage() {
 
                 {isNewMember && <Alert radius="md" variant="light" color="blue" title="Novo Perfil" icon={<IconAlertCircle />}>Dados de exemplo.</Alert>}
 
-                <Stack gap="md">
-                  <Stack gap={0} align="left">
+                <Stack gap={isMobile ? "xs" : "md"}>
+                  <Paper p="sm" radius="md" withBorder shadow="sm">
                     <Group justify="space-between" align="center">
-                        <Text fw={700} size="lg" c="#0E1862">{memberData?.name || personId}</Text>
+                        <Stack gap={0}>
+                            <Text fw={700} size="md" c="#0E1862" truncate>{memberData?.name || personId}</Text>
+                            <Text size="xs" c="dimmed" truncate style={{maxWidth: '200px'}}>{memberData?.email || personId}</Text>
+                        </Stack>
                         <Badge variant="light" color={hasUnsavedChanges ? "orange" : "green"}>{hasUnsavedChanges ? "Não salvo" : "Salvo"}</Badge>
                     </Group>
-                    <Text size="xs" c="dimmed">{memberData?.email || personId}</Text>
-                  </Stack>
+                  </Paper>
 
+                  {/* Frentes */}
                   <Box>
                     <Group justify="space-between" mb="xs">
                         <Text size="sm" fw={600} c="#4A5568">Frentes:</Text>
@@ -515,30 +552,43 @@ export default function EditContentPage() {
                             </Group>
                         </Stack>
                     ) : (
-                        <Group gap="xs">
-                            {memberData?.frentes?.split(',').map(f => f.trim()).filter(Boolean).sort().map((frente, idx) => {
-                                const emoji = FRENTES_EMOJIS[frente] || "📌";
-                                return <Badge key={idx} size="sm" style={{ textTransform: "none" }} styles={{ root: { backgroundColor: 'rgba(142, 201, 252, 0.2)', color: '#1A202C', border: 'none', fontWeight: 600 } }}>{emoji} {frente}</Badge>;
-                            })}
-                        </Group>
+                        // No mobile, se tiver muitas frentes, usa scroll horizontal
+                        isMobile ? (
+                            <ScrollArea type="never" offsetScrollbars={false}>
+                                <Group gap="xs" wrap="nowrap" pb={4}>
+                                    {memberData?.frentes?.split(',').map(f => f.trim()).filter(Boolean).sort().map((frente, idx) => {
+                                        const emoji = FRENTES_EMOJIS[frente] || "📌";
+                                        return <Badge key={idx} size="sm" style={{ textTransform: "none", flexShrink: 0 }} styles={{ root: { backgroundColor: 'rgba(142, 201, 252, 0.2)', color: '#1A202C', border: 'none', fontWeight: 600 } }}>{emoji} {frente}</Badge>;
+                                    })}
+                                </Group>
+                            </ScrollArea>
+                        ) : (
+                            <Group gap="xs">
+                                {memberData?.frentes?.split(',').map(f => f.trim()).filter(Boolean).sort().map((frente, idx) => {
+                                    const emoji = FRENTES_EMOJIS[frente] || "📌";
+                                    return <Badge key={idx} size="sm" style={{ textTransform: "none" }} styles={{ root: { backgroundColor: 'rgba(142, 201, 252, 0.2)', color: '#1A202C', border: 'none', fontWeight: 600 } }}>{emoji} {frente}</Badge>;
+                                })}
+                            </Group>
+                        )
                     )}
                   </Box>
 
-                  <Box mt="xs">
+                  {/* FERRAMENTAS - Layout Condicional */}
+                  <Box mt={isMobile ? 0 : "xs"}>
                     <Group justify="space-between" mb="xs">
                       <Text size="sm" fw={600} style={{ textDecoration: 'underline', color: '#4A5568' }}>distribuição de horas:</Text>
-                      <HoverCard width={320} shadow="md" withArrow position="right">
+                      {/* Botão de ajuda mantido */}
+                      <HoverCard width={320} shadow="md" withArrow position="left">
                         <HoverCard.Target>
                           <ActionIcon variant="subtle" color="gray" size="sm">
                             <IconAlertTriangle size={16} /> 
                           </ActionIcon>
                         </HoverCard.Target>
                         <HoverCard.Dropdown>
+                          {/* Conteúdo do tooltip igual */}
                           <Group gap="xs" mb="xs">
-                            <ThemeIcon size="md" variant="light" color="blue">
-                              <IconAlertTriangle size={16} />
-                            </ThemeIcon>
-                            <Text size="sm" fw={700} c="blue">Regras de Preenchimento</Text>
+                            <ThemeIcon size="md" variant="light" color="blue"><IconAlertTriangle size={16} /></ThemeIcon>
+                            <Text size="sm" fw={700} c="blue">Regras</Text>
                           </Group>
                           <List size="xs" spacing={4} type="ordered">
                             <List.Item>O horário de aulas deve refletir sua grade no SAU.</List.Item>
@@ -550,77 +600,101 @@ export default function EditContentPage() {
                       </HoverCard>
                     </Group>
                     
-                    <Text size="xs" c="dimmed" mb="xs">Clique em uma categoria abaixo para ativar o modo de pintura.</Text>
+                    {!isMobile && <Text size="xs" c="dimmed" mb="xs">Clique em uma categoria abaixo para ativar o modo de pintura.</Text>}
                     
-                    <SimpleGrid cols={1} spacing="xs" verticalSpacing="xs">
-                      {renderToolButton("aula", "Aula", <IconSchool size={14} />, "blue", hourCounts.aula)}
-                      {renderToolButton("online", "Online", <IconDeviceLaptop size={14} />, "teal", `${hourCounts.online}/${ho}`)}
-                      {renderToolButton("presencial", "Presencial", <IconBuildingSkyscraper size={14} />, "green", `${hourCounts.presencial}/${hp}`)}
-                      {renderToolButton("reuniao", "Reunião", <IconUsers size={14} />, "orange", hourCounts.reuniao)}
-                      {renderToolButton("almoss", "Almoço", <IconClock size={14} />, "yellow", 0)}
-                      {renderToolButton("ocupado", "Ocupado", <IconBan size={14} />, "red", 0)}
-                    </SimpleGrid>
+                    {isMobile ? (
+                        // Mobile: Scroll Horizontal para ferramentas
+                        <ScrollArea type="never" offsetScrollbars={false} mb="sm">
+                            <Group gap="xs" wrap="nowrap" pb="xs">
+                                {renderTools()}
+                            </Group>
+                        </ScrollArea>
+                    ) : (
+                        // Desktop: Grid Vertical
+                        <SimpleGrid cols={1} spacing="xs" verticalSpacing="xs">
+                            {renderTools()}
+                        </SimpleGrid>
+                    )}
                   </Box>
 
                 </Stack>
               </Stack>
             </Grid.Col>
 
+            {/* --- SEÇÃO DA TABELA --- */}
             <Grid.Col span={{ base: 12, md: 7, lg: 8 }}>
               <Stack gap="md">
-                <Table
-                    striped
-                    highlightOnHover
-                    withTableBorder
-                    withColumnBorders
-                    style={{ textAlign: "center", background: "white", tableLayout: "fixed" }}
-                    onMouseLeave={() => setIsDragging(false)} 
-                  >
-                    <Table.Thead bg="gray.1">
-                      <Table.Tr>
-                        <Table.Th style={{ width: "80px", textAlign: "center", height: ROW_HEIGHT }}>Horário</Table.Th>
-                        {DAY_LABELS_SHORT.map((day) => (<Table.Th key={day} style={{ textAlign: "center", height: ROW_HEIGHT }}>{day}</Table.Th>))}
-                      </Table.Tr>
-                    </Table.Thead>
-                    <Table.Tbody>
-                      {HOURS_DISPLAY.map((hour) => (
-                        <Table.Tr key={hour}>
-                          <Table.Td style={{ fontWeight: 500, color: "#888", height: ROW_HEIGHT }}>{hour}:00</Table.Td>
-                          {WEEKDAY_UI_INDICES.map((dayIndex) => {
-                            const status = schedule?.[dayIndex]?.[hour];
-                            const config = status ? getStatusConfig(status) : null;
-
-                            return (
-                              <Table.Td
-                                key={`${dayIndex}-${hour}`}
-                                p={0}
-                                style={{ cursor: "pointer", height: ROW_HEIGHT }}
-                                onMouseDown={(e) => handleMouseDown(dayIndex, hour, e)}
-                                onMouseEnter={() => handleMouseEnter(dayIndex, hour)}
-                              >
-                                {config ? (
-                                  <HoverCard width={200} shadow="md" position="bottom" withArrow>
-                                    <HoverCard.Target>
-                                      <Box w="100%" h="100%" pl="sm" bg={`${config.color}.1`} style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", borderLeft: `5px solid var(--mantine-color-${config.color}-6)` }}>
-                                        <Text size="xs" c={`${config.color}.9`} fw={500} style={{ lineHeight: 1.2 }}>{config.label}</Text>
-                                      </Box>
-                                    </HoverCard.Target>
-                                  </HoverCard>
-                                ) : (
-                                  <Box w="100%" h="100%" /> 
-                                )}
-                              </Table.Td>
-                            );
-                          })}
+                {/* ScrollArea para a tabela permitir rolagem horizontal no mobile */}
+                <ScrollArea type="auto" offsetScrollbars>
+                    <Table
+                        striped
+                        highlightOnHover
+                        withTableBorder
+                        withColumnBorders
+                        style={{ 
+                            textAlign: "center", 
+                            background: "white", 
+                            tableLayout: "fixed",
+                            minWidth: isMobile ? "600px" : "100%" // Força largura mínima no mobile
+                        }}
+                        onMouseLeave={() => setIsDragging(false)} 
+                    >
+                        <Table.Thead bg="gray.1">
+                        <Table.Tr>
+                            <Table.Th style={{ width: "72px", textAlign: "center", height: ROW_HEIGHT }}>Horário</Table.Th>
+                            {DAY_LABELS_SHORT.map((day) => (<Table.Th key={day} style={{ textAlign: "center", height: ROW_HEIGHT }}>{day}</Table.Th>))}
                         </Table.Tr>
-                      ))}
-                    </Table.Tbody>
-                  </Table>
+                        </Table.Thead>
+                        <Table.Tbody>
+                        {HOURS_DISPLAY.map((hour) => (
+                            <Table.Tr key={hour}>
+                            <Table.Td style={{ fontWeight: 500, color: "#888", height: ROW_HEIGHT, fontSize: '12px' }}>{hour}:00</Table.Td>
+                            {WEEKDAY_UI_INDICES.map((dayIndex) => {
+                                const status = schedule?.[dayIndex]?.[hour];
+                                const config = status ? getStatusConfig(status) : null;
 
-                <Group justify="flex-end" mt="md">
-                    <Button leftSection={<IconRefresh size={18} />} variant="subtle" color="gray" onClick={handleReset}>Resetar</Button>
-                    <Button leftSection={<IconX size={18} />} variant="light" color="red" onClick={() => setSchedule({})}>Limpar</Button>
-                    <Button leftSection={<IconDeviceFloppy size={18} />} color="green" onClick={handleSave} loading={isSaving} disabled={!hasUnsavedChanges && !isNewMember}>Salvar Alterações</Button>
+                                return (
+                                <Table.Td
+                                    key={`${dayIndex}-${hour}`}
+                                    p={0}
+                                    style={{ cursor: "pointer", height: ROW_HEIGHT }}
+                                    // Eventos de clique para Mobile (tap) e Desktop (drag)
+                                    onClick={() => handleCellClick(dayIndex, hour)}
+                                    onMouseDown={(e) => handleMouseDown(dayIndex, hour, e)}
+                                    onMouseEnter={() => handleMouseEnter(dayIndex, hour)}
+                                >
+                                    {config ? (
+                                        // No mobile, removemos o HoverCard para melhorar performance e usabilidade,
+                                        // e mostramos apenas a letra ou cor
+                                        isMobile ? (
+                                            <Box w="100%" h="100%" bg={`${config.color}.1`} style={{ display: "flex", alignItems: "center", justifyContent: "center", borderLeft: `4px solid var(--mantine-color-${config.color}-6)` }}>
+                                                <Text size="xs" c={`${config.color}.9`} fw={700}>{config.label}</Text>
+                                            </Box>
+                                        ) : (
+                                            <HoverCard width={200} shadow="md" position="bottom" withArrow>
+                                                <HoverCard.Target>
+                                                <Box w="100%" h="100%" pl="sm" bg={`${config.color}.1`} style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", borderLeft: `5px solid var(--mantine-color-${config.color}-6)` }}>
+                                                    <Text size="xs" c={`${config.color}.9`} fw={500} style={{ lineHeight: 1.2 }}>{config.label}</Text>
+                                                </Box>
+                                                </HoverCard.Target>
+                                            </HoverCard>
+                                        )
+                                    ) : (
+                                        <Box w="100%" h="100%" /> 
+                                    )}
+                                </Table.Td>
+                                );
+                            })}
+                            </Table.Tr>
+                        ))}
+                        </Table.Tbody>
+                    </Table>
+                </ScrollArea>
+
+                <Group justify={isMobile ? "space-between" : "flex-end"} mt="md">
+                    <Button leftSection={<IconRefresh size={18} />} variant="subtle" color="gray" onClick={handleReset} size={isMobile ? "xs" : "sm"}>Reset</Button>
+                    <Button leftSection={<IconX size={18} />} variant="light" color="red" onClick={() => setSchedule({})} size={isMobile ? "xs" : "sm"}>Limpar</Button>
+                    <Button leftSection={<IconDeviceFloppy size={18} />} color="green" onClick={handleSave} loading={isSaving} disabled={!hasUnsavedChanges && !isNewMember} size={isMobile ? "xs" : "sm"}>Salvar</Button>
                 </Group>
               </Stack>
             </Grid.Col>
@@ -637,7 +711,7 @@ export default function EditContentPage() {
           </Group>
         </Modal>
 
-        <Modal opened={rulesModalOpen} onClose={() => setRulesModalOpen(false)} title="Ajustes Necessários" centered size="lg">
+        <Modal opened={rulesModalOpen} onClose={() => setRulesModalOpen(false)} title="Ajustes Necessários" centered size={isMobile ? "sm" : "lg"}>
           <Alert icon={<IconAlertCircle />} color="orange" mb="sm">Corrija os itens abaixo:</Alert>
           <Stack gap="xs" mb="md">{rulesViolations.map((v, idx) => <Text key={idx} size="sm">{v.message}</Text>)}</Stack>
           <Group justify="flex-end"><Button onClick={() => setRulesModalOpen(false)}>Ok</Button></Group>
