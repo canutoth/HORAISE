@@ -22,7 +22,9 @@ import {
   Table,
   HoverCard,
   ThemeIcon,
+  ScrollArea, // Adicionado
 } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks"; // Adicionado
 import {
   IconArrowLeft,
   IconSearch,
@@ -79,6 +81,10 @@ interface CompatibilityResult {
 
 export default function SchedulerPage() {
   const router = useRouter();
+  
+  // Hook para detectar mobile
+  const isMobile = useMediaQuery('(max-width: 768px)');
+
   const [searchMode, setSearchMode] = useState<"frente" | "pessoas">("frente");
   const [selectedFrente, setSelectedFrente] = useState<string | null>(null);
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
@@ -366,19 +372,22 @@ export default function SchedulerPage() {
           background: "#F8F9FF",
           display: "flex",
           flexDirection: "column",
-          paddingTop: "140px",
+          // Ajuste de padding para mobile vs desktop
+          paddingTop: isMobile ? "80px" : "140px",
         }}
       >
-        <Container size="96%" style={{ width: "100%" }}>
-          <Grid gutter={40}>
+        <Container size="96%" style={{ width: "100%", paddingBottom: "40px" }}>
+          {/* Ajuste de gutter para mobile */}
+          <Grid gutter={isMobile ? 20 : 40}>
+            {/* Seção de Filtros */}
             <Grid.Col span={{ base: 12, md: 5, lg: 4 }}>
               
-                <Stack gap="xl">
+                <Stack gap={isMobile ? "md" : "xl"}>
                   <Box ta="left">
                      <Title  
                       order={1}
-                      size="h1" 
-                      style={{ marginBottom: 8 }}
+                      size={isMobile ? "h3" : "h1"} 
+                      style={{ marginBottom: 4, paddingTop: isMobile ? "40px" : "0px"}}
                     >
                     <span
                       style={{
@@ -400,9 +409,9 @@ export default function SchedulerPage() {
                     SCHEDULER
                     </span>
                   </Title>
-                    <Text size="sm" c="dimmed">
-                      Busque horários compatíveis por frente ou por pessoas específicas. O sistema analisa automaticamente a melhor combinação de horários disponíveis.
-                    </Text>
+                      <Text size="sm" c="dimmed">
+                        Busque horários compatíveis por frente ou por pessoas específicas. 
+                      </Text>
                   </Box>
 
                   {errorMessage && !loadingMembers && (
@@ -536,6 +545,7 @@ export default function SchedulerPage() {
                 </Stack>
             </Grid.Col>
 
+            {/* Seção de Resultados */}
             <Grid.Col span={{ base: 12, md: 7, lg: 8 }}>
               {!result && !loading && (
                 <Center h="100%" style={{ minHeight: "400px", opacity: 0.5 }}>
@@ -548,125 +558,128 @@ export default function SchedulerPage() {
 
               {result && (
                   <Stack gap="md">
-                    <Table
-                      striped
-                      highlightOnHover
-                      withTableBorder
-                      withColumnBorders
-                      style={{
-                        textAlign: "center",
-                        background: "white",
-                        tableLayout: "fixed" 
-                      }}
-                    >
-                      <Table.Thead bg="gray.1">
-                        <Table.Tr>
-                          <Table.Th
-                            style={{ width: "80px", textAlign: "center", height: ROW_HEIGHT }}
-                          >
-                            Horário
-                          </Table.Th>
-                          {DAY_LABELS_SHORT.map((day) => (
-                            <Table.Th key={day} style={{ textAlign: "center", height: ROW_HEIGHT }}>
-                              {day}
-                            </Table.Th>
-                          ))}
-                        </Table.Tr>
-                      </Table.Thead>
-                      <Table.Tbody>
-                        {HOURS_DISPLAY.map((hour) => (
-                          <Table.Tr key={hour}>
-                            <Table.Td
-                              style={{ fontWeight: 500, color: "#888", height: ROW_HEIGHT }}
+                    <ScrollArea type="auto" offsetScrollbars>
+                      <Table
+                        striped
+                        highlightOnHover
+                        withTableBorder
+                        withColumnBorders
+                        style={{
+                          textAlign: "center",
+                          background: "white",
+                          tableLayout: "fixed",
+                          minWidth: isMobile ? "600px" : "100%" 
+                        }}
+                      >
+                        <Table.Thead bg="gray.1">
+                          <Table.Tr>
+                            <Table.Th
+                              style={{ width: "80px", textAlign: "center", height: ROW_HEIGHT }}
                             >
-                              {hour}:00
-                            </Table.Td>
-                            {WEEKDAY_UI_INDICES.map((dayIndex) => {
-                              const matchedSlot = result.slots.find(
-                                (s) => s.day === dayIndex && s.hour === hour
-                              );
+                              Horário
+                            </Table.Th>
+                            {DAY_LABELS_SHORT.map((day) => (
+                              <Table.Th key={day} style={{ textAlign: "center", height: ROW_HEIGHT }}>
+                                {day}
+                              </Table.Th>
+                            ))}
+                          </Table.Tr>
+                        </Table.Thead>
+                        <Table.Tbody>
+                          {HOURS_DISPLAY.map((hour) => (
+                            <Table.Tr key={hour}>
+                              <Table.Td
+                                style={{ fontWeight: 500, color: "#888", height: ROW_HEIGHT }}
+                              >
+                                {hour}:00
+                              </Table.Td>
+                              {WEEKDAY_UI_INDICES.map((dayIndex) => {
+                                const matchedSlot = result.slots.find(
+                                  (s) => s.day === dayIndex && s.hour === hour
+                                );
 
-                              if (matchedSlot) {
-                                let colorBase = "yellow"; 
-                                if (result.level === 1) colorBase = "green";
-                                else if (result.level === 2) colorBase = "teal";
-                                else if (result.level === 3) colorBase = "cyan";
+                                if (matchedSlot) {
+                                  let colorBase = "yellow"; 
+                                  if (result.level === 1) colorBase = "green";
+                                  else if (result.level === 2) colorBase = "teal";
+                                  else if (result.level === 3) colorBase = "cyan";
 
-                                const statuses = matchedSlot.memberStatuses || [];
-                                const total = statuses.length;
-                                const workingCount = statuses.filter(
-                                  (m) =>
-                                    m.status === "presencial" ||
-                                    m.status === "online"
-                                ).length;
-                                const meetingCount = statuses.filter(
-                                  (m) => m.status === "reuniao"
-                                ).length;
-                                const freeCount = statuses.filter(
-                                  (m) => m.status === null
-                                ).length;
+                                  const statuses = matchedSlot.memberStatuses || [];
+                                  const total = statuses.length;
+                                  const workingCount = statuses.filter(
+                                    (m) =>
+                                      m.status === "presencial" ||
+                                      m.status === "online"
+                                  ).length;
+                                  const meetingCount = statuses.filter(
+                                    (m) => m.status === "reuniao"
+                                  ).length;
+                                  const freeCount = statuses.filter(
+                                    (m) => m.status === null
+                                  ).length;
 
-                                let badgeLabel = "";
-                                if (workingCount === total && total > 0) {
-                                  badgeLabel = "Todos trabalhando";
-                                } else if (meetingCount > 0) {
-                                  badgeLabel = `${meetingCount} em reunião`;
-                                } else if (freeCount === total && total > 0) {
-                                  badgeLabel = "Todos livres";
-                                } else {
-                                  badgeLabel = `${workingCount} trabalhando`;
+                                  let badgeLabel = "";
+                                  if (workingCount === total && total > 0) {
+                                    badgeLabel = "Todos trabalhando";
+                                  } else if (meetingCount > 0) {
+                                    badgeLabel = `${meetingCount} em reunião`;
+                                  } else if (freeCount === total && total > 0) {
+                                    badgeLabel = "Todos livres";
+                                  } else {
+                                    badgeLabel = `${workingCount} trabalhando`;
+                                  }
+
+                                  return (
+                                    <Table.Td
+                                      key={`${dayIndex}-${hour}`}
+                                      p={0}
+                                      style={{ cursor: "pointer", height: ROW_HEIGHT }}
+                                    >
+                                      <HoverCard
+                                        width={280}
+                                        shadow="md"
+                                        position={isMobile ? "top" : "bottom"} 
+                                        withArrow
+                                      >
+                                        <HoverCard.Target>
+                                          <Box
+                                            w="100%"
+                                            h="100%" 
+                                            pl="sm"
+                                            bg={`${colorBase}.1`}
+                                            style={{
+                                              display: "flex",
+                                              alignItems: "center",
+                                              justifyContent: "flex-start",
+                                              borderLeft: `5px solid var(--mantine-color-${colorBase}-6)`,
+                                            }}
+                                          >
+                                            <Text size="xs" c={`${colorBase}.9`} fw={500} style={{ lineHeight: 1.2 }}>
+                                              {isMobile && badgeLabel.includes("trabalhando") ? badgeLabel.replace("trabalhando", "trab.") : badgeLabel}
+                                            </Text>
+                                          </Box>
+                                        </HoverCard.Target>
+                                        <HoverCard.Dropdown>
+                                          {renderHoverContent(matchedSlot)}
+                                        </HoverCard.Dropdown>
+                                      </HoverCard>
+                                    </Table.Td>
+                                  );
                                 }
 
                                 return (
                                   <Table.Td
                                     key={`${dayIndex}-${hour}`}
-                                    p={0}
-                                    style={{ cursor: "pointer", height: ROW_HEIGHT }}
-                                  >
-                                    <HoverCard
-                                      width={280}
-                                      shadow="md"
-                                      position="bottom"
-                                      withArrow
-                                    >
-                                      <HoverCard.Target>
-                                        <Box
-                                          w="100%"
-                                          h="100%" 
-                                          pl="sm"
-                                          bg={`${colorBase}.1`}
-                                          style={{
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "flex-start",
-                                            borderLeft: `5px solid var(--mantine-color-${colorBase}-6)`,
-                                          }}
-                                        >
-                                          <Text size="sm" c={`${colorBase}.9`} fw={500} style={{ lineHeight: 1.2 }}>
-                                            {badgeLabel}
-                                          </Text>
-                                        </Box>
-                                      </HoverCard.Target>
-                                      <HoverCard.Dropdown>
-                                        {renderHoverContent(matchedSlot)}
-                                      </HoverCard.Dropdown>
-                                    </HoverCard>
-                                  </Table.Td>
+                                    bg="white"
+                                    style={{ height: ROW_HEIGHT }}
+                                  />
                                 );
-                              }
-
-                              return (
-                                <Table.Td
-                                  key={`${dayIndex}-${hour}`}
-                                  bg="white"
-                                  style={{ height: ROW_HEIGHT }}
-                                />
-                              );
-                            })}
-                          </Table.Tr>
-                        ))}
-                      </Table.Tbody>
-                    </Table>
+                              })}
+                            </Table.Tr>
+                          ))}
+                        </Table.Tbody>
+                      </Table>
+                    </ScrollArea>
                   </Stack>
               )}
             </Grid.Col>
