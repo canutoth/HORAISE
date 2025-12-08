@@ -8,8 +8,6 @@ import Image from "next/image";
 export default function TopNavBar() {
   const router = useRouter();
   const pathname = usePathname();
-  
-  // Hook para controlar abertura/fechamento do menu mobile
   const [opened, { toggle, close }] = useDisclosure(false);
 
   const tabs = [
@@ -36,14 +34,12 @@ export default function TopNavBar() {
           zIndex: 100,
           boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
           display: "flex",
-          alignItems: "center", // Centraliza verticalmente
+          alignItems: "center", 
         }}
       >
         <Group justify="space-between" w="100%">
-          
-          {/* --- LOGO --- */}
-          
-          {/* Versão Desktop (Original) - Visível apenas em telas médias pra cima */}
+        
+          {/* visível apenas em telas médias pra cima */}
           <Box visibleFrom="md">
             <Image
               src="/horaise.png"
@@ -55,19 +51,18 @@ export default function TopNavBar() {
             />
           </Box>
 
-          {/* Versão Mobile (Menor) - Visível apenas em telas pequenas */}
+          {/* versão mobile menor*/}
           <Box hiddenFrom="md">
             <Image
               src="/horaise.png"
               alt="HORAISE Logo"
-              width={160} // Logo bem menor no mobile
-              height={19.25} // Proporcional
+              width={160} 
+              height={19.25} 
               style={{ cursor: "pointer" }}
               onClick={() => router.push("/")}
             />
           </Box>
 
-          {/* --- MENU DESKTOP (Original) --- */}
           <Group gap="lg" visibleFrom="md">
             {tabs.map((item, index) => {
               if (item.divider) {
@@ -99,7 +94,7 @@ export default function TopNavBar() {
             })}
           </Group>
 
-          {/* --- MENU MOBILE (Sanduíche) --- */}
+          {/* menu sanduiche pra mobile */}
           <Burger 
             opened={opened} 
             onClick={toggle} 
@@ -110,11 +105,10 @@ export default function TopNavBar() {
         </Group>
       </Box>
 
-      {/* --- DRAWER (Conteúdo do Menu Mobile) --- */}
       <Drawer
         opened={opened}
         onClose={close}
-        size="75%" // Ocupa 75% da tela
+        size="75%" 
         padding="md"
         hiddenFrom="md"
         zIndex={200}
@@ -129,7 +123,6 @@ export default function TopNavBar() {
       >
         <Stack gap="md" mt="xl">
           {tabs.map((item, index) => {
-            // No mobile, geralmente não mostramos o divisor "|" visualmente como texto
             if (item.divider) return null;
 
             const isActive = pathname === item.path;
@@ -138,13 +131,13 @@ export default function TopNavBar() {
               <Button
                 key={item.path}
                 variant={isActive ? "light" : "subtle"}
-                color="indigo" // Aproximação da cor #0E1862 no tema
+                color="indigo" 
                 fullWidth
                 justify="flex-start"
                 size="md"
                 onClick={() => {
                   router.push(item.path!);
-                  close(); // Fecha o menu ao clicar
+                  close(); 
                 }}
                 styles={{
                   label: {

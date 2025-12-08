@@ -25,9 +25,9 @@ import {
   Divider,
   UnstyledButton,
   List,
-  ScrollArea, // Adicionado para scroll na tabela e toolbar
+  ScrollArea, 
 } from "@mantine/core";
-import { useMediaQuery } from "@mantine/hooks"; // Adicionado para responsividade
+import { useMediaQuery } from "@mantine/hooks"; 
 import {
   IconDeviceFloppy,
   IconRefresh,
@@ -86,8 +86,7 @@ export default function EditContentPage() {
   const router = useRouter();
   const params = useParams();
   const personId = decodeURIComponent(params?.personid as string);
-  
-  // Detecta telas menores que 768px (Mobile/Tablet Portrait)
+
   const isMobile = useMediaQuery('(max-width: 768px)');
 
   const [memberData, setMemberData] = useState<TeamMemberData | null>(null);
@@ -121,7 +120,6 @@ export default function EditContentPage() {
   useEffect(() => {
     const handleGlobalMouseUp = () => setIsDragging(false);
     window.addEventListener("mouseup", handleGlobalMouseUp);
-    // Adiciona touchend para mobile
     window.addEventListener("touchend", handleGlobalMouseUp);
     return () => {
       window.removeEventListener("mouseup", handleGlobalMouseUp);
@@ -453,23 +451,21 @@ export default function EditContentPage() {
     );
   }
 
-  // --- Função para renderizar os botões de ferramentas (Ajustada para Mobile) ---
   const renderToolButton = (tool: string, label: string, icon: React.ReactNode, color: string, value: string | number) => {
     const isActive = activeTool === tool;
     
-    // No mobile, o botão é menor e mais compacto
     return (
       <UnstyledButton
         onClick={() => setActiveTool(isActive ? null : tool)}
         style={{
-          width: isMobile ? "auto" : "100%", // Mobile: largura auto para caber no scroll
-          minWidth: isMobile ? "85px" : "auto", // Mobile: tamanho mínimo
+          width: isMobile ? "auto" : "100%", 
+          minWidth: isMobile ? "85px" : "auto", 
           padding: "8px",
           borderRadius: "8px",
-          backgroundColor: isActive ? `var(--mantine-color-${color}-1)` : "white", // Mobile: fundo branco para contraste
+          backgroundColor: isActive ? `var(--mantine-color-${color}-1)` : "white", 
           border: isActive ? `2px solid var(--mantine-color-${color}-6)` : "1px solid #eee",
           transition: "all 0.2s",
-          flexShrink: 0, // Impede que o botão encolha no scroll horizontal
+          flexShrink: 0, 
         }}
       >
         <Group gap="xs" w="100%" wrap="nowrap" justify={isMobile ? "center" : "flex-start"}>
@@ -506,17 +502,13 @@ export default function EditContentPage() {
     <>
       <TopNavBar />
       <Box style={{ minHeight: "100vh", background: "#F8F9FF", display: "flex", flexDirection: "column", paddingTop: isMobile ? "80px" : "140px", paddingBottom: "40px" }}>
-        {/* Container fluido no mobile para aproveitar 100% da largura */}
         <Container size={isMobile ? "100%" : "96%"} style={{ width: "100%" }} px={isMobile ? "xs" : "md"}>
           
           <Grid gutter={isMobile ? 20 : 40}>
-            {/* --- SEÇÃO LATERAL / SUPERIOR --- */}
             <Grid.Col span={{ base: 12, md: 5, lg: 4 }}>
               <Stack gap={isMobile ? "sm" : "xl"}>
                 
-                {/* Cabeçalho */}
                 <Box ta="left">
-                  {/* Título menor no mobile */}
                   <Title order={1} size={isMobile ? "h3" : "h1"} style={{ marginBottom: 4 , paddingTop: isMobile ? "40px" : "0px"}}>
                     <span style={{ background: "#0E1862", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", fontWeight: 800 }}>HORAISE</span>{" "}
                     <span style={{ color: "#8EC9FC", fontWeight: 800 }}>EDITOR</span>
@@ -537,7 +529,7 @@ export default function EditContentPage() {
                     </Group>
                   </Paper>
 
-                  {/* Frentes */}
+                  {/* frentes */}
                   <Box>
                     <Group justify="space-between" mb="xs">
                         <Text size="sm" fw={600} c="#4A5568">Frentes:</Text>
@@ -552,7 +544,7 @@ export default function EditContentPage() {
                             </Group>
                         </Stack>
                     ) : (
-                        // No mobile, se tiver muitas frentes, usa scroll horizontal
+                        // scroll horizontal se tiver mts frentes
                         isMobile ? (
                             <ScrollArea type="never" offsetScrollbars={false}>
                                 <Group gap="xs" wrap="nowrap" pb={4}>
@@ -573,11 +565,10 @@ export default function EditContentPage() {
                     )}
                   </Box>
 
-                  {/* FERRAMENTAS - Layout Condicional */}
+                  
                   <Box mt={isMobile ? 0 : "xs"}>
                     <Group justify="space-between" mb="xs">
                       <Text size="sm" fw={600} style={{ textDecoration: 'underline', color: '#4A5568' }}>distribuição de horas:</Text>
-                      {/* Botão de ajuda mantido */}
                       <HoverCard width={320} shadow="md" withArrow position="left">
                         <HoverCard.Target>
                           <ActionIcon variant="subtle" color="gray" size="sm">
@@ -585,7 +576,6 @@ export default function EditContentPage() {
                           </ActionIcon>
                         </HoverCard.Target>
                         <HoverCard.Dropdown>
-                          {/* Conteúdo do tooltip igual */}
                           <Group gap="xs" mb="xs">
                             <ThemeIcon size="md" variant="light" color="blue"><IconAlertTriangle size={16} /></ThemeIcon>
                             <Text size="sm" fw={700} c="blue">Regras</Text>
@@ -603,14 +593,14 @@ export default function EditContentPage() {
                     {!isMobile && <Text size="xs" c="dimmed" mb="xs">Clique em uma categoria abaixo para ativar o modo de pintura.</Text>}
                     
                     {isMobile ? (
-                        // Mobile: Scroll Horizontal para ferramentas
+                        //scroll horizontal
                         <ScrollArea type="never" offsetScrollbars={false} mb="sm">
                             <Group gap="xs" wrap="nowrap" pb="xs">
                                 {renderTools()}
                             </Group>
                         </ScrollArea>
                     ) : (
-                        // Desktop: Grid Vertical
+                        // Grid Vertical
                         <SimpleGrid cols={1} spacing="xs" verticalSpacing="xs">
                             {renderTools()}
                         </SimpleGrid>
@@ -621,10 +611,9 @@ export default function EditContentPage() {
               </Stack>
             </Grid.Col>
 
-            {/* --- SEÇÃO DA TABELA --- */}
+            {/*tabela */}
             <Grid.Col span={{ base: 12, md: 7, lg: 8 }}>
               <Stack gap="md">
-                {/* ScrollArea para a tabela permitir rolagem horizontal no mobile */}
                 <ScrollArea type="auto" offsetScrollbars>
                     <Table
                         striped
@@ -635,7 +624,7 @@ export default function EditContentPage() {
                             textAlign: "center", 
                             background: "white", 
                             tableLayout: "fixed",
-                            minWidth: isMobile ? "600px" : "100%" // Força largura mínima no mobile
+                            minWidth: isMobile ? "600px" : "100%" 
                         }}
                         onMouseLeave={() => setIsDragging(false)} 
                     >
@@ -658,14 +647,12 @@ export default function EditContentPage() {
                                     key={`${dayIndex}-${hour}`}
                                     p={0}
                                     style={{ cursor: "pointer", height: ROW_HEIGHT }}
-                                    // Eventos de clique para Mobile (tap) e Desktop (drag)
+                                    // Mobile (tap) e Desktop (drag)
                                     onClick={() => handleCellClick(dayIndex, hour)}
                                     onMouseDown={(e) => handleMouseDown(dayIndex, hour, e)}
                                     onMouseEnter={() => handleMouseEnter(dayIndex, hour)}
                                 >
                                     {config ? (
-                                        // No mobile, removemos o HoverCard para melhorar performance e usabilidade,
-                                        // e mostramos apenas a letra ou cor
                                         isMobile ? (
                                             <Box w="100%" h="100%" bg={`${config.color}.1`} style={{ display: "flex", alignItems: "center", justifyContent: "center", borderLeft: `4px solid var(--mantine-color-${config.color}-6)` }}>
                                                 <Text size="xs" c={`${config.color}.9`} fw={700}>{config.label}</Text>
