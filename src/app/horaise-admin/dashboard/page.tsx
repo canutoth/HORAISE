@@ -545,7 +545,7 @@ export default function AdminDashboard() {
         <Container size="xl" px={isMobile ? "xs" : "md"}>
           <Group justify="space-between" mb="xl">
             <Box>
-              <Title order={2} style={{ color: "#0E1862", fontSize: isMobile ? '1.5rem' : '2rem' }}>
+              <Title order={2} style={{ color: "#0E1862", fontSize: isMobile ? '1.5rem' : '2rem', paddingTop: isMobile ? "16px" : "0px" }}>
                 Gestão Administrativa
               </Title>
               <Text c="dimmed" size="sm">Visão geral das pendências e acessos</Text>
