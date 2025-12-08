@@ -96,8 +96,10 @@ const EditMemberPopover = ({
     member.frentes ? member.frentes.split(",").map((s) => s.trim()).filter(Boolean) : []
   );
   
-  const [bolsaSelecionada, setBolsaSelecionada] = useState<string | null>(
-    member.bolsa === "nan" || !member.bolsa ? "Voluntário" : member.bolsa
+  const [bolsasSelecionadas, setBolsasSelecionadas] = useState<string[]>(
+    member.bolsa && member.bolsa !== "nan" && member.bolsa.trim() !== '' 
+      ? member.bolsa.split(",").map((s) => s.trim()).filter(Boolean) 
+      : []
   );
 
   const [hours, setHours] = useState({
@@ -110,7 +112,7 @@ const EditMemberPopover = ({
     onSave({
       email: member.email,
       frentes: frentesSelecionadas.join(", "),
-      bolsa: bolsaSelecionada === "Voluntário" ? "" : bolsaSelecionada,
+      bolsa: bolsasSelecionadas.join(", "),
       hp: hours.hp,
       ho: hours.ho,
       pending: member.pendingAccess,
@@ -126,7 +128,8 @@ const EditMemberPopover = ({
       position="bottom-end" 
       withArrow 
       shadow="md"
-      trapFocus
+      closeOnClickOutside={true}
+      closeOnEscape={true}
     >
       <Popover.Target>
         <ActionIcon 
@@ -153,14 +156,15 @@ const EditMemberPopover = ({
             hidePickedOptions
           />
           
-          <Select
-            label="Bolsa"
+          <MultiSelect
+            label="Bolsa(s)"
             size="xs"
-            placeholder="Tipo"
+            placeholder="Selecione (opcional)"
             data={BOLSA_OPTIONS}
-            value={bolsaSelecionada}
-            onChange={setBolsaSelecionada}
-            allowDeselect={false}
+            value={bolsasSelecionadas}
+            onChange={setBolsasSelecionadas}
+            hidePickedOptions
+            clearable
           />
 
           <Group grow>
@@ -284,25 +288,19 @@ export default function AdminDashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          action: "_",  /*adicionar no back*/
+          action: "update-member-data",
           email: data.email,
           frentes: data.frentes,
           bolsa: data.bolsa,
-          hp: String(data.hp),
-          ho: String(data.ho),
-          pending: data.pending,
-          editor: data.editor
+          hp: data.hp,
+          ho: data.ho,
         }),
       });
-
-      if (!response.ok && response.status === 400) {
-        console.warn("Backend não suporta update-member-data.");
-      }
 
       const resJson = await response.json();
       
       if (response.ok) {
-        notifications.show({ title: "Salvo", message: "Dados atualizados!", color: "blue" });
+        notifications.show({ title: "Salvo", message: "Cadastro aprovado e acesso liberado!", color: "green" });
         fetchMembers();
       } else {
         notifications.show({ title: "Erro", message: resJson.error || "Falha ao salvar", color: "red" });
@@ -317,9 +315,20 @@ export default function AdminDashboard() {
     router.push("/horaise-admin");
   };
 
-  const pendingRegistrations = members.filter(m => m.ho === 0 || m.hp === 0);
+  // Cadastro pendente = HP ou HO zerados/vazios OU sem bolsa definida
+  const pendingRegistrations = members.filter(m => {
+    const hasMissingHours = m.ho === 0 || m.hp === 0;
+    const hasMissingBolsa = !m.bolsa || m.bolsa === 'nan' || m.bolsa.trim() === '';
+    return hasMissingHours || hasMissingBolsa;
+  });
+  
   const pendingSchedules = members.filter(m => m.pendingTimeTable === 1);
-  const activeEditors = members.filter(m => m.pendingAccess === 1 || m.editor === 1);
+  
+  // Acessos de Edição = Apenas pessoas COM todos os dados preenchidos (HP, HO, Bolsa)
+  const activeEditors = members.filter(m => {
+    const hasAllData = m.ho > 0 && m.hp > 0 && m.bolsa && m.bolsa !== 'nan' && m.bolsa.trim() !== '';
+    return hasAllData && (m.pendingAccess === 1 || m.editor === 1);
+  });
 
   const MemberTable = ({ data, type }: { data: AdminMember[], type: 'registration' | 'schedule' | 'access' }) => (
     <Table.ScrollContainer minWidth={500}>
@@ -329,27 +338,27 @@ export default function AdminDashboard() {
             <Table.Th>Nome</Table.Th>
             {/* ocultar frentes e bolsa no mobile (visibleFrom="md") */}
             <Table.Th visibleFrom="md">Frente(s)</Table.Th>
-            <Table.Th visibleFrom="md">Bolsa</Table.Th>
+            <Table.Th visibleFrom="md" style={{ textAlign: 'center' }}>Bolsa</Table.Th>
 
             {type === 'registration' && (
               <>
                 <Table.Th style={{ textAlign: 'center' }}>HO</Table.Th>
                 <Table.Th style={{ textAlign: 'center' }}>HP</Table.Th>
-                <Table.Th style={{ textAlign: 'right' }}>Ações</Table.Th>
+                <Table.Th style={{ textAlign: 'center' }}>Ações</Table.Th>
               </>
             )}
 
             {type === 'schedule' && (
               <>
                 <Table.Th style={{ textAlign: 'center' }}>Horário</Table.Th>
-                <Table.Th style={{ textAlign: 'right' }}>Aceitar</Table.Th>
+                <Table.Th style={{ textAlign: 'center' }}>Aceitar</Table.Th>
               </>
             )}
 
             {type === 'access' && (
               <>
                 <Table.Th style={{ textAlign: 'center' }}>Status</Table.Th>
-                <Table.Th style={{ textAlign: 'right' }}>Ação</Table.Th>
+                <Table.Th style={{ textAlign: 'center' }}>Ação</Table.Th>
               </>
             )}
           </Table.Tr>
@@ -406,32 +415,49 @@ export default function AdminDashboard() {
                   </Table.Td>
 
                   {/* bolsa */}
-                  <Table.Td visibleFrom="md">
-                    <Badge variant="dot" color={member.bolsa && member.bolsa !== 'nan' ? "blue" : "gray"}>
-                      {member.bolsa && member.bolsa !== 'nan' ? member.bolsa : "Voluntário"}
-                    </Badge>
+                  <Table.Td visibleFrom="md" style={{ textAlign: 'center' }}>
+                    {(() => {
+                      const bolsasList = member.bolsa && member.bolsa !== 'nan' && member.bolsa.trim() !== '' 
+                        ? member.bolsa.split(',').map(s => s.trim()).filter(Boolean) 
+                        : [];
+                      
+                      if (bolsasList.length === 0) {
+                        return <Text size="sm" c="dimmed">-</Text>;
+                      }
+                      
+                      if (bolsasList.length === 1) {
+                        return <Badge variant="dot" color="blue">{bolsasList[0]}</Badge>;
+                      }
+                      
+                      const visibleBolsas = bolsasList.slice(0, 1);
+                      const hiddenCount = bolsasList.length - 1;
+                      const hiddenBolsasList = bolsasList.slice(1).join(', ');
+                      
+                      return (
+                        <Group gap={6} justify="center" wrap="nowrap">
+                          <Badge variant="dot" color="blue">{visibleBolsas[0]}</Badge>
+                          <Tooltip label={hiddenBolsasList} withArrow multiline w={200}>
+                            <Badge size="sm" variant="light" color="gray" circle style={{ cursor: 'help', minWidth: '24px', height: '24px' }}>
+                              +{hiddenCount}
+                            </Badge>
+                          </Tooltip>
+                        </Group>
+                      );
+                    })()}
                   </Table.Td>
 
                   {/* cadastro pendente*/}
                   {type === 'registration' && (
                     <>
                       <Table.Td style={{ textAlign: 'center' }}>
-                        <Text fw={600} c="red">{member.ho || 0}h</Text>
+                        <Text fw={600} c={member.ho === 0 ? "red" : "green"}>{member.ho || 0}h</Text>
                       </Table.Td>
                       <Table.Td style={{ textAlign: 'center' }}>
-                        <Text fw={600} c="red">{member.hp || 0}h</Text>
+                        <Text fw={600} c={member.hp === 0 ? "red" : "green"}>{member.hp || 0}h</Text>
                       </Table.Td>
-                      <Table.Td style={{ textAlign: 'right' }}>
-                        <Group gap={8} justify="flex-end" wrap="nowrap">
+                      <Table.Td style={{ textAlign: 'center' }}>
+                        <Group gap={8} justify="center" wrap="nowrap">
                           <EditMemberPopover member={member} onSave={handleUpdateData} />
-                          <ActionIcon 
-                            color="red" 
-                            variant="light" 
-                            size="lg" 
-                            onClick={() => handleSimpleAction(member.email, 'revoke-editor')} /* add no back rejeitar cadastro? */
-                          >
-                            <IconX size={20} />
-                          </ActionIcon>
                         </Group>
                       </Table.Td>
                     </>
@@ -450,7 +476,7 @@ export default function AdminDashboard() {
                           <IconEye size={20} />
                         </ActionIcon>
                       </Table.Td>
-                      <Table.Td style={{ textAlign: 'right' }}>
+                      <Table.Td style={{ textAlign: 'center' }}>
                         <ActionIcon 
                           color="green" 
                           variant="filled"
@@ -468,17 +494,18 @@ export default function AdminDashboard() {
                     <>
                       <Table.Td style={{ textAlign: 'center' }}>
                         {member.editor === 1 ? (
-                          <ThemeIcon color="green" variant="light" radius="xl"><IconLockOpen size={16} /></ThemeIcon>
+                          <Group gap={6} justify="center">
+                            <ThemeIcon color="green" variant="light" radius="xl"><IconLockOpen size={16} /></ThemeIcon>
+                            {!isMobile && <Text size="sm" c="green" fw={500}>Liberado</Text>}
+                          </Group>
                         ) : (
-                          <Group gap={4} justify="center">
-                             <ThemeIcon color="orange" variant="light" radius="xl"><IconAlertCircle size={16} /></ThemeIcon>
-                            {hasMissingHours && (
-                              <IconAlertTriangle size={16} color="orange" />
-                            )}
+                          <Group gap={6} justify="center">
+                            <ThemeIcon color="orange" variant="light" radius="xl"><IconAlertCircle size={16} /></ThemeIcon>
+                            {!isMobile && <Text size="sm" c="orange" fw={500}>Pendente</Text>}
                           </Group>
                         )}
                       </Table.Td>
-                      <Table.Td style={{ textAlign: 'right' }}>
+                      <Table.Td style={{ textAlign: 'center' }}>
                         {member.editor === 1 ? (
                           <ActionIcon 
                             color="red" 
@@ -489,7 +516,7 @@ export default function AdminDashboard() {
                             <IconLock size={20} />
                           </ActionIcon>
                         ) : (
-                          <Group gap={8} justify="flex-end" wrap="nowrap">
+                          <Group gap={8} justify="center" wrap="nowrap">
                              <ActionIcon 
                               color={hasMissingHours ? "gray" : "green"} 
                               variant={hasMissingHours ? "light" : "filled"}

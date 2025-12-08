@@ -28,7 +28,7 @@ function getStatus(schedule: ScheduleData, day: number, hour: number): string | 
 export function ruleWeekdayLunch(schedule: ScheduleData): RuleViolation[] {
   const violations: RuleViolation[] = [];
   for (let day = 0; day <= 4; day++) {
-    const hasLunch = LUNCH_WINDOW_HOURS.some((h) => getStatus(schedule, day, h) === "almoss");
+    const hasLunch = LUNCH_WINDOW_HOURS.some((h) => getStatus(schedule, day, h) === "almoco");
     const fullClassWindow = LUNCH_WINDOW_HOURS.every((h) => getStatus(schedule, day, h) === "aula");
     if (!hasLunch && !fullClassWindow) {
       violations.push({

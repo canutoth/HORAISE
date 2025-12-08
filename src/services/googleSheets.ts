@@ -6,7 +6,7 @@
 const OFFLINE_MODE = process.env.NEXT_PUBLIC_OFFLINE_MODE === "true";
 export interface ScheduleData {
   [day: number]: {
-    [hour: number]: "presencial" | "ocupado" | "online" | "reuniao" | "aula" | "almoss" | null;
+    [hour: number]: "presencial" | "ocupado" | "online" | "reuniao" | "aula" | "almoco" | null;
   };
 }
 // Interface simplificada para HORAISE (Nome, Email, Frentes + Schedule)
@@ -173,8 +173,9 @@ export async function saveMember(
       throw new Error(error.message || "Erro ao salvar dados");
     }
     const result = await response.json();
-    // Sempre salva o schedule quando fornecido, mesmo se vazio, para permitir limpar na planilha
-    if (member.schedule !== undefined) {
+    // Só salva o schedule se NÃO for um cadastro novo e se o schedule foi fornecido
+    // Em cadastros novos, o schedule não deve ser salvo ainda (usuário ainda não tem acesso)
+    if (!isNew && member.schedule !== undefined) {
       const scheduleResult = await saveScheduleToSheet(member.email, member.schedule);
       if (!scheduleResult.success) {
         console.warn("Dados salvos mas schedule falhou:", scheduleResult.message);
@@ -263,15 +264,15 @@ const STATUS_TO_CODE: Record<string, string> = {
   "online": "O",
   "ocupado": "X",
   "reuniao": "R",
-  "almoss": "L",
+  "almoco": "L",
 };
-const CODE_TO_STATUS: Record<string, "presencial" | "ocupado" | "online" | "reuniao" | "aula" | "almoss"> = {
+const CODE_TO_STATUS: Record<string, "presencial" | "ocupado" | "online" | "reuniao" | "aula" | "almoco"> = {
   "A": "aula",
   "P": "presencial",
   "O": "online",
   "X": "ocupado",
   "R": "reuniao",
-  "L": "almoss",
+  "L": "almoco",
 };
 export function scheduleToInfoRow(schedule: ScheduleData): string[] {
   // Cria array com 91 colunas (7 dias x 13 horas) mapeando D..CN

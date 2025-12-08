@@ -136,7 +136,7 @@ export default function EditContentPage() {
       case "online": return "O";
       case "ocupado": return "X";
       case "reuniao": return "R";
-      case "almoss": return "L";
+      case "almoco": return "L";
       default: return "";
     }
   };
@@ -161,12 +161,15 @@ export default function EditContentPage() {
       let nextStatus: string | null = null;
 
       if (activeTool) {
-        if (currentStatus === activeTool) {
-             nextStatus = null; 
+        // Se a célula já tem algum status (independente de qual), limpar
+        if (currentStatus) {
+          nextStatus = null;
         } else {
-             nextStatus = activeTool; 
+          // Se a célula está vazia, aplicar o tool ativo
+          nextStatus = activeTool;
         }
-      } 
+      }
+      
       if (nextStatus) {
         newSchedule[day][hour] = nextStatus;
       } else {
@@ -210,7 +213,7 @@ export default function EditContentPage() {
       case "reuniao": return { color: "orange", label: isMobile ? "R" : "Reunião" };
       case "aula": return { color: "blue", label: isMobile ? "A" : "Aula" };
       case "ocupado": return { color: "red", label: isMobile ? "X" : "Ocupado" };
-      case "almoss": return { color: "yellow", label: isMobile ? "L" : "Almoço" };
+      case "almoco": return { color: "yellow", label: isMobile ? "L" : "Almoço" };
       default: return null;
     }
   };
@@ -476,7 +479,7 @@ export default function EditContentPage() {
              <Text size="xs" c={isActive ? color : "dimmed"} style={{ fontWeight: isActive ? 700 : 400, lineHeight: 1.1 }}>
                 {label}
              </Text>
-             {tool !== 'almoss' && tool !== 'ocupado' && (
+             {tool !== 'almoco' && tool !== 'ocupado' && (
                 <Text size={isMobile ? "9px" : "xs"} c="dimmed" fw={600} style={{lineHeight: 1}}>
                     {value}h 
                 </Text>
@@ -493,7 +496,7 @@ export default function EditContentPage() {
         {renderToolButton("online", "Online", <IconDeviceLaptop size={14} />, "teal", `${hourCounts.online}/${ho}`)}
         {renderToolButton("presencial", "Presenc.", <IconBuildingSkyscraper size={14} />, "green", `${hourCounts.presencial}/${hp}`)}
         {renderToolButton("reuniao", "Reunião", <IconUsers size={14} />, "orange", hourCounts.reuniao)}
-        {renderToolButton("almoss", "Almoço", <IconClock size={14} />, "yellow", 0)}
+        {renderToolButton("almoco", "Almoço", <IconClock size={14} />, "yellow", 0)}
         {renderToolButton("ocupado", "Ocupado", <IconBan size={14} />, "red", 0)}
     </>
   );

@@ -33,6 +33,7 @@ import {
   IconDeviceLaptop,
   IconBuildingSkyscraper,
   IconUsers,
+  IconToolsKitchen2,
 } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
 import { getAllMembers } from "../../services/googleSheets";
@@ -81,7 +82,21 @@ export default function VisualizerPage() {
         const list = await getAllMembers();
         const sorted = [...list].sort((a, b) => a.name.localeCompare(b.name));
         setMembers(sorted);
-        setCurrentIndex(0);
+        
+        // Verifica se há um personid na URL
+        const params = new URLSearchParams(window.location.search);
+        const personid = params.get('personid');
+        
+        if (personid) {
+          const index = sorted.findIndex(m => m.email.toLowerCase() === personid.toLowerCase());
+          if (index >= 0) {
+            setCurrentIndex(index);
+          } else {
+            setCurrentIndex(0);
+          }
+        } else {
+          setCurrentIndex(0);
+        }
       } catch (e) {
         console.error("Erro carregando membros:", e);
         setError("Erro ao carregar dados do Google Sheets.");
@@ -121,13 +136,14 @@ export default function VisualizerPage() {
       case "online": return { color: "teal", label: "Online", short: "O" };
       case "reuniao": return { color: "orange", label: "Reunião", short: "R" };
       case "aula": return { color: "blue", label: "Aula", short: "A" };
+      case "almoco": return { color: "yellow", label: "Almoço", short: "L" };
       case "ocupado": return { color: "red", label: "Ocupado", short: "X" };
       default: return null;
     }
   };
 
   const hourCounts = useMemo(() => {
-    const counts = { aula: 0, online: 0, presencial: 0, reuniao: 0 };
+    const counts = { aula: 0, online: 0, presencial: 0, reuniao: 0, almoco: 0 };
     if (current && current.schedule) {
       Object.values(current.schedule).forEach((daySlots: any) => {
         Object.values(daySlots).forEach((status: any) => {
@@ -135,6 +151,7 @@ export default function VisualizerPage() {
           else if (status === 'online') counts.online++;
           else if (status === 'presencial') counts.presencial++;
           else if (status === 'reuniao') counts.reuniao++;
+          else if (status === 'almoco') counts.almoco++;
         });
       });
     }
@@ -282,6 +299,18 @@ export default function VisualizerPage() {
                             </Text>
                             <Text size="sm" c="dimmed" fw={600}>
                               {hourCounts.reuniao}h
+                            </Text>
+                          </Group>
+
+                          <Group gap="xs" w={isMobile ? "100%" : "50%"}>
+                            <ThemeIcon variant="light" color="yellow" size="sm">
+                              <IconToolsKitchen2 size={14} />
+                            </ThemeIcon>
+                            <Text size="sm" c="dimmed" style={{ flex: 1 }}>
+                              Almoço
+                            </Text>
+                            <Text size="sm" c="dimmed" fw={600}>
+                              {hourCounts.almoco}h
                             </Text>
                           </Group>
                         </SimpleGrid>

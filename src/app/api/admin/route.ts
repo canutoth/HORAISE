@@ -33,7 +33,15 @@ type AdminActions =
       email: string;
       scheduleRow: string[];
     }
-  | { action: "quick-approve-access"; email: string };
+  | { action: "quick-approve-access"; email: string }
+  | {
+      action: "update-member-data";
+      email: string;
+      frentes: string;
+      bolsa: string;
+      hp: number;
+      ho: number;
+    };
 
 export async function POST(request: NextRequest) {
   try {
@@ -254,6 +262,61 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           success: true,
           message: `Acesso liberado para ${memberName} (${body.email})`,
+        });
+      }
+
+      case "update-member-data": {
+        if (!body.email || body.hp === undefined || body.ho === undefined) {
+          return NextResponse.json(
+            { error: "Email, HP e HO são obrigatórios" },
+            { status: 400 }
+          );
+        }
+
+        // Valida se HP e HO são >= 0
+        if (body.hp < 0 || body.ho < 0) {
+          return NextResponse.json(
+            { error: "HP e HO devem ser maiores ou iguais a 0" },
+            { status: 400 }
+          );
+        }
+
+        const currentData = await readMemberByEmail(body.email);
+        if (!currentData) {
+          return NextResponse.json(
+            { error: "Membro não encontrado" },
+            { status: 404 }
+          );
+        }
+
+        const memberName = currentData.row[0] || "";
+        
+        // Atualiza os dados do membro
+        const memberData = {
+          name: memberName,
+          email: body.email,
+          frentes: body.frentes,
+          bolsa: body.bolsa,
+          editor: 1, // Libera acesso de editor
+          pendingAccess: 0, // Remove flag de pendência
+          pendingTimeTable: 0,
+          hp: String(body.hp),
+          ho: String(body.ho),
+        };
+
+        const result = await updateMemberRow(memberData, false);
+        
+        if (result.success) {
+          // Envia email notificando que o cadastro foi aprovado
+          try {
+            await sendUserApproval(body.email, memberName);
+          } catch (emailError) {
+            console.error("Erro ao enviar email:", emailError);
+          }
+        }
+
+        return NextResponse.json(result, {
+          status: result.success ? 200 : 400,
         });
       }
 
