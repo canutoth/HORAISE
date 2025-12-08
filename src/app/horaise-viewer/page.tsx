@@ -18,8 +18,10 @@ import {
   HoverCard,
   Divider,
   Select,
-  SimpleGrid, 
+  SimpleGrid,
+  ScrollArea, 
 } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks"; 
 import {
   IconArrowLeft,
   IconAlertCircle,
@@ -61,6 +63,8 @@ const ROW_HEIGHT = "40px";
 
 export default function VisualizerPage() {
   const router = useRouter();
+  const isMobile = useMediaQuery('(max-width: 768px)');
+
   const [loading, setLoading] = useState(true);
   const [members, setMembers] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -113,11 +117,11 @@ export default function VisualizerPage() {
 
   const getStatusConfig = (status: string) => {
     switch (status) {
-      case "presencial": return { color: "green", label: "Presencial" };
-      case "online": return { color: "teal", label: "Online" };
-      case "reuniao": return { color: "orange", label: "Reunião" };
-      case "aula": return { color: "blue", label: "Aula" };
-      case "ocupado": return { color: "red", label: "Ocupado" };
+      case "presencial": return { color: "green", label: "Presencial", short: "P" };
+      case "online": return { color: "teal", label: "Online", short: "O" };
+      case "reuniao": return { color: "orange", label: "Reunião", short: "R" };
+      case "aula": return { color: "blue", label: "Aula", short: "A" };
+      case "ocupado": return { color: "red", label: "Ocupado", short: "X" };
       default: return null;
     }
   };
@@ -140,17 +144,31 @@ export default function VisualizerPage() {
   return (
     <>
       <TopNavBar />
-      <Box style={{ minHeight: "100vh", background: "#F8F9FF", display: "flex", flexDirection: "column", paddingTop: "140px" }}>
-        <Container size="96%" style={{ width: "100%" }}>
-          <Grid gutter={40}>
+      <Box 
+        style={{ 
+          minHeight: "100vh", 
+          background: "#F8F9FF", 
+          display: "flex", 
+          flexDirection: "column", 
+          paddingTop: isMobile ? "80px" : "140px" 
+        }}
+      >
+        <Container size="96%" style={{ width: "100%", paddingBottom: "40px" }}>
+          <Grid gutter={isMobile ? 20 : 40}>
+            
+            {/* info membro */}
             <Grid.Col span={{ base: 12, md: 5, lg: 4 }}>
-              <Stack gap="xl">
+              <Stack gap={isMobile ? "md" : "xl"}>
                 <Box ta="left">
-                  <Title order={1} size="h1" style={{ marginBottom: 8 }}>
+                  <Title 
+                    order={1} 
+                    size={isMobile ? "h3" : "h1"} 
+                    style={{ marginBottom: 8 , paddingTop: isMobile ? "40px" : "0px" }}
+                  >
                     <span style={{ background: "#0E1862", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", fontWeight: 800 }}>HORAISE</span>{" "}
                     <span style={{ color: "#8EC9FC", fontWeight: 800 }}>VIEWER</span>
                   </Title>
-                  <Text size="sm" c="dimmed">Visualize o horário individual de cada membro.</Text>
+                  {!isMobile && <Text size="sm" c="dimmed">Visualize o horário individual de cada membro.</Text>}
                 </Box>
 
                 {error && <Alert icon={<IconAlertCircle size={18} />} title="Erro" color="red" variant="light">{error}</Alert>}
@@ -176,23 +194,41 @@ export default function VisualizerPage() {
                       </Group>
 
                       {current.frentes && (
-                        <Group gap="xs">
-                          {current.frentes.split(',').map((f: string) => f.trim()).filter(Boolean).sort((a: string, b: string) => a.localeCompare(b)).map((frente: string, idx: number) => {
-                            const emoji = FRENTES_EMOJIS[frente] || "📌";
-                            return (
-                              <Badge
-                                key={idx}
-                                size="sm"
-                                style={{ textTransform: "none" }}
-                                styles={{
-                                  root: { backgroundColor: 'rgba(142, 201, 252, 0.2)', color: '#1A202C', border: 'none', fontWeight: 600 }
-                                }}
-                              >
-                                {emoji} {frente}
-                              </Badge>
-                            );
-                          })}
-                        </Group>
+                        isMobile ? (
+                          <ScrollArea type="never">
+                            <Group gap="xs" wrap="nowrap">
+                              {current.frentes.split(',').map((f: string) => f.trim()).filter(Boolean).sort((a: string, b: string) => a.localeCompare(b)).map((frente: string, idx: number) => {
+                                const emoji = FRENTES_EMOJIS[frente] || "📌";
+                                return (
+                                  <Badge
+                                    key={idx}
+                                    size="sm"
+                                    style={{ textTransform: "none", flexShrink: 0 }}
+                                    styles={{ root: { backgroundColor: 'rgba(142, 201, 252, 0.2)', color: '#1A202C', border: 'none', fontWeight: 600 } }}
+                                  >
+                                    {emoji} {frente}
+                                  </Badge>
+                                );
+                              })}
+                            </Group>
+                          </ScrollArea>
+                        ) : (
+                          <Group gap="xs">
+                            {current.frentes.split(',').map((f: string) => f.trim()).filter(Boolean).sort((a: string, b: string) => a.localeCompare(b)).map((frente: string, idx: number) => {
+                              const emoji = FRENTES_EMOJIS[frente] || "📌";
+                              return (
+                                <Badge
+                                  key={idx}
+                                  size="sm"
+                                  style={{ textTransform: "none" }}
+                                  styles={{ root: { backgroundColor: 'rgba(142, 201, 252, 0.2)', color: '#1A202C', border: 'none', fontWeight: 600 } }}
+                                >
+                                  {emoji} {frente}
+                                </Badge>
+                              );
+                            })}
+                          </Group>
+                        )
                       )}
 
                       <Box mt="xs">
@@ -200,8 +236,8 @@ export default function VisualizerPage() {
                           distribuição de horas:
                         </Text>
                         
-                        <SimpleGrid cols={1} spacing="sm" verticalSpacing="sm">
-                          <Group gap="xs" w="50%">
+                        <SimpleGrid cols={isMobile ? 2 : 1} spacing="sm" verticalSpacing="sm">
+                          <Group gap="xs" w={isMobile ? "100%" : "50%"}>
                             <ThemeIcon variant="light" color="blue" size="sm">
                               <IconSchool size={14} />
                             </ThemeIcon>
@@ -213,7 +249,7 @@ export default function VisualizerPage() {
                             </Text>
                           </Group>
                             
-                          <Group gap="xs" w="50%">
+                          <Group gap="xs" w={isMobile ? "100%" : "50%"}>
                             <ThemeIcon variant="light" color="teal" size="sm">
                               <IconDeviceLaptop size={14} />
                             </ThemeIcon>
@@ -225,7 +261,7 @@ export default function VisualizerPage() {
                             </Text>
                           </Group>
 
-                          <Group gap="xs" w="50%">
+                          <Group gap="xs" w={isMobile ? "100%" : "50%"}>
                             <ThemeIcon variant="light" color="green" size="sm">
                               <IconBuildingSkyscraper size={14} />
                             </ThemeIcon>
@@ -237,7 +273,7 @@ export default function VisualizerPage() {
                             </Text>
                           </Group>
 
-                          <Group gap="xs" w="50%">
+                          <Group gap="xs" w={isMobile ? "100%" : "50%"}>
                             <ThemeIcon variant="light" color="orange" size="sm">
                               <IconUsers size={14} />
                             </ThemeIcon>
@@ -256,69 +292,96 @@ export default function VisualizerPage() {
               </Stack>
             </Grid.Col>
 
+            {/* tabela */}
             <Grid.Col span={{ base: 12, md: 7, lg: 8 }}>
               {current ? (
                 <Stack gap="md">
-                  <Table striped highlightOnHover withTableBorder withColumnBorders style={{ textAlign: "center", background: "white", tableLayout: "fixed" }}>
-                    <Table.Thead bg="gray.1">
-                      <Table.Tr>
-                        <Table.Th style={{ width: "80px", textAlign: "center", height: ROW_HEIGHT }}>Horário</Table.Th>
-                        {DAY_LABELS_SHORT.map((day) => (<Table.Th key={day} style={{ textAlign: "center", height: ROW_HEIGHT }}>{day}</Table.Th>))}
-                      </Table.Tr>
-                    </Table.Thead>
-                    <Table.Tbody>
-                      {HOURS_DISPLAY.map((hour) => (
-                        <Table.Tr key={hour}>
-                          <Table.Td style={{ fontWeight: 500, color: "#888", height: ROW_HEIGHT }}>{hour}:00</Table.Td>
-                          {WEEKDAY_UI_INDICES.map((dayIndex) => {
-                            const status = current.schedule?.[dayIndex]?.[hour];
-                            const config = status ? getStatusConfig(status) : null;
-                            if (config) {
-                              return (
-                                <Table.Td key={`${dayIndex}-${hour}`} p={0} style={{ cursor: "default", height: ROW_HEIGHT }}>
-                                  <HoverCard width={200} shadow="md" position="bottom" withArrow>
-                                    <HoverCard.Target>
-                                      <Box w="100%" h="100%" pl="sm" bg={`${config.color}.1`} style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", borderLeft: `5px solid var(--mantine-color-${config.color}-6)` }}>
-                                        <Text size="xs" c={`${config.color}.9`} fw={500} style={{ lineHeight: 1.2 }}>{config.label}</Text>
-                                      </Box>
-                                    </HoverCard.Target>
-                                    <HoverCard.Dropdown>
-                                      <Group gap="xs"><IconClock size={16} color="gray" /><Text size="sm">{DAY_LABELS_SHORT[dayIndex]} - {hour}:00</Text></Group>
-                                      <Divider my={4} />
-                                      <Text size="sm" fw={600} c={config.color}>{config.label}</Text>
-                                    </HoverCard.Dropdown>
-                                  </HoverCard>
-                                </Table.Td>
-                              );
-                            }
-                            return <Table.Td key={`${dayIndex}-${hour}`} bg="white" style={{ height: ROW_HEIGHT }} />;
-                          })}
+                  <ScrollArea type="auto" offsetScrollbars>
+                    <Table 
+                      striped 
+                      highlightOnHover 
+                      withTableBorder 
+                      withColumnBorders 
+                      style={{ 
+                        textAlign: "center", 
+                        background: "white", 
+                        tableLayout: "fixed",
+                        minWidth: isMobile ? "600px" : "100%" 
+                      }}
+                    >
+                      <Table.Thead bg="gray.1">
+                        <Table.Tr>
+                          <Table.Th style={{ width: "80px", textAlign: "center", height: ROW_HEIGHT }}>Horário</Table.Th>
+                          {DAY_LABELS_SHORT.map((day) => (<Table.Th key={day} style={{ textAlign: "center", height: ROW_HEIGHT }}>{day}</Table.Th>))}
                         </Table.Tr>
-                      ))}
-                    </Table.Tbody>
-                  </Table>
+                      </Table.Thead>
+                      <Table.Tbody>
+                        {HOURS_DISPLAY.map((hour) => (
+                          <Table.Tr key={hour}>
+                            <Table.Td style={{ fontWeight: 500, color: "#888", height: ROW_HEIGHT }}>{hour}:00</Table.Td>
+                            {WEEKDAY_UI_INDICES.map((dayIndex) => {
+                              const status = current.schedule?.[dayIndex]?.[hour];
+                              const config = status ? getStatusConfig(status) : null;
+                              
+                              if (config) {
+                                if (isMobile) {
+                                  return (
+                                    <Table.Td key={`${dayIndex}-${hour}`} p={0} style={{ cursor: "default", height: ROW_HEIGHT }}>
+                                      <Box w="100%" h="100%" bg={`${config.color}.1`} style={{ display: "flex", alignItems: "center", justifyContent: "center", borderLeft: `4px solid var(--mantine-color-${config.color}-6)` }}>
+                                        <Text size="sm" c={`${config.color}.9`} fw={700}>{config.short}</Text>
+                                      </Box>
+                                    </Table.Td>
+                                  );
+                                }
 
-                  <Box>
-                    <Text size="xs" fw={700} c="dimmed" mb="xs" tt="uppercase">Navegação Rápida</Text>
-                    <Box ref={scrollContainerRef} style={{ overflowX: "auto", overflowY: "hidden", display: "flex", gap: 8, paddingBottom: 8, scrollBehavior: "smooth" }}>
-                      {members.map((m, idx) => {
-                        const active = idx === currentIndex;
-                        return (
-                          <Button
-                            key={m.email}
-                            size="sm"
-                            variant={active ? "filled" : "default"}
-                            color={active ? "blue" : "gray"}
-                            onClick={() => setCurrentIndex(idx)}
-                            px="md"
-                            style={{ whiteSpace: "nowrap", transition: "all 0.2s", flexShrink: 0 }}
-                          >
-                            {m.name}
-                          </Button>
-                        );
-                      })}
+                                return (
+                                  <Table.Td key={`${dayIndex}-${hour}`} p={0} style={{ cursor: "default", height: ROW_HEIGHT }}>
+                                    <HoverCard width={200} shadow="md" position="bottom" withArrow>
+                                      <HoverCard.Target>
+                                        <Box w="100%" h="100%" pl="sm" bg={`${config.color}.1`} style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", borderLeft: `5px solid var(--mantine-color-${config.color}-6)` }}>
+                                          <Text size="xs" c={`${config.color}.9`} fw={500} style={{ lineHeight: 1.2 }}>{config.label}</Text>
+                                        </Box>
+                                      </HoverCard.Target>
+                                      <HoverCard.Dropdown>
+                                        <Group gap="xs"><IconClock size={16} color="gray" /><Text size="sm">{DAY_LABELS_SHORT[dayIndex]} - {hour}:00</Text></Group>
+                                        <Divider my={4} />
+                                        <Text size="sm" fw={600} c={config.color}>{config.label}</Text>
+                                      </HoverCard.Dropdown>
+                                    </HoverCard>
+                                  </Table.Td>
+                                );
+                              }
+                              return <Table.Td key={`${dayIndex}-${hour}`} bg="white" style={{ height: ROW_HEIGHT }} />;
+                            })}
+                          </Table.Tr>
+                        ))}
+                      </Table.Tbody>
+                    </Table>
+                  </ScrollArea>
+
+                  
+                    <Box>
+                      <Box ref={scrollContainerRef} style={{ overflowX: "auto", overflowY: "hidden", display: "flex", gap: 8, paddingBottom: 8, scrollBehavior: "smooth" }}>
+                        {members.map((m, idx) => {
+                          const active = idx === currentIndex;
+                          return (
+                            <Button
+                              key={m.email}
+                              size="sm"
+                              variant={active ? "filled" : "default"}
+                              color={active ? "blue" : "gray"}
+                              onClick={() => setCurrentIndex(idx)}
+                              px="md"
+                              style={{ whiteSpace: "nowrap", transition: "all 0.2s", flexShrink: 0 }}
+                            >
+                              {m.name}
+                            </Button>
+                          );
+                        })}
+                      </Box>
                     </Box>
-                  </Box>
+                
+
                 </Stack>
               ) : (
                 <Center h={400}><Text c="dimmed">{!loading && "Nenhum membro selecionado."}</Text></Center>
