@@ -4,14 +4,23 @@ import {
   updateMemberRow,
   readAllMembers,
   updateMemberAccess,
+  approveSchedule, 
 } from "../../../server/sheets";
-import { sendUserApproval, sendAccessGrantedToUser } from "../../../server/email";
+import { 
+  sendUserApproval, 
+  sendAccessGrantedToUser, 
+  sendScheduleApprovedToUser 
+} from "../../../server/email";
 import { validateScheduleHours, parseHours } from "../../../server/hoursValidation";
 
 type AdminActions =
   | { action: "login"; email: string; password: string }
   | { action: "list-pending-members" }
+  | { action: "read-all-members" } 
   | { action: "get-member"; email: string }
+  | { action: "approve-registration"; email: string }
+  | { action: "approve-schedule-remove-editor"; email: string }
+  | { action: "revoke-editor"; email: string }
   | {
       action: "approve-member";
       email: string;
@@ -32,7 +41,6 @@ export async function POST(request: NextRequest) {
 
     switch (body.action) {
       case "login": {
-        // Valida credenciais de admin usando variáveis de ambiente
         const adminEmail = process.env.EMAIL_ADMIN;
         const adminPassword = process.env.SENHA_ADMIN;
 
@@ -53,12 +61,16 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: true, message: "Login realizado com sucesso" });
       }
 
+      case "read-all-members": {
+        const members = await readAllMembers();
+        return NextResponse.json({ members });
+      }
+
       case "list-pending-members": {
-        // Lista todos os membros com Pending = 1 (pendentes de aprovação)
         const allMembers = await readAllMembers();
         const pending = allMembers
           .filter((row) => {
-            const pendingFlag = Number(row[5] || 0); // Coluna F (Pending)
+            const pendingFlag = Number(row[5] || 0); 
             return pendingFlag === 1;
           })
           .map((row) => ({
@@ -73,8 +85,40 @@ export async function POST(request: NextRequest) {
           }));
         return NextResponse.json({ pending });
       }
+
+      case "approve-registration": {
+        if (!body.email) return NextResponse.json({ error: "Email obrigatório" }, { status: 400 });
+        
+        const result = await updateMemberAccess(body.email, 1, 0);
+        
+        if (result.success) {
+          const member = await readMemberByEmail(body.email);
+          const name = member ? member.row[0] : "Usuário";
+          sendAccessGrantedToUser(body.email, name).catch(console.error);
+        }
+        return NextResponse.json(result, { status: result.success ? 200 : 400 });
+      }
+
+      case "approve-schedule-remove-editor": {
+        if (!body.email) return NextResponse.json({ error: "Email obrigatório" }, { status: 400 });
+        
+        const result = await approveSchedule(body.email, false);
+
+        if (result.success) {
+           const member = await readMemberByEmail(body.email);
+           const name = member ? member.row[0] : "Usuário";
+           sendScheduleApprovedToUser(body.email, name, false).catch(console.error);
+        }
+        return NextResponse.json(result, { status: result.success ? 200 : 400 });
+      }
+
+      case "revoke-editor": {
+        if (!body.email) return NextResponse.json({ error: "Email obrigatório" }, { status: 400 });
+        const result = await updateMemberAccess(body.email, 0, 0);
+        return NextResponse.json(result, { status: result.success ? 200 : 400 });
+      }
+
       case "get-member": {
-        // Busca informações completas de um membro específico
         if (!body.email) {
           return NextResponse.json(
             { error: "email é obrigatório" },
@@ -100,15 +144,14 @@ export async function POST(request: NextRequest) {
         };
         return NextResponse.json({ member });
       }
+
       case "approve-member": {
-        // Admin aprova um cadastro: define HP, HO, libera Editor (=1) e zera Pending (=0)
         if (!body.email || !body.hp || !body.ho) {
           return NextResponse.json(
             { error: "email, hp e ho são obrigatórios" },
             { status: 400 }
           );
         }
-        // Busca dados atuais do membro
         const currentData = await readMemberByEmail(body.email);
         if (!currentData) {
           return NextResponse.json(
@@ -116,7 +159,6 @@ export async function POST(request: NextRequest) {
             { status: 404 }
           );
         }
-        // Valida HP e HO
         const hp = parseHours(body.hp);
         const ho = parseHours(body.ho);
         if (hp < 0 || ho < 0) {
@@ -125,20 +167,18 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
-        // Atualiza com os dados do admin
         const memberData = {
           name: currentData.row[0] || "",
           email: body.email,
           frentes: body.frentes || currentData.row[2] || "",
           bolsa: currentData.row[3] || "",
-          editor: 1, // Libera acesso
-          pending: 0, // Remove de pendentes
+          editor: 1, 
+          pending: 0, 
           hp: body.hp,
           ho: body.ho,
         };
         const result = await updateMemberRow(memberData, false);
         if (result.success) {
-          // Envia email de notificação ao usuário
           sendUserApproval(body.email, memberData.name).catch((e) =>
             console.error("Falha ao enviar email:", e)
           );
@@ -147,15 +187,14 @@ export async function POST(request: NextRequest) {
           status: result.success ? 200 : 400,
         });
       }
+
       case "validate-schedule": {
-        // Valida se um schedule atende às regras de HP e HO
         if (!body.email || !body.scheduleRow) {
           return NextResponse.json(
             { error: "email e scheduleRow são obrigatórios" },
             { status: 400 }
           );
         }
-        // Busca HP e HO do membro
         const member = await readMemberByEmail(body.email);
         if (!member) {
           return NextResponse.json(
@@ -163,8 +202,8 @@ export async function POST(request: NextRequest) {
             { status: 404 }
           );
         }
-        const hp = parseHours(member.row[6] || "0"); // HP é índice 6 (coluna G)
-        const ho = parseHours(member.row[7] || "0"); // HO é índice 7 (coluna H)
+        const hp = parseHours(member.row[6] || "0"); 
+        const ho = parseHours(member.row[7] || "0"); 
         if (hp === 0 && ho === 0) {
           return NextResponse.json(
             {
@@ -174,12 +213,12 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
-        // Valida o schedule
         const validation = validateScheduleHours(body.scheduleRow, hp, ho);
         return NextResponse.json({
           validation,
         });
       }
+
       case "quick-approve-access": {
         if (!body.email) {
           return NextResponse.json(
@@ -188,7 +227,6 @@ export async function POST(request: NextRequest) {
           );
         }
         
-        // Busca dados do membro
         const member = await readMemberByEmail(body.email);
         if (!member) {
           return NextResponse.json(
@@ -199,7 +237,6 @@ export async function POST(request: NextRequest) {
         
         const memberName = member.row[0] || "Usuário";
         
-        // Atualiza para Editor=1, Pending=0 (libera acesso)
         const updateResult = await updateMemberAccess(body.email, 1, 0);
         if (!updateResult.success) {
           return NextResponse.json(
@@ -208,12 +245,10 @@ export async function POST(request: NextRequest) {
           );
         }
         
-        // Envia email para o usuário
         try {
           await sendAccessGrantedToUser(body.email, memberName);
         } catch (emailError) {
           console.error("Erro ao enviar email para usuário:", emailError);
-          // Não falha a requisição se o email não enviar
         }
         
         return NextResponse.json({
@@ -221,6 +256,7 @@ export async function POST(request: NextRequest) {
           message: `Acesso liberado para ${memberName} (${body.email})`,
         });
       }
+
       default:
         return NextResponse.json(
           { error: "ação inválida" },
@@ -243,7 +279,6 @@ export async function GET(request: NextRequest) {
     const email = searchParams.get("email");
     
     if (action === "quick-approve-access" && email) {
-      // Busca dados do membro
       const member = await readMemberByEmail(email);
       if (!member) {
         return new NextResponse(
@@ -295,7 +330,6 @@ export async function GET(request: NextRequest) {
       
       const memberName = member.row[0] || "Usuário";
       
-      // Atualiza para Editor=1, Pending=0 (libera acesso)
       const updateResult = await updateMemberAccess(email, 1, 0);
       if (!updateResult.success) {
         return new NextResponse(
@@ -345,14 +379,12 @@ export async function GET(request: NextRequest) {
         );
       }
       
-      // Envia email para o usuário
       try {
         await sendAccessGrantedToUser(email, memberName);
       } catch (emailError) {
         console.error("Erro ao enviar email para usuário:", emailError);
       }
       
-      // Sucesso: retorna página HTML com mensagem de sucesso
       return new NextResponse(
         `
         <!DOCTYPE html>
