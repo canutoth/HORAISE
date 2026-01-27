@@ -48,12 +48,33 @@ const stringToArray = (str: string): string[] => {
     .map((item) => item.trim())
     .filter(Boolean);
 };
+
+// 🎯 Easter egg: Normaliza o nome do Coutinho
+const normalizeCoutinho = (name: string, email: string): string => {
+  const nameLower = name.toLowerCase().trim();
+  const emailLower = email.toLowerCase().trim();
+  
+  // Se o nome é "daniel coutinho" OU é um dos emails dele, vira "Coutinho"
+  if (
+    nameLower === "daniel coutinho" ||
+    emailLower === "dcoutinho@inf.puc-rio.br" ||
+    emailLower === "danieljosebc@gmail.com"
+  ) {
+    return "Coutinho";
+  }
+  
+  return name;
+};
+
 // Converte linha do Google Sheets (HORAISE) para objeto TeamMemberData
 // Formato atual: [Nome, Email, Frentes, Bolsa, Editor, Pending-Access, Pending-TimeTable, HP, HO, ...schedule columns]
 const rowToTeamMember = (row: string[]): TeamMemberData => {
+  const rawName = row[0] || "";
+  const email = row[1] || "";
+  
   return {
-    name: row[0] || "",
-    email: row[1] || "",
+    name: normalizeCoutinho(rawName, email),
+    email: email,
     frentes: row[2] || "",
     bolsa: row[3] || "",
     editor: Number(row[4] ?? 0) || 0,
@@ -149,7 +170,7 @@ export async function getExampleData(): Promise<TeamMemberData> {
 export async function saveMember(
   member: TeamMemberData,
   isNew: boolean = false
-): Promise<{ success: boolean; message: string }> {
+): Promise<{ success: boolean; message: string; errors?: string[] }> {
   // Modo offline: salva no storage local
   if (OFFLINE_MODE) {
     console.log("🔌 MODO OFFLINE: Salvando membro no storage local");
@@ -178,8 +199,12 @@ export async function saveMember(
     if (!isNew && member.schedule !== undefined) {
       const scheduleResult = await saveScheduleToSheet(member.email, member.schedule);
       if (!scheduleResult.success) {
-        console.warn("Dados salvos mas schedule falhou:", scheduleResult.message);
-        // Não retorna erro, pois os dados principais foram salvos
+        // Se o schedule falhou, retorna o erro ao invés de ignorar
+        return {
+          success: false,
+          message: scheduleResult.message,
+          errors: scheduleResult.errors,
+        };
       }
     }
     return result;
@@ -314,7 +339,7 @@ export function infoRowToSchedule(infoRow: string[]): ScheduleData {
 export async function saveScheduleToSheet(
   email: string,
   schedule: ScheduleData
-): Promise<{ success: boolean; message: string }> {
+): Promise<{ success: boolean; message: string; errors?: string[] }> {
   // Modo offline: salva no storage local (já está sendo feito no saveMember)
   if (OFFLINE_MODE) {
     console.log("🔌 MODO OFFLINE: Schedule salvo localmente junto com memberData");
@@ -338,7 +363,12 @@ export async function saveScheduleToSheet(
     });
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.message || "Erro ao salvar schedule");
+      // Retorna o erro estruturado ao invés de fazer throw
+      return {
+        success: false,
+        message: error.message || "Erro ao salvar schedule",
+        errors: error.errors, // Inclui array de erros se existir
+      };
     }
     const result = await response.json();
     return result;

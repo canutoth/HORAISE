@@ -43,7 +43,8 @@ export function ruleWeekdayLunch(schedule: ScheduleData): RuleViolation[] {
 }
 export function validateSchedule(schedule: ScheduleData): ValidationResult {
   const violations: RuleViolation[] = [];
-  violations.push(...ruleWeekdayLunch(schedule));
+  // Regra de almoço agora é dinâmica (validada no backend via RULES sheet)
+  // violations.push(...ruleWeekdayLunch(schedule));
   return { ok: violations.length === 0, violations };
 }
 export function formatViolations(messages: RuleViolation[]): string[] {

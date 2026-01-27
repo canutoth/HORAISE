@@ -120,6 +120,80 @@ export async function sendAccessGrantedToUser(userEmail: string, userName: strin
   };
   await transporter.sendMail(mailOptions);
 }
+
+export async function sendExceptionRequestToAdmin(userName: string, userEmail: string, violations: string[]) {
+  const adminEmail = process.env.EMAIL_ADMIN;
+  
+  const violationsList = violations.map(v => `<li>${v}</li>`).join("");
+  
+  const mailOptions = {
+    from: `"HORAISE" <${process.env.SMTP_USER}>`,
+    to: adminEmail,
+    subject: `⚠️ Solicitação de Exceção de Horário: ${userName}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; color: #333;">
+        <h2>Solicitação de Exceção de Horário</h2>
+        <p><strong>Usuário:</strong> ${userName}</p>
+        <p><strong>Email:</strong> ${userEmail}</p>
+        <br/>
+        <div style="background: #fff3cd; padding: 15px; border-left: 5px solid #ffc107; margin: 20px 0;">
+          <strong>⚠️ Este usuário solicitou uma exceção às regras de horário.</strong>
+          <p style="margin-top: 10px;">O horário proposto viola as seguintes regras:</p>
+          <ul style="margin: 10px 0; padding-left: 20px;">
+            ${violationsList}
+          </ul>
+        </div>
+        <p>O horário foi salvo e está aguardando sua análise e aprovação.</p>
+        <br/>
+        <p><strong>Ações disponíveis no painel:</strong></p>
+        <ul>
+          <li>✅ Aprovar a exceção e manter acesso de edição</li>
+          <li>✅ Aprovar a exceção e bloquear acesso de edição</li>
+          <li>❌ Rejeitar e solicitar ajustes ao usuário</li>
+        </ul>
+        <br/>
+        <a href="${BASE_URL}/horaise-admin/dashboard" style="background: #ffc107; color: #333; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Ver Solicitação no Painel</a>
+      </div>
+    `,
+  };
+  await transporter.sendMail(mailOptions);
+}
+
+export async function sendExceptionApprovedToUser(userEmail: string, userName: string) {
+  const mailOptions = {
+    from: `"HORAISE" <${process.env.SMTP_USER}>`,
+    to: userEmail,
+    subject: `✅ Sua exceção de horário foi aprovada!`,
+    html: `
+      <div style="font-family: Arial, sans-serif; color: #333;">
+        <h3>Olá, ${userName}!</h3>
+        <p>O administrador analisou sua solicitação de exceção de horário e <strong>aprovou</strong> seu schedule.</p>
+        <br/>
+        <a href="${BASE_URL}/horaise-viewer" style="background: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Ver Meu Schedule</a>
+      </div>
+    `,
+  };
+  await transporter.sendMail(mailOptions);
+}
+
+export async function sendExceptionRejectedToUser(userEmail: string, userName: string, reason?: string) {
+  const mailOptions = {
+    from: `"HORAISE" <${process.env.SMTP_USER}>`,
+    to: userEmail,
+    subject: `❌ Sua exceção de horário não foi aprovada`,
+    html: `
+      <div style="font-family: Arial, sans-serif; color: #333;">
+        <h3>Olá, ${userName}!</h3>
+        <p>O administrador analisou sua solicitação de exceção de horário e <strong>não aprovou</strong> as alterações.</p>
+        ${reason ? `<p><strong>Motivo:</strong> ${reason}</p>` : ""}
+        <p>Por favor, ajuste seu horário para cumprir as regras estabelecidas ou entre em contato com o administrador.</p>
+        <br/>
+        <a href="${BASE_URL}/horaise-editor" style="background: #52afe1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Editar Horário</a>
+      </div>
+    `,
+  };
+  await transporter.sendMail(mailOptions);
+}
 export async function sendUserApproval(userEmail: string, userName: string) {
   const mailOptions = {
     from: `"HORAISE" <${process.env.SMTP_USER}>`,

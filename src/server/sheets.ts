@@ -2,6 +2,7 @@ import { google } from "googleapis";
 const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ID || "";
 const SHEET_NAME = process.env.SHEET_NAME || "INFO";
 const BACKLOG_SHEET_NAME = process.env.BACKLOG_SHEET_NAME || "BACKLOG";
+const RULES_SHEET_NAME = process.env.RULES_SHEET_NAME || "RULES";
 export function escapeSheetName(name: string): string {
   if (!name) return name;
   return `'${name.replace(/'/g, "''")}'`;
@@ -114,6 +115,33 @@ export async function saveScheduleRow(email: string, scheduleRow: string[]) {
   
   return { success: true, message: "Schedule salvo e enviado para aprovação." };
 }
+
+export async function saveScheduleRowAsException(email: string, scheduleRow: string[]) {
+  const { sheets } = await getSheetsClient();
+  const sheetRef = escapeSheetName(SHEET_NAME);
+  const rowNumber = await findRowByEmail(sheets, email);
+  if (!rowNumber) return { success: false, message: `Email ${email} não encontrado` };
+  // 7 dias x 13 horas = 91 colunas -> agora J..DX (após Bolsa, Editor, Pending-Access, Pending-TimeTable, HP, HO)
+  const range = `${sheetRef}!J${rowNumber}:DX${rowNumber}`;
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range,
+    valueInputOption: "RAW",
+    requestBody: { values: [scheduleRow] },
+  });
+  
+  // Marca Pending-TimeTable=2 para indicar exceção (coluna G)
+  const rangePendingTimeTable = `${sheetRef}!G${rowNumber}`;
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: rangePendingTimeTable,
+    valueInputOption: "RAW",
+    requestBody: { values: [[2]] }, // Define Pending-TimeTable=2 (exceção)
+  });
+  
+  return { success: true, message: "Schedule salvo como exceção e enviado para aprovação." };
+}
+
 export async function loadScheduleRow(email: string): Promise<string[] | null> {
   const { sheets } = await getSheetsClient();
   const sheetRef = escapeSheetName(SHEET_NAME);
@@ -232,6 +260,63 @@ export async function readBacklogOptions(): Promise<{
   } catch (error) {
     console.error("Erro ao ler aba BACKLOG:", error);
     return { frentes: [], bolsas: [] };
+  }
+}
+
+/**
+ * Lê as regras dinâmicas da aba RULES
+ * A aba RULES tem 2 colunas: Regra (A), Valor (B)
+ * Retorna objeto com as regras e seus valores
+ */
+export async function readRulesFromSheet(): Promise<{
+  minimoSlotsConsecutivos: number;
+  minimoSlotsDiariosPresencial: number;
+  intervaloAlmoco: string;
+}> {
+  const { sheets } = await getSheetsClient();
+  const rulesSheetName = escapeSheetName(RULES_SHEET_NAME);
+  
+  try {
+    // Lê todas as linhas das colunas A até B (ignorando a primeira linha que é o cabeçalho)
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${rulesSheetName}!A2:B`,
+    });
+    
+    const rows = res.data.values || [];
+    
+    // Valores padrão caso não encontre na planilha
+    let minimoSlotsConsecutivos = 2;
+    let minimoSlotsDiariosPresencial = 4;
+    let intervaloAlmoco = "11-14";
+    
+    for (const row of rows) {
+      const regra = row[0]?.trim().toLowerCase();
+      const valor = row[1]?.trim();
+      
+      // Aceita vários formatos para as regras
+      if (regra.includes("slots seguidos") || regra.includes("slots_seguidos")) {
+        minimoSlotsConsecutivos = parseInt(valor || "2", 10);
+      } else if (regra.includes("slots diarios") || regra.includes("slots diários") || regra.includes("slots_diarios")) {
+        minimoSlotsDiariosPresencial = parseInt(valor || "2", 10);
+      } else if (regra.includes("almoss") || regra.includes("almoco") || regra.includes("almoço")) {
+        intervaloAlmoco = valor || "11-14";
+      }
+    }
+    
+    return {
+      minimoSlotsConsecutivos,
+      minimoSlotsDiariosPresencial,
+      intervaloAlmoco,
+    };
+  } catch (error) {
+    console.error("Erro ao ler aba RULES:", error);
+    // Retorna valores padrão em caso de erro
+    return {
+      minimoSlotsConsecutivos: 2,
+      minimoSlotsDiariosPresencial: 4,
+      intervaloAlmoco: "11-14",
+    };
   }
 }
 

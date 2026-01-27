@@ -83,6 +83,7 @@ export default function EditContentPage() {
   const [confirmExitOpen, setConfirmExitOpen] = useState(false);
   const [rulesModalOpen, setRulesModalOpen] = useState(false);
   const [rulesViolations, setRulesViolations] = useState<RuleViolation[]>([]);
+  const [isRequestingException, setIsRequestingException] = useState(false);
   
   const [activeTool, setActiveTool] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -352,19 +353,24 @@ export default function EditContentPage() {
 
     const allViolations: RuleViolation[] = [];
     
-    if (hp > 0 && ho > 0) {
-      const scheduleArray: string[] = [];
-      for (let day = 0; day <= 6; day++) {
-        for (let hour = 7; hour <= 19; hour++) {
-          const status = schedule?.[day]?.[hour];
-          let code = "";
-          if (status === "presencial") code = "P";
-          else if (status === "online") code = "O";
-          else if (status === "reuniao") code = "R";
-          scheduleArray.push(code);
-        }
+    // Monta o scheduleArray com todos os códigos
+    const scheduleArray: string[] = [];
+    for (let day = 0; day <= 6; day++) {
+      for (let hour = 7; hour <= 19; hour++) {
+        const status = schedule?.[day]?.[hour];
+        let code = "";
+        if (status === "presencial") code = "P";
+        else if (status === "online") code = "O";
+        else if (status === "reuniao") code = "R";
+        else if (status === "aula") code = "A";
+        else if (status === "ocupado") code = "X";
+        else if (status === "almoco") code = "L";
+        scheduleArray.push(code);
       }
-      
+    }
+    
+    // Validação de horas (HP e HO)
+    if (hp > 0 && ho > 0) {
       const hoursValidation = await fetch("/api", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -376,6 +382,7 @@ export default function EditContentPage() {
       }
     }
     
+    // Validações das regras antigas do scheduleRules.ts
     const scheduleResult = validateSchedule(schedule);
     if (!scheduleResult.ok) allViolations.push(...scheduleResult.violations);
     
@@ -400,7 +407,29 @@ export default function EditContentPage() {
         setIsNewMember(false);
         return true;
       } else {
-        notifications.show({ title: "Erro", message: result.message, color: "red" });
+        // Se o backend retornou erros de validação dinâmica
+        if (result.errors && Array.isArray(result.errors) && result.errors.length > 0) {
+          // Converte os erros para o formato de RuleViolation para o popup
+          const dynamicViolations: RuleViolation[] = result.errors.map((msg: string) => ({
+            code: "dynamic-rule" as any,
+            day: -1,
+            message: msg
+          }));
+          setRulesViolations(dynamicViolations);
+          setRulesModalOpen(true);
+        } else if (result.message && result.message.includes("viola as seguintes regras")) {
+          // Fallback: parse da mensagem se não vier como array
+          const errorLines = result.message.split("\n").filter((line: string) => line.trim() !== "");
+          const dynamicViolations = errorLines.slice(1).map((msg: string) => ({
+            code: "dynamic-rule" as any,
+            day: -1,
+            message: msg
+          }));
+          setRulesViolations(dynamicViolations);
+          setRulesModalOpen(true);
+        } else {
+          notifications.show({ title: "Erro", message: result.message, color: "red" });
+        }
         return false;
       }
     } catch (error) {
@@ -408,6 +437,59 @@ export default function EditContentPage() {
       return false;
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleRequestException = async () => {
+    if (!currentData) return;
+    
+    setIsRequestingException(true);
+    setRulesModalOpen(false);
+    
+    try {
+      // Salva o schedule com flag de exceção solicitada
+      const response = await fetch("/api", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          action: "request-schedule-exception", 
+          email: currentData.email,
+          schedule: currentData.schedule,
+          violations: rulesViolations.map(v => v.message)
+        }),
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        notifications.show({ 
+          title: "Solicitação Enviada!", 
+          message: "Seu horário foi enviado para aprovação do administrador. Você será notificado por email sobre a decisão.", 
+          color: "blue",
+          icon: <IconCheck />,
+          autoClose: 7000
+        });
+        setSavedSchedule(cloneSchedule(schedule));
+        // Atualiza o memberData com pendingTimeTable = 1
+        if (memberData) {
+          setMemberData({ ...memberData, pendingTimeTable: 1 });
+        }
+      } else {
+        notifications.show({ 
+          title: "Erro", 
+          message: result.message || "Erro ao solicitar exceção", 
+          color: "red" 
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao solicitar exceção:", error);
+      notifications.show({ 
+        title: "Erro", 
+        message: "Erro ao enviar solicitação", 
+        color: "red" 
+      });
+    } finally {
+      setIsRequestingException(false);
     }
   };
 
@@ -700,9 +782,22 @@ export default function EditContentPage() {
         </Modal>
 
         <Modal opened={rulesModalOpen} onClose={() => setRulesModalOpen(false)} title="Ajustes Necessários" centered size={isMobile ? "sm" : "lg"}>
-          <Alert icon={<IconAlertCircle />} color="orange" mb="sm">Corrija os itens abaixo:</Alert>
+          <Alert icon={<IconAlertCircle />} color="orange" mb="sm">Seu horário não cumpre as seguintes regras:</Alert>
           <Stack gap="xs" mb="md">{rulesViolations.map((v, idx) => <Text key={idx} size="sm">{v.message}</Text>)}</Stack>
-          <Group justify="flex-end"><Button onClick={() => setRulesModalOpen(false)}>Ok</Button></Group>
+          <Text size="xs" c="dimmed" mb="md">
+            Você pode ajustar seu horário ou solicitar uma exceção ao administrador caso seja um caso especial.
+          </Text>
+          <Group justify="flex-end" gap="sm">
+            <Button variant="default" onClick={() => setRulesModalOpen(false)}>Ajustar Horário</Button>
+            <Button 
+              color="blue" 
+              onClick={handleRequestException}
+              loading={isRequestingException}
+              leftSection={<IconAlertCircle size={16} />}
+            >
+              Solicitar Exceção
+            </Button>
+          </Group>
         </Modal>
       </Box>
     </>

@@ -63,7 +63,21 @@ const FRENTES_EMOJIS: Record<string, string> = {
   "Annotaise": "📝",
 };
 
-
+// 🎯 Easter egg: Normaliza o nome do Coutinho
+const normalizeCoutinho = (name: string, email: string): string => {
+  const nameLower = name.toLowerCase().trim();
+  const emailLower = email.toLowerCase().trim();
+  
+  if (
+    nameLower === "daniel coutinho" ||
+    emailLower === "dcoutinho@inf.puc-rio.br" ||
+    emailLower === "danieljosebc@gmail.com"
+  ) {
+    return "Coutinho";
+  }
+  
+  return name;
+};
 
 type AdminMember = {
   name: string;
@@ -252,7 +266,7 @@ export default function AdminDashboard() {
       
       if (response.ok && data.members) {
         const mappedMembers = data.members.slice(1).map((row: any, index: number) => ({
-          name: row[0],
+          name: normalizeCoutinho(row[0], row[1]),
           email: row[1],
           frentes: row[2],
           bolsa: row[3],
@@ -350,7 +364,7 @@ export default function AdminDashboard() {
     return hasMissingHours || hasMissingBolsa;
   });
   
-  const pendingSchedules = members.filter(m => m.pendingTimeTable === 1);
+  const pendingSchedules = members.filter(m => m.pendingTimeTable === 1 || m.pendingTimeTable === 2);
   
   // Acessos de Edição = Apenas pessoas COM todos os dados preenchidos (HP, HO, Bolsa)
   const activeEditors = members.filter(m => {
@@ -510,14 +524,24 @@ export default function AdminDashboard() {
                   {type === 'schedule' && (
                     <>
                       <Table.Td style={{ textAlign: 'center' }}>
-                        <ActionIcon 
-                          variant="outline" 
-                          color="blue" 
-                          size="lg" 
-                          onClick={() => window.open(`/horaise-viewer?personid=${encodeURIComponent(member.email)}`, '_blank')}
-                        >
-                          <IconEye size={20} />
-                        </ActionIcon>
+                        <Group gap={6} justify="center" wrap="nowrap">
+                          <ActionIcon 
+                            variant="outline" 
+                            color="blue" 
+                            size="lg" 
+                            onClick={() => window.open(`/horaise-viewer?personid=${encodeURIComponent(member.email)}`, '_blank')}
+                          >
+                            <IconEye size={20} />
+                          </ActionIcon>
+                          {/* Indicador de exceção solicitada - só aparece quando pendingTimeTable === 2 */}
+                          {member.pendingTimeTable === 2 && (
+                            <Tooltip label="Este horário foi solicitado com exceção às regras" withArrow>
+                              <ThemeIcon color="orange" variant="light" size="lg" radius="xl">
+                                <IconAlertTriangle size={18} />
+                              </ThemeIcon>
+                            </Tooltip>
+                          )}
+                        </Group>
                       </Table.Td>
                       <Table.Td style={{ textAlign: 'center' }}>
                         <ActionIcon 
