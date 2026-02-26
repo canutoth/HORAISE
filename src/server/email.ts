@@ -120,7 +120,28 @@ export async function sendAccessGrantedToUser(userEmail: string, userName: strin
   };
   await transporter.sendMail(mailOptions);
 }
-
+/**
+ * Envia email ao usuário notificando que o admin sugeriu um novo horário
+ */
+export async function sendSuggestionToUser(userEmail: string, userName: string) {
+  const mailOptions = {
+    from: `"HORAISE" <${process.env.SMTP_USER}>`,
+    to: userEmail,
+    subject: `📝 Nova Sugestão de Horário do Administrador`,
+    html: `
+      <div style="font-family: Arial, sans-serif; color: #333;">
+        <h2>Olá, ${userName}!</h2>
+        <p>O administrador sugeriu um novo horário para você.</p>
+        <p>Acesse o editor para visualizar a sugestão e decidir se deseja aceitá-la.</p>
+        <br/>
+        <p><strong>⚠️ Importante:</strong> Você pode comparar sua agenda atual com a sugestão e aceitar ou recusar conforme preferir.</p>
+        <br/>
+        <a href="${BASE_URL}/horaise-editor" style="background: #52afe1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Ver Sugestão</a>
+      </div>
+    `,
+  };
+  await transporter.sendMail(mailOptions);
+}
 export async function sendExceptionRequestToAdmin(userName: string, userEmail: string, violations: string[]) {
   const adminEmail = process.env.EMAIL_ADMIN;
   
@@ -206,6 +227,29 @@ export async function sendUserApproval(userEmail: string, userName: string) {
         <p>Você já pode acessar o HORAISE para preencher seus horários.</p>
         <br/>
         <a href="${BASE_URL}/horaise-editor" style="background: #52afe1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Preencher Horários</a>
+      </div>
+    `,
+  };
+  await transporter.sendMail(mailOptions);
+}
+
+export async function sendProfileChangeToUser(userEmail: string, userName: string, field: string, oldValue: string, newValue: string) {
+  const mailOptions = {
+    from: `"HORAISE" <${process.env.SMTP_USER}>`,
+    to: userEmail,
+    subject: `🔔 Seu perfil foi atualizado pelo administrador`,
+    html: `
+      <div style="font-family: Arial, sans-serif; color: #333;">
+        <h3>Olá, ${userName}!</h3>
+        <p>O administrador atualizou uma informação do seu perfil no HORAISE:</p>
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0;">
+          <p><strong>Campo alterado:</strong> ${field}</p>
+          <p><strong>Valor anterior:</strong> ${oldValue}</p>
+          <p><strong>Novo valor:</strong> <span style="color: #28a745; font-weight: bold;">${newValue}</span></p>
+        </div>
+        <p>Se você tiver alguma dúvida sobre essa alteração, entre em contato com o administrador.</p>
+        <br/>
+        <a href="${BASE_URL}/horaise-editor" style="background: #52afe1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Ver Meu Perfil</a>
       </div>
     `,
   };

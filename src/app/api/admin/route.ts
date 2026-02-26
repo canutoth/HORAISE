@@ -88,8 +88,8 @@ export async function POST(request: NextRequest) {
             bolsa: row[3] || "",
             editor: Number(row[4] || 0),
             pending: Number(row[5] || 0),
-            hp: row[7] || "",
-            ho: row[8] || "",
+            hp: row[8] || "",
+            ho: row[9] || "",
           }));
         return NextResponse.json({ pending });
       }
@@ -147,8 +147,8 @@ export async function POST(request: NextRequest) {
           bolsa: found.row[3] || "",
           editor: Number(found.row[4] || 0),
           pending: Number(found.row[5] || 0),
-          hp: found.row[7] || "",
-          ho: found.row[8] || "",
+          hp: found.row[8] || "",
+          ho: found.row[9] || "",
         };
         return NextResponse.json({ member });
       }
@@ -210,8 +210,8 @@ export async function POST(request: NextRequest) {
             { status: 404 }
           );
         }
-        const hp = parseHours(member.row[7] || "0"); 
-        const ho = parseHours(member.row[8] || "0"); 
+        const hp = parseHours(member.row[8] || "0"); 
+        const ho = parseHours(member.row[9] || "0"); 
         if (hp === 0 && ho === 0) {
           return NextResponse.json(
             {
