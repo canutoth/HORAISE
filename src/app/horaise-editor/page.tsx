@@ -31,6 +31,7 @@ export default function EditorLoginPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [allMembers, setAllMembers] = useState<Array<{name: string, email: string}>>([]);
   const [selectedMember, setSelectedMember] = useState<string | null>(null);
+  
 
   useEffect(() => {
     document.title = "HORAISE | Editor";

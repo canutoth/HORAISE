@@ -47,25 +47,37 @@ export default function VisualizerPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [error, setError] = useState<string>("");
   const [frentesEmojis, setFrentesEmojis] = useState<Record<string, string>>({});
+  // 👈 PASSO 1: Estado para as cores das bolsas
+  const [bolsasColors, setBolsasColors] = useState<Record<string, string>>({}); 
 
   useEffect(() => {
     document.title = "HORAISE | Viewer";
   }, []);
 
   useEffect(() => {
-    const loadEmojis = async () => {
+    // 👈 PASSO 2: Atualização do loadOptions
+    const loadOptions = async () => {
       try {
         const options = await getBacklogOptions();
+        
         const emojiMap: Record<string, string> = {};
         options.frentes.forEach(f => {
           emojiMap[f.name] = f.emoji;
         });
         setFrentesEmojis(emojiMap);
+
+        // Mapeia as cores das bolsas
+        const colorMap: Record<string, string> = {};
+        options.bolsas.forEach(b => {
+          colorMap[b.name] = b.color;
+        });
+        setBolsasColors(colorMap);
+
       } catch (error) {
-        console.error("Erro ao carregar emojis:", error);
+        console.error("Erro ao carregar opções:", error);
       }
     };
-    loadEmojis();
+    loadOptions();
   }, []);
 
   useEffect(() => {
@@ -197,9 +209,29 @@ export default function VisualizerPage() {
                     />
 
                     <Stack gap="sm">
+                      {/* 👈 PASSO 3: Adicionando as Badges das Bolsas ao lado do Nome */}
                       <Group justify="space-between" w="100%">
                         <Stack gap={0} align="left">
-                          <Text fw={700} size="lg" c="#0E1862">{current.name}</Text>
+                          <Group gap="sm" align="center" wrap="wrap">
+                            <Text fw={700} size="lg" c="#0E1862">{current.name}</Text>
+                            
+                            {current.bolsa && current.bolsa.split(',').map((bolsaItem: string, idx: number) => {
+                              const bolsaName = bolsaItem.trim();
+                              if (!bolsaName) return null;
+                              
+                              return (
+                                <Badge 
+                                  key={idx}
+                                  size="sm" 
+                                  variant="light"
+                                  color={bolsasColors[bolsaName] || "blue"} 
+                                  style={{ textTransform: "none", fontWeight: 700 }}
+                                >
+                                  {bolsaName}
+                                </Badge>
+                              );
+                            })}
+                          </Group>
                         </Stack>
                       </Group>
 

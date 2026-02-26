@@ -113,6 +113,7 @@ export default function EditContentPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [frentesOptions, setFrentesOptions] = useState<string[]>([]);
   const [frentesEmojis, setFrentesEmojis] = useState<Record<string, string>>({});
+  const [bolsasColors, setBolsasColors] = useState<Record<string, string>>({}); // 👈 PASSO 1
 
   const hp = memberData?.hp ? parseFloat(memberData.hp) : 0;
   const ho = memberData?.ho ? parseFloat(memberData.ho) : 0;
@@ -125,16 +126,21 @@ export default function EditContentPage() {
     const loadOptions = async () => {
       try {
         const options = await getBacklogOptions();
-        // Mapeia para formato de string simples
         setFrentesOptions(options.frentes.map(f => f.name));
-        // Cria mapa de emojis
+        
         const emojiMap: Record<string, string> = {};
         options.frentes.forEach(f => {
           emojiMap[f.name] = f.emoji;
         });
         setFrentesEmojis(emojiMap);
+
+        // 👈 PASSO 2: Mapeia as cores das bolsas
+        const colorMap: Record<string, string> = {};
+        options.bolsas.forEach(b => {
+          colorMap[b.name] = b.color;
+        });
+        setBolsasColors(colorMap);
         
-        // Busca regras dinâmicas
         const rulesResponse = await fetch("/api", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -195,11 +201,9 @@ export default function EditContentPage() {
       let nextStatus: string | null = null;
 
       if (activeTool) {
-        // Se a célula já tem algum status (independente de qual), limpar
         if (currentStatus) {
           nextStatus = null;
         } else {
-          // Se a célula está vazia, aplicar o tool ativo
           nextStatus = activeTool;
         }
       }
@@ -242,7 +246,7 @@ export default function EditContentPage() {
 
   const getStatusConfig = (status: string) => {
     switch (status) {
-      case "presencial": return { color: "green", label: isMobile ? "P" : "Presencial" }; // Abrevia label no mobile
+      case "presencial": return { color: "green", label: isMobile ? "P" : "Presencial" }; 
       case "online": return { color: "teal", label: isMobile ? "O" : "Online" };
       case "reuniao": return { color: "orange", label: isMobile ? "R" : "Reunião" };
       case "aula": return { color: "blue", label: isMobile ? "A" : "Aula" };
@@ -256,11 +260,9 @@ export default function EditContentPage() {
     const loadMemberData = async () => {
       setIsLoading(true);
       try {
-        // Verifica se o usuário logado é admin
         if (typeof window !== "undefined") {
           const loggedEmail = sessionStorage.getItem("adminEmail");
           if (loggedEmail) {
-            // Verifica se realmente é admin
             const checkAdmin = await fetch("/api", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -310,13 +312,12 @@ export default function EditContentPage() {
           setSavedSchedule(cloneSchedule(memberSchedule));
           setIsNewMember(false);
           
-          // Carrega sugestão se existir (pendingSuggestion === 1)
           if (member.pendingSuggestion === 1) {
             try {
               const suggested = await loadSuggestedScheduleFromSheet(personId);
               if (suggested) {
                 setSuggestedSchedule(suggested);
-                setActiveTab("suggested"); // Mostra aba de sugestão por padrão
+                setActiveTab("suggested"); 
               }
             } catch (suggError) {
               console.warn("Erro ao carregar sugestão:", suggError);
@@ -407,7 +408,6 @@ export default function EditContentPage() {
     if (!memberData || !isAdminMode) return;
 
     try {
-      // Atualiza diretamente via API sem validar schedule
       const response = await fetch("/api", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -421,7 +421,6 @@ export default function EditContentPage() {
       const result = await response.json();
 
       if (result.success) {
-        // Enviar email notificando a mudança
         await fetch("/api", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -471,7 +470,6 @@ export default function EditContentPage() {
     if (!memberData || !isAdminMode) return;
 
     try {
-      // Atualiza diretamente via API sem validar schedule
       const response = await fetch("/api", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -485,7 +483,6 @@ export default function EditContentPage() {
       const result = await response.json();
 
       if (result.success) {
-        // Enviar email notificando a mudança
         await fetch("/api", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -547,7 +544,6 @@ export default function EditContentPage() {
 
     const allViolations: RuleViolation[] = [];
     
-    // Monta o scheduleArray com todos os códigos
     const scheduleArray: string[] = [];
     for (let day = 0; day <= 6; day++) {
       for (let hour = 7; hour <= 19; hour++) {
@@ -563,7 +559,6 @@ export default function EditContentPage() {
       }
     }
     
-    // Validação de horas (HP e HO)
     if (hp > 0 && ho > 0) {
       const hoursValidation = await fetch("/api", {
         method: "POST",
@@ -576,11 +571,9 @@ export default function EditContentPage() {
       }
     }
     
-    // Validações das regras antigas do scheduleRules.ts
     const scheduleResult = validateSchedule(schedule);
     if (!scheduleResult.ok) allViolations.push(...scheduleResult.violations);
     
-    // Validações dinâmicas do backend (slots consecutivos, almoço, range de horários, etc)
     try {
       const dynamicValidation = await fetch("/api", {
         method: "POST",
@@ -610,7 +603,6 @@ export default function EditContentPage() {
 
     setIsSaving(true);
     try {
-      // Se for admin editando outro membro, salva como sugestão
       if (isAdminMode && adminEmail) {
         const { saveSuggestedSchedule } = await import("../../../services/googleSheets");
         const result = await saveSuggestedSchedule(adminEmail, currentData.email, schedule);
@@ -631,7 +623,6 @@ export default function EditContentPage() {
         }
       }
       
-      // Salvar normal (usuário salvando seu próprio horário)
       const result = await saveMember(currentData, isNewMember);
       if (result.success) {
         notifications.show({ title: "Sucesso!", message: "Dados salvos", color: "green", icon: <IconCheck /> });
@@ -640,9 +631,7 @@ export default function EditContentPage() {
         setIsNewMember(false);
         return true;
       } else {
-        // Se o backend retornou erros de validação dinâmica
         if (result.errors && Array.isArray(result.errors) && result.errors.length > 0) {
-          // Converte os erros para o formato de RuleViolation para o popup
           const dynamicViolations: RuleViolation[] = result.errors.map((msg: string) => ({
             code: "dynamic-rule" as any,
             day: -1,
@@ -651,7 +640,6 @@ export default function EditContentPage() {
           setRulesViolations(dynamicViolations);
           setRulesModalOpen(true);
         } else if (result.message && result.message.includes("viola as seguintes regras")) {
-          // Fallback: parse da mensagem se não vier como array
           const errorLines = result.message.split("\n").filter((line: string) => line.trim() !== "");
           const dynamicViolations = errorLines.slice(1).map((msg: string) => ({
             code: "dynamic-rule" as any,
@@ -680,7 +668,6 @@ export default function EditContentPage() {
     setRulesModalOpen(false);
     
     try {
-      // Salva o schedule com flag de exceção solicitada
       const response = await fetch("/api", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -703,7 +690,6 @@ export default function EditContentPage() {
           autoClose: 7000
         });
         setSavedSchedule(cloneSchedule(schedule));
-        // Atualiza o memberData com pendingTimeTable = 1
         if (memberData) {
           setMemberData({ ...memberData, pendingTimeTable: 1 });
         }
@@ -742,17 +728,14 @@ export default function EditContentPage() {
           autoClose: 3000
         });
         
-        // Atualiza o schedule local com a sugestão
         if (suggestedSchedule) {
           setSchedule(suggestedSchedule);
           setSavedSchedule(cloneSchedule(suggestedSchedule));
         }
         
-        // Limpa a sugestão e volta para aba original
         setSuggestedSchedule(null);
         setActiveTab("original");
         
-        // Atualiza memberData removendo flag de sugestão
         setMemberData({ ...memberData, pendingSuggestion: 0 });
       } else {
         notifications.show({
@@ -913,7 +896,6 @@ export default function EditContentPage() {
                     key={`${dayIndex}-${hour}`}
                     p={0}
                     style={{ cursor: isReadOnly ? "default" : "pointer", height: ROW_HEIGHT }}
-                    // Mobile (tap) e Desktop (drag) - apenas se não for read-only
                     onClick={() => !isReadOnly && handleCellClick(dayIndex, hour)}
                     onMouseDown={(e) => !isReadOnly && handleMouseDown(dayIndex, hour, e)}
                     onMouseEnter={() => !isReadOnly && handleMouseEnter(dayIndex, hour)}
@@ -975,8 +957,27 @@ export default function EditContentPage() {
                   <Paper p="sm" radius="md" withBorder shadow="sm">
                     <Group justify="space-between" align="center">
                         <Stack gap={0}>
+                          <Group gap="sm" align="center" wrap="wrap" mb={2}>
                             <Text fw={700} size="md" c="#0E1862" truncate>{memberData?.name || personId}</Text>
-                            <Text size="xs" c="dimmed" truncate style={{maxWidth: '200px'}}>{memberData?.email || personId}</Text>
+                            
+                            {memberData?.bolsa && memberData.bolsa.split(',').map((bolsaItem: string, idx: number) => {
+                              const bolsaName = bolsaItem.trim();
+                              if (!bolsaName) return null;
+                              
+                              return (
+                                <Badge 
+                                  key={idx}
+                                  size="xs" 
+                                  variant="light"
+                                  color={bolsasColors[bolsaName] || "blue"} 
+                                  style={{ textTransform: "none", fontWeight: 700 }}
+                                >
+                                  {bolsaName}
+                                </Badge>
+                              );
+                            })}
+                          </Group>
+                          <Text size="xs" c="dimmed" truncate style={{maxWidth: '200px'}}>{memberData?.email || personId}</Text>
                         </Stack>
                         <Badge variant="light" color={hasUnsavedChanges ? "orange" : "green"}>{hasUnsavedChanges ? "Não salvo" : "Salvo"}</Badge>
                     </Group>
@@ -997,7 +998,6 @@ export default function EditContentPage() {
                             </Group>
                         </Stack>
                     ) : (
-                        // scroll horizontal se tiver mts frentes
                         isMobile ? (
                             <ScrollArea type="never" offsetScrollbars={false}>
                                 <Group gap="xs" wrap="nowrap" pb={4}>
@@ -1052,14 +1052,12 @@ export default function EditContentPage() {
                     {!isMobile && <Text size="xs" c="dimmed" mb="xs">Clique em uma categoria abaixo para ativar o modo de pintura.</Text>}
                     
                     {isMobile ? (
-                        //scroll horizontal
                         <ScrollArea type="never" offsetScrollbars={false} mb="sm">
                             <Group gap="xs" wrap="nowrap" pb="xs">
                                 {renderTools()}
                             </Group>
                         </ScrollArea>
                     ) : (
-                        // Grid Vertical
                         <SimpleGrid cols={1} spacing="xs" verticalSpacing="xs">
                             {renderTools()}
                         </SimpleGrid>
@@ -1073,14 +1071,12 @@ export default function EditContentPage() {
             {/*tabela */}
             <Grid.Col span={{ base: 12, md: 7, lg: 8 }}>
               <Stack gap="md">
-                {/* Alerta de sugestão pendente */}
                 {suggestedSchedule && (
                   <Alert variant="light" color="blue" title="📝 Nova Sugestão de Horário" icon={<IconInfoCircle />}>
                     O administrador sugeriu um novo horário para você. Use as abas abaixo para comparar e decidir.
                   </Alert>
                 )}
                 
-                {/* Tabs para original e sugestão */}
                 {suggestedSchedule ? (
                   <Tabs value={activeTab} onChange={(value) => setActiveTab(value as "original" | "suggested")}>
                     <Tabs.List>
@@ -1121,7 +1117,6 @@ export default function EditContentPage() {
                   renderScheduleTable(schedule, false)
                 )}
                 
-                {/* Botões de ação (apenas na aba original sem sugestão) */}
                 {(!suggestedSchedule || activeTab === "original") && (
                   <Group justify={isMobile ? "space-between" : "flex-end"} mt="md">
                     <Button leftSection={<IconRefresh size={18} />} variant="subtle" color="gray" onClick={handleReset} size={isMobile ? "xs" : "sm"}>Reset</Button>
