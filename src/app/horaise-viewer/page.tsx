@@ -47,7 +47,6 @@ export default function VisualizerPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [error, setError] = useState<string>("");
   const [frentesEmojis, setFrentesEmojis] = useState<Record<string, string>>({});
-  // 👈 PASSO 1: Estado para as cores das bolsas
   const [bolsasColors, setBolsasColors] = useState<Record<string, string>>({}); 
 
   useEffect(() => {
@@ -55,7 +54,6 @@ export default function VisualizerPage() {
   }, []);
 
   useEffect(() => {
-    // 👈 PASSO 2: Atualização do loadOptions
     const loadOptions = async () => {
       try {
         const options = await getBacklogOptions();
@@ -209,7 +207,6 @@ export default function VisualizerPage() {
                     />
 
                     <Stack gap="sm">
-                      {/* 👈 PASSO 3: Adicionando as Badges das Bolsas ao lado do Nome */}
                       <Group justify="space-between" w="100%">
                         <Stack gap={0} align="left">
                           <Group gap="sm" align="center" wrap="wrap">

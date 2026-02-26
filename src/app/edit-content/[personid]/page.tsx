@@ -113,7 +113,7 @@ export default function EditContentPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [frentesOptions, setFrentesOptions] = useState<string[]>([]);
   const [frentesEmojis, setFrentesEmojis] = useState<Record<string, string>>({});
-  const [bolsasColors, setBolsasColors] = useState<Record<string, string>>({}); // 👈 PASSO 1
+  const [bolsasColors, setBolsasColors] = useState<Record<string, string>>({}); 
 
   const hp = memberData?.hp ? parseFloat(memberData.hp) : 0;
   const ho = memberData?.ho ? parseFloat(memberData.ho) : 0;
@@ -134,7 +134,6 @@ export default function EditContentPage() {
         });
         setFrentesEmojis(emojiMap);
 
-        // 👈 PASSO 2: Mapeia as cores das bolsas
         const colorMap: Record<string, string> = {};
         options.bolsas.forEach(b => {
           colorMap[b.name] = b.color;
