@@ -16,19 +16,13 @@ import {
   ThemeIcon,
   Table,
   HoverCard,
-  Divider,
   Select,
   SimpleGrid,
   ScrollArea, 
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks"; 
 import {
-  IconArrowLeft,
   IconAlertCircle,
-  IconChevronLeft,
-  IconChevronRight,
-  IconCalendar,
-  IconClock,
   IconSchool, 
   IconDeviceLaptop,
   IconBuildingSkyscraper,
@@ -370,11 +364,6 @@ export default function VisualizerPage() {
                                           <Text size="xs" c={`${config.color}.9`} fw={500} style={{ lineHeight: 1.2 }}>{config.label}</Text>
                                         </Box>
                                       </HoverCard.Target>
-                                      <HoverCard.Dropdown>
-                                        <Group gap="xs"><IconClock size={16} color="gray" /><Text size="sm">{DAY_LABELS_SHORT[dayIndex]} - {hour}-{hour+1}h</Text></Group>
-                                        <Divider my={4} />
-                                        <Text size="sm" fw={600} c={config.color}>{config.label}</Text>
-                                      </HoverCard.Dropdown>
                                     </HoverCard>
                                   </Table.Td>
                                 );
