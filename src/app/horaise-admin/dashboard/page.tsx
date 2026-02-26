@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   Box,
   Container,
@@ -62,7 +62,6 @@ const FRENTES_EMOJIS: Record<string, string> = {
   "EcoSustain": "🌱",
   "Annotaise": "📝",
 };
-
 // 🎯 Easter egg: Normaliza o nome do Coutinho
 const normalizeCoutinho = (name: string, email: string): string => {
   const nameLower = name.toLowerCase().trim();
@@ -100,6 +99,19 @@ export default function AdminDashboard() {
   const isMobile = useMediaQuery('(max-width: 768px)');
   const [frentesOptions, setFrentesOptions] = useState<{ value: string; label: string }[]>([]);
   const [bolsasOptions, setBolsasOptions] = useState<{ value: string; label: string; color: string }[]>([]);
+
+  // Pendentes (editor !== 1) aparecem primeiro e depois ordem alfabética
+  const sortedMembers = useMemo(() => {
+    return [...members].sort((a, b) => {
+      const aIsPending = a.editor !== 1;
+      const bIsPending = b.editor !== 1;
+
+      if (aIsPending && !bIsPending) return -1;
+      if (!aIsPending && bIsPending) return 1;
+      
+      return a.name.localeCompare(b.name);
+    });
+  }, [members]);
 
   const [confirmationModal, setConfirmationModal] = useState<{
     type: 'approve' | 'revoke' | null;
@@ -234,14 +246,12 @@ export default function AdminDashboard() {
       const data = await response.json();
       
       if (response.ok) {
-        // Mapeia frentes com emojis dinâmicos
         const frentesWithEmojis = (data.frentes || []).map((frente: { name: string; emoji: string }) => ({
           value: frente.name,
           label: `${frente.emoji} ${frente.name}`,
         }));
         setFrentesOptions(frentesWithEmojis);
         
-        // Mapeia bolsas com cores dinâmicas
         const bolsasWithColors = (data.bolsas || []).map((bolsa: { name: string; color: string }) => ({
           value: bolsa.name,
           label: bolsa.name,
@@ -358,16 +368,16 @@ export default function AdminDashboard() {
   };
 
   // Cadastro pendente = HP ou HO zerados/vazios OU sem bolsa definida
-  const pendingRegistrations = members.filter(m => {
+  const pendingRegistrations = sortedMembers.filter(m => {
     const hasMissingHours = m.ho === 0 || m.hp === 0;
     const hasMissingBolsa = !m.bolsa || m.bolsa === 'nan' || m.bolsa.trim() === '';
     return hasMissingHours || hasMissingBolsa;
   });
   
-  const pendingSchedules = members.filter(m => m.pendingTimeTable === 1 || m.pendingTimeTable === 2);
+  const pendingSchedules = sortedMembers.filter(m => m.pendingTimeTable === 1 || m.pendingTimeTable === 2);
   
   // Acessos de Edição = Apenas pessoas COM todos os dados preenchidos (HP, HO, Bolsa)
-  const activeEditors = members.filter(m => {
+  const activeEditors = sortedMembers.filter(m => {
     const hasAllData = m.ho > 0 && m.hp > 0 && m.bolsa && m.bolsa !== 'nan' && m.bolsa.trim() !== '';
     return hasAllData && (m.pendingAccess === 1 || m.editor === 1);
   });
@@ -378,7 +388,6 @@ export default function AdminDashboard() {
         <Table.Thead bg="gray.1">
           <Table.Tr>
             <Table.Th>Nome</Table.Th>
-            {/* ocultar frentes e bolsa no mobile (visibleFrom="md") */}
             <Table.Th visibleFrom="md">Frente(s)</Table.Th>
             <Table.Th visibleFrom="md" style={{ textAlign: 'center' }}>Bolsa</Table.Th>
 
@@ -438,7 +447,7 @@ export default function AdminDashboard() {
                     </Group>
                   </Table.Td>
                   
-                  {/* frentes */}
+                 {/* frentes */}
                   <Table.Td visibleFrom="md">
                     {frentesList.length === 0 ? (
                       <Text size="sm" c="dimmed">-</Text>
