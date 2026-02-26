@@ -42,7 +42,7 @@ export default function TopNavBar() {
           {/* visível apenas em telas médias pra cima */}
           <Box visibleFrom="md">
             <Image
-              src="/horaise.png"
+              src="/logoHoraise.png"
               alt="HORAISE Logo"
               width={320}
               height={38.5}
@@ -54,7 +54,7 @@ export default function TopNavBar() {
           {/* versão mobile menor*/}
           <Box hiddenFrom="md">
             <Image
-              src="/horaise.png"
+              src="/logoHoraise.png"
               alt="HORAISE Logo"
               width={160} 
               height={19.25} 
@@ -114,7 +114,7 @@ export default function TopNavBar() {
         zIndex={200}
         title={
           <Image
-            src="/horaise.png"
+            src="/logoHoraise.png"
             alt="HORAISE Logo"
             width={140}
             height={16.8}

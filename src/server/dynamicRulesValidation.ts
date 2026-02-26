@@ -6,6 +6,8 @@ export interface DynamicRulesConfig {
   minimoSlotsConsecutivos: number;
   minimoSlotsDiariosPresencial: number;
   intervaloAlmoco: string; // formato "11-14"
+  inicio: number; // hora de início do expediente (ex: 8)
+  fim: number; // hora de fim do expediente (ex: 18)
 }
 
 export interface DynamicValidationResult {
@@ -16,7 +18,7 @@ export interface DynamicValidationResult {
 /**
  * Converte scheduleRow (91 posições) em estrutura por dia e hora
  * 7 dias x 13 horas = 91 posições
- * Cada dia tem 13 slots (8h-20h)
+ * Cada dia tem 13 slots (7h-20h: 7-8h, 8-9h, ..., 19-20h)
  */
 function parseScheduleByDay(scheduleRow: string[]): Map<number, string[]> {
   const dayMap = new Map<number, string[]>();
@@ -147,9 +149,9 @@ export function validateLunchInterval(
     return { isValid: true, errors: [] }; // Ignora validação se formato inválido
   }
   
-  // Para horários de 8h-20h (13 slots), mapeamos:
-  // 8h = index 0, 9h = index 1, ..., 20h = index 12
-  const baseHour = 8;
+  // Para horários de 7h-20h (13 slots), mapeamos:
+  // 7h = index 0, 8h = index 1, ..., 19h = index 12
+  const baseHour = 7;
   
   dayMap.forEach((slots, day) => {
     // Ignora fins de semana (sábado=5, domingo=6) - ajustar se necessário
@@ -200,6 +202,81 @@ export function validateLunchInterval(
 }
 
 /**
+ * Valida se há preenchimentos fora do range de horário permitido (inicio-fim)
+ * A aba INFO sempre tem 7-20h, mas se a pessoa preencher fora do range inicio-fim de RULES,
+ * ela é sinalizada para poder solicitar exceção
+ */
+export function validateWorkingHoursRange(
+  scheduleRow: string[],
+  inicio: number,
+  fim: number
+): DynamicValidationResult {
+  const errors: string[] = [];
+  const dayMap = parseScheduleByDay(scheduleRow);
+  const dayNames = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"];
+  
+  // Para horários de 7h-20h (13 slots), mapeamos:
+  // 7h = index 0, 8h = index 1, ..., 19h = index 12
+  const baseHour = 7;
+  
+  dayMap.forEach((slots, day) => {
+    const violatingHours: number[] = [];
+    
+    slots.forEach((slot, hourIndex) => {
+      // Se há algum preenchimento (qualquer valor não vazio)
+      if (slot && slot.trim() !== "") {
+        const actualHour = baseHour + hourIndex;
+        
+        // Verifica se está fora do range permitido
+        if (actualHour < inicio || actualHour >= fim) {
+          violatingHours.push(actualHour);
+        }
+      }
+    });
+    
+    if (violatingHours.length > 0) {
+      // Agrupa horários consecutivos para mostrar ranges
+      const ranges: string[] = [];
+      let rangeStart = violatingHours[0];
+      let rangeEnd = violatingHours[0];
+      
+      for (let i = 1; i < violatingHours.length; i++) {
+        if (violatingHours[i] === rangeEnd + 1) {
+          // Horário consecutivo, expande o range
+          rangeEnd = violatingHours[i];
+        } else {
+          // Quebra na sequência, finaliza o range atual
+          if (rangeStart === rangeEnd) {
+            ranges.push(`${rangeStart}h`);
+          } else {
+            ranges.push(`${rangeStart}-${rangeEnd + 1}h`);
+          }
+          rangeStart = violatingHours[i];
+          rangeEnd = violatingHours[i];
+        }
+      }
+      
+      // Adiciona o último range
+      if (rangeStart === rangeEnd) {
+        ranges.push(`${rangeStart}h`);
+      } else {
+        ranges.push(`${rangeStart}-${rangeEnd + 1}h`);
+      }
+      
+      const rangesStr = ranges.join(", ");
+      errors.push(
+        `${dayNames[day]}: Você preencheu horários fora do range permitido (${inicio}-${fim}h). Horários fora do range: ${rangesStr}.`
+      );
+    }
+  });
+  
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
+}
+
+/**
  * Valida todas as regras dinâmicas
  */
 export function validateDynamicRules(
@@ -222,6 +299,10 @@ export function validateDynamicRules(
   // Valida intervalo de almoço
   const lunchResult = validateLunchInterval(scheduleRow, rules.intervaloAlmoco);
   allErrors.push(...lunchResult.errors);
+  
+  // Valida range de horários de trabalho (inicio-fim)
+  const workingHoursResult = validateWorkingHoursRange(scheduleRow, rules.inicio, rules.fim);
+  allErrors.push(...workingHoursResult.errors);
   
   return {
     isValid: allErrors.length === 0,

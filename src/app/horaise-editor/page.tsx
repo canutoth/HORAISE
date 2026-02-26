@@ -12,8 +12,11 @@ import {
   Select,
   Group,
   Divider,
+  Select,
+  Group,
+  Divider,
 } from "@mantine/core";
-import { IconEdit, IconMail, IconUsers } from "@tabler/icons-react";
+import { IconEdit, IconMail, IconUsers, IconUsers } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
 import TopNavBar from "@/components/TopNavBar";
 import { notifications } from "@mantine/notifications";
@@ -31,6 +34,7 @@ export default function EditorLoginPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [allMembers, setAllMembers] = useState<Array<{name: string, email: string}>>([]);
   const [selectedMember, setSelectedMember] = useState<string | null>(null);
+  
 
   useEffect(() => {
     document.title = "HORAISE | Editor";

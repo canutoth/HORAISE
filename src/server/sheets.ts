@@ -274,6 +274,8 @@ export async function readRulesFromSheet(): Promise<{
   minimoSlotsConsecutivos: number;
   minimoSlotsDiariosPresencial: number;
   intervaloAlmoco: string;
+  inicio: number;
+  fim: number;
 }> {
   const { sheets } = await getSheetsClient();
   const rulesSheetName = escapeSheetName(RULES_SHEET_NAME);
@@ -291,6 +293,8 @@ export async function readRulesFromSheet(): Promise<{
     let minimoSlotsConsecutivos = 2;
     let minimoSlotsDiariosPresencial = 4;
     let intervaloAlmoco = "11-14";
+    let inicio = 8; // Padrão: 8h
+    let fim = 20; // Padrão: 20h (fim do range, não inclusivo)
     
     for (const row of rows) {
       const regra = row[0]?.trim().toLowerCase();
@@ -303,6 +307,10 @@ export async function readRulesFromSheet(): Promise<{
         minimoSlotsDiariosPresencial = parseInt(valor || "2", 10);
       } else if (regra.includes("almoss") || regra.includes("almoco") || regra.includes("almoço")) {
         intervaloAlmoco = valor || "11-14";
+      } else if (regra.includes("inicio") || regra.includes("início")) {
+        inicio = parseInt(valor || "8", 10);
+      } else if (regra.includes("fim")) {
+        fim = parseInt(valor || "20", 10);
       }
     }
     
@@ -310,6 +318,8 @@ export async function readRulesFromSheet(): Promise<{
       minimoSlotsConsecutivos,
       minimoSlotsDiariosPresencial,
       intervaloAlmoco,
+      inicio,
+      fim,
     };
   } catch (error) {
     console.error("Erro ao ler aba RULES:", error);
@@ -318,6 +328,8 @@ export async function readRulesFromSheet(): Promise<{
       minimoSlotsConsecutivos: 2,
       minimoSlotsDiariosPresencial: 4,
       intervaloAlmoco: "11-14",
+      inicio: 8,
+      fim: 20,
     };
   }
 }

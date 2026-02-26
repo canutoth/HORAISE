@@ -16,19 +16,13 @@ import {
   ThemeIcon,
   Table,
   HoverCard,
-  Divider,
   Select,
   SimpleGrid,
   ScrollArea, 
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks"; 
 import {
-  IconArrowLeft,
   IconAlertCircle,
-  IconChevronLeft,
-  IconChevronRight,
-  IconCalendar,
-  IconClock,
   IconSchool, 
   IconDeviceLaptop,
   IconBuildingSkyscraper,
@@ -53,25 +47,35 @@ export default function VisualizerPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [error, setError] = useState<string>("");
   const [frentesEmojis, setFrentesEmojis] = useState<Record<string, string>>({});
+  const [bolsasColors, setBolsasColors] = useState<Record<string, string>>({}); 
 
   useEffect(() => {
     document.title = "HORAISE | Viewer";
   }, []);
 
   useEffect(() => {
-    const loadEmojis = async () => {
+    const loadOptions = async () => {
       try {
         const options = await getBacklogOptions();
+        
         const emojiMap: Record<string, string> = {};
         options.frentes.forEach(f => {
           emojiMap[f.name] = f.emoji;
         });
         setFrentesEmojis(emojiMap);
+
+        // Mapeia as cores das bolsas
+        const colorMap: Record<string, string> = {};
+        options.bolsas.forEach(b => {
+          colorMap[b.name] = b.color;
+        });
+        setBolsasColors(colorMap);
+
       } catch (error) {
-        console.error("Erro ao carregar emojis:", error);
+        console.error("Erro ao carregar opções:", error);
       }
     };
-    loadEmojis();
+    loadOptions();
   }, []);
 
   useEffect(() => {
@@ -205,7 +209,26 @@ export default function VisualizerPage() {
                     <Stack gap="sm">
                       <Group justify="space-between" w="100%">
                         <Stack gap={0} align="left">
-                          <Text fw={700} size="lg" c="#0E1862">{current.name}</Text>
+                          <Group gap="sm" align="center" wrap="wrap">
+                            <Text fw={700} size="lg" c="#0E1862">{current.name}</Text>
+                            
+                            {current.bolsa && current.bolsa.split(',').map((bolsaItem: string, idx: number) => {
+                              const bolsaName = bolsaItem.trim();
+                              if (!bolsaName) return null;
+                              
+                              return (
+                                <Badge 
+                                  key={idx}
+                                  size="sm" 
+                                  variant="light"
+                                  color={bolsasColors[bolsaName] || "blue"} 
+                                  style={{ textTransform: "none", fontWeight: 700 }}
+                                >
+                                  {bolsaName}
+                                </Badge>
+                              );
+                            })}
+                          </Group>
                         </Stack>
                       </Group>
 
@@ -346,7 +369,7 @@ export default function VisualizerPage() {
                       <Table.Tbody>
                         {HOURS_DISPLAY.map((hour) => (
                           <Table.Tr key={hour}>
-                            <Table.Td style={{ fontWeight: 500, color: "#888", height: ROW_HEIGHT }}>{hour}:00</Table.Td>
+                            <Table.Td style={{ fontWeight: 500, color: "#888", height: ROW_HEIGHT }}>{hour}-{hour+1}h</Table.Td>
                             {WEEKDAY_UI_INDICES.map((dayIndex) => {
                               const status = current.schedule?.[dayIndex]?.[hour];
                               const config = status ? getStatusConfig(status) : null;
@@ -370,11 +393,6 @@ export default function VisualizerPage() {
                                           <Text size="xs" c={`${config.color}.9`} fw={500} style={{ lineHeight: 1.2 }}>{config.label}</Text>
                                         </Box>
                                       </HoverCard.Target>
-                                      <HoverCard.Dropdown>
-                                        <Group gap="xs"><IconClock size={16} color="gray" /><Text size="sm">{DAY_LABELS_SHORT[dayIndex]} - {hour}:00</Text></Group>
-                                        <Divider my={4} />
-                                        <Text size="sm" fw={600} c={config.color}>{config.label}</Text>
-                                      </HoverCard.Dropdown>
                                     </HoverCard>
                                   </Table.Td>
                                 );

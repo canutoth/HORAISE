@@ -591,7 +591,7 @@ export default function SchedulerPage() {
                               <Table.Td
                                 style={{ fontWeight: 500, color: "#888", height: ROW_HEIGHT }}
                               >
-                                {hour}:00
+                                {hour}-{hour+1}h
                               </Table.Td>
                               {WEEKDAY_UI_INDICES.map((dayIndex) => {
                                 const matchedSlot = result.slots.find(

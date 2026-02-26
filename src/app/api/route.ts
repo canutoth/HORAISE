@@ -29,9 +29,11 @@ type Actions =
   | { action: "accept-suggested-schedule"; email: string }
   | { action: "read-all-members" }
   | { action: "read-backlog-options" }
+  | { action: "read-rules" }
   | { action: "admin-precheck"; email: string }
   | { action: "admin-login"; email: string; password: string }
   | { action: "validate-hours"; scheduleRow: string[]; hp: number; ho: number }
+  | { action: "validate-dynamic-rules"; scheduleRow: string[] }
   | { action: "request-editor-access"; email: string }
   | { action: "request-schedule-exception"; email: string; schedule: any; violations: string[] }
   | { action: "approve-schedule-keep-editor"; email: string }
@@ -218,6 +220,15 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ frentes: [], bolsas: [] }, { status: 500 });
         }
       }
+      case "read-rules": {
+        try {
+          const rules = await readRulesFromSheet();
+          return NextResponse.json({ success: true, rules });
+        } catch (error) {
+          console.error("Erro ao buscar regras:", error);
+          return NextResponse.json({ success: false, message: "Erro ao buscar regras" }, { status: 500 });
+        }
+      }
       case "admin-precheck": {
         if (!body.email) return NextResponse.json({ ok: false }, { status: 400 });
         const adminEmail = process.env.EMAIL_ADMIN || "";
@@ -244,6 +255,27 @@ export async function POST(request: NextRequest) {
         }
         const validation = validateScheduleHours(body.scheduleRow, body.hp, body.ho);
         return NextResponse.json(validation);
+      }
+      case "validate-dynamic-rules": {
+        if (!body.scheduleRow) {
+          return NextResponse.json({ isValid: false, message: "scheduleRow é obrigatório" }, { status: 400 });
+        }
+        
+        try {
+          const rules = await readRulesFromSheet();
+          const dynamicValidation = validateDynamicRules(body.scheduleRow, rules);
+          
+          return NextResponse.json({
+            isValid: dynamicValidation.isValid,
+            errors: dynamicValidation.errors
+          });
+        } catch (error) {
+          console.error("Erro ao validar regras dinâmicas:", error);
+          return NextResponse.json({ 
+            isValid: true, 
+            errors: [] 
+          }); // Retorna válido se houver erro para não bloquear
+        }
       }
       case "request-editor-access": {
         if (!body.email) {

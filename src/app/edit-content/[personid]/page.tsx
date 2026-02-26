@@ -29,6 +29,10 @@ import {
   Tabs,
   TextInput,
   NumberInput, 
+  ScrollArea,
+  Tabs,
+  TextInput,
+  NumberInput, 
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks"; 
 import {
@@ -47,7 +51,8 @@ import {
   IconClock,
   IconBan,
   IconAlertTriangle,
-  IconInfoCircle, 
+  IconInfoCircle,
+  IconToolsKitchen2, 
 } from "@tabler/icons-react";
 import { useRouter, useParams } from "next/navigation";
 import { notifications } from "@mantine/notifications";
@@ -57,6 +62,8 @@ import {
   saveMember,
   validateMemberData,
   getBacklogOptions,
+  loadSuggestedScheduleFromSheet,
+  acceptSuggestedSchedule,
   loadSuggestedScheduleFromSheet,
   acceptSuggestedSchedule,
   type TeamMemberData,
@@ -83,11 +90,18 @@ export default function EditContentPage() {
   const [suggestedSchedule, setSuggestedSchedule] = useState<ScheduleData | null>(null);
   const [activeTab, setActiveTab] = useState<"original" | "suggested">("original");
   const [isAcceptingSuggestion, setIsAcceptingSuggestion] = useState(false);
+  const [suggestedSchedule, setSuggestedSchedule] = useState<ScheduleData | null>(null);
+  const [activeTab, setActiveTab] = useState<"original" | "suggested">("original");
+  const [isAcceptingSuggestion, setIsAcceptingSuggestion] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isNewMember, setIsNewMember] = useState(false);
   const [isEditingFrentes, setIsEditingFrentes] = useState(false);
   const [editedFrentes, setEditedFrentes] = useState<string[]>([]);
+  const [isEditingHP, setIsEditingHP] = useState(false);
+  const [editedHP, setEditedHP] = useState<string>("");
+  const [isEditingHO, setIsEditingHO] = useState(false);
+  const [editedHO, setEditedHO] = useState<string>("");
   const [isEditingHP, setIsEditingHP] = useState(false);
   const [editedHP, setEditedHP] = useState<string>("");
   const [isEditingHO, setIsEditingHO] = useState(false);
@@ -100,10 +114,22 @@ export default function EditContentPage() {
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [adminEmail, setAdminEmail] = useState<string | null>(null);
   
+  const [dynamicRules, setDynamicRules] = useState<{
+    minimoSlotsConsecutivos: number;
+    minimoSlotsDiariosPresencial: number;
+    intervaloAlmoco: string;
+    inicio: number;
+    fim: number;
+  } | null>(null);
+  
+  const [isAdminMode, setIsAdminMode] = useState(false);
+  const [adminEmail, setAdminEmail] = useState<string | null>(null);
+  
   const [activeTool, setActiveTool] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [frentesOptions, setFrentesOptions] = useState<string[]>([]);
   const [frentesEmojis, setFrentesEmojis] = useState<Record<string, string>>({});
+  const [bolsasColors, setBolsasColors] = useState<Record<string, string>>({}); 
 
   const hp = memberData?.hp ? parseFloat(memberData.hp) : 0;
   const ho = memberData?.ho ? parseFloat(memberData.ho) : 0;
@@ -116,14 +142,29 @@ export default function EditContentPage() {
     const loadOptions = async () => {
       try {
         const options = await getBacklogOptions();
-        // Mapeia para formato de string simples
         setFrentesOptions(options.frentes.map(f => f.name));
-        // Cria mapa de emojis
+        
         const emojiMap: Record<string, string> = {};
         options.frentes.forEach(f => {
           emojiMap[f.name] = f.emoji;
         });
         setFrentesEmojis(emojiMap);
+
+        const colorMap: Record<string, string> = {};
+        options.bolsas.forEach(b => {
+          colorMap[b.name] = b.color;
+        });
+        setBolsasColors(colorMap);
+        
+        const rulesResponse = await fetch("/api", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "read-rules" }),
+        });
+        const rulesData = await rulesResponse.json();
+        if (rulesData.success && rulesData.rules) {
+          setDynamicRules(rulesData.rules);
+        }
       } catch (error) {
         console.error("Erro ao carregar opções:", error);
       }
@@ -175,11 +216,9 @@ export default function EditContentPage() {
       let nextStatus: string | null = null;
 
       if (activeTool) {
-        // Se a célula já tem algum status (independente de qual), limpar
         if (currentStatus) {
           nextStatus = null;
         } else {
-          // Se a célula está vazia, aplicar o tool ativo
           nextStatus = activeTool;
         }
       }
@@ -222,7 +261,7 @@ export default function EditContentPage() {
 
   const getStatusConfig = (status: string) => {
     switch (status) {
-      case "presencial": return { color: "green", label: isMobile ? "P" : "Presencial" }; // Abrevia label no mobile
+      case "presencial": return { color: "green", label: isMobile ? "P" : "Presencial" }; 
       case "online": return { color: "teal", label: isMobile ? "O" : "Online" };
       case "reuniao": return { color: "orange", label: isMobile ? "R" : "Reunião" };
       case "aula": return { color: "blue", label: isMobile ? "A" : "Aula" };
@@ -236,11 +275,9 @@ export default function EditContentPage() {
     const loadMemberData = async () => {
       setIsLoading(true);
       try {
-        // Verifica se o usuário logado é admin
         if (typeof window !== "undefined") {
           const loggedEmail = sessionStorage.getItem("adminEmail");
           if (loggedEmail) {
-            // Verifica se realmente é admin
             const checkAdmin = await fetch("/api", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -290,13 +327,12 @@ export default function EditContentPage() {
           setSavedSchedule(cloneSchedule(memberSchedule));
           setIsNewMember(false);
           
-          // Carrega sugestão se existir (pendingSuggestion === 1)
           if (member.pendingSuggestion === 1) {
             try {
               const suggested = await loadSuggestedScheduleFromSheet(personId);
               if (suggested) {
                 setSuggestedSchedule(suggested);
-                setActiveTab("suggested"); // Mostra aba de sugestão por padrão
+                setActiveTab("suggested"); 
               }
             } catch (suggError) {
               console.warn("Erro ao carregar sugestão:", suggError);
@@ -387,7 +423,6 @@ export default function EditContentPage() {
     if (!memberData || !isAdminMode) return;
 
     try {
-      // Atualiza diretamente via API sem validar schedule
       const response = await fetch("/api", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -401,7 +436,6 @@ export default function EditContentPage() {
       const result = await response.json();
 
       if (result.success) {
-        // Enviar email notificando a mudança
         await fetch("/api", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -451,7 +485,6 @@ export default function EditContentPage() {
     if (!memberData || !isAdminMode) return;
 
     try {
-      // Atualiza diretamente via API sem validar schedule
       const response = await fetch("/api", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -465,7 +498,6 @@ export default function EditContentPage() {
       const result = await response.json();
 
       if (result.success) {
-        // Enviar email notificando a mudança
         await fetch("/api", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -527,7 +559,6 @@ export default function EditContentPage() {
 
     const allViolations: RuleViolation[] = [];
     
-    // Monta o scheduleArray com todos os códigos
     const scheduleArray: string[] = [];
     for (let day = 0; day <= 6; day++) {
       for (let hour = 7; hour <= 19; hour++) {
@@ -543,7 +574,6 @@ export default function EditContentPage() {
       }
     }
     
-    // Validação de horas (HP e HO)
     if (hp > 0 && ho > 0) {
       const hoursValidation = await fetch("/api", {
         method: "POST",
@@ -556,9 +586,24 @@ export default function EditContentPage() {
       }
     }
     
-    // Validações das regras antigas do scheduleRules.ts
     const scheduleResult = validateSchedule(schedule);
     if (!scheduleResult.ok) allViolations.push(...scheduleResult.violations);
+    
+    try {
+      const dynamicValidation = await fetch("/api", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "validate-dynamic-rules", scheduleRow: scheduleArray })
+      }).then(res => res.json());
+      
+      if (!dynamicValidation.isValid && dynamicValidation.errors) {
+        dynamicValidation.errors.forEach((msg: string) => {
+          allViolations.push({ code: "dynamic-rule" as any, day: -1, message: msg });
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao validar regras dinâmicas:", error);
+    }
     
     if (allViolations.length > 0) {
       setRulesViolations(allViolations);
@@ -573,7 +618,6 @@ export default function EditContentPage() {
 
     setIsSaving(true);
     try {
-      // Se for admin editando outro membro, salva como sugestão
       if (isAdminMode && adminEmail) {
         const { saveSuggestedSchedule } = await import("../../../services/googleSheets");
         const result = await saveSuggestedSchedule(adminEmail, currentData.email, schedule);
@@ -594,7 +638,6 @@ export default function EditContentPage() {
         }
       }
       
-      // Salvar normal (usuário salvando seu próprio horário)
       const result = await saveMember(currentData, isNewMember);
       if (result.success) {
         notifications.show({ title: "Sucesso!", message: "Dados salvos", color: "green", icon: <IconCheck /> });
@@ -603,9 +646,7 @@ export default function EditContentPage() {
         setIsNewMember(false);
         return true;
       } else {
-        // Se o backend retornou erros de validação dinâmica
         if (result.errors && Array.isArray(result.errors) && result.errors.length > 0) {
-          // Converte os erros para o formato de RuleViolation para o popup
           const dynamicViolations: RuleViolation[] = result.errors.map((msg: string) => ({
             code: "dynamic-rule" as any,
             day: -1,
@@ -614,7 +655,6 @@ export default function EditContentPage() {
           setRulesViolations(dynamicViolations);
           setRulesModalOpen(true);
         } else if (result.message && result.message.includes("viola as seguintes regras")) {
-          // Fallback: parse da mensagem se não vier como array
           const errorLines = result.message.split("\n").filter((line: string) => line.trim() !== "");
           const dynamicViolations = errorLines.slice(1).map((msg: string) => ({
             code: "dynamic-rule" as any,
@@ -643,7 +683,6 @@ export default function EditContentPage() {
     setRulesModalOpen(false);
     
     try {
-      // Salva o schedule com flag de exceção solicitada
       const response = await fetch("/api", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -666,7 +705,6 @@ export default function EditContentPage() {
           autoClose: 7000
         });
         setSavedSchedule(cloneSchedule(schedule));
-        // Atualiza o memberData com pendingTimeTable = 1
         if (memberData) {
           setMemberData({ ...memberData, pendingTimeTable: 1 });
         }
@@ -705,17 +743,14 @@ export default function EditContentPage() {
           autoClose: 3000
         });
         
-        // Atualiza o schedule local com a sugestão
         if (suggestedSchedule) {
           setSchedule(suggestedSchedule);
           setSavedSchedule(cloneSchedule(suggestedSchedule));
         }
         
-        // Limpa a sugestão e volta para aba original
         setSuggestedSchedule(null);
         setActiveTab("original");
         
-        // Atualiza memberData removendo flag de sugestão
         setMemberData({ ...memberData, pendingSuggestion: 0 });
       } else {
         notifications.show({
@@ -780,8 +815,55 @@ export default function EditContentPage() {
   const renderToolButton = (tool: string, label: string, icon: React.ReactNode, color: string, value: string | number) => {
     const isActive = activeTool === tool;
     const canEdit = isAdminMode && (tool === 'online' || tool === 'presencial');
+    const canEdit = isAdminMode && (tool === 'online' || tool === 'presencial');
     
     return (
+      <Group gap={4} w="100%" wrap="nowrap">
+        <UnstyledButton
+          onClick={() => setActiveTool(isActive ? null : tool)}
+          style={{
+            width: isMobile ? "auto" : "100%", 
+            minWidth: isMobile ? "85px" : "auto", 
+            padding: "8px",
+            borderRadius: "8px",
+            backgroundColor: isActive ? `var(--mantine-color-${color}-1)` : "white", 
+            border: isActive ? `2px solid var(--mantine-color-${color}-6)` : "1px solid #eee",
+            transition: "all 0.2s",
+            flexShrink: 0,
+            flex: 1,
+          }}
+        >
+          <Group gap="xs" w="100%" wrap="nowrap" justify={isMobile ? "center" : "flex-start"}>
+            <ThemeIcon variant="light" color={color} size="sm">
+              {icon}
+            </ThemeIcon>
+            <Stack gap={0} align={isMobile ? "center" : "flex-start"}>
+               <Text size="xs" c={isActive ? color : "dimmed"} style={{ fontWeight: isActive ? 700 : 400, lineHeight: 1.1 }}>
+                  {label}
+               </Text>
+               {tool !== 'almoco' && tool !== 'ocupado' && (
+                  <Text size={isMobile ? "9px" : "xs"} c="dimmed" fw={600} style={{lineHeight: 1}}>
+                      {value}h 
+                  </Text>
+               )}
+            </Stack>
+          </Group>
+        </UnstyledButton>
+        {canEdit && !isMobile && (
+          <ActionIcon 
+            variant="subtle" 
+            color="gray" 
+            onClick={(e) => {
+              e.stopPropagation();
+              if (tool === 'online') handleStartEditHO();
+              else if (tool === 'presencial') handleStartEditHP();
+            }}
+            size="xs"
+          >
+            <IconPencil size={14} />
+          </ActionIcon>
+        )}
+      </Group>
       <Group gap={4} w="100%" wrap="nowrap">
         <UnstyledButton
           onClick={() => setActiveTool(isActive ? null : tool)}
@@ -837,7 +919,7 @@ export default function EditContentPage() {
         {renderToolButton("online", "Online", <IconDeviceLaptop size={14} />, "teal", `${hourCounts.online}/${ho}`)}
         {renderToolButton("presencial", "Presenc.", <IconBuildingSkyscraper size={14} />, "green", `${hourCounts.presencial}/${hp}`)}
         {renderToolButton("reuniao", "Reunião", <IconUsers size={14} />, "orange", hourCounts.reuniao)}
-        {renderToolButton("almoco", "Almoço", <IconClock size={14} />, "yellow", 0)}
+        {renderToolButton("almoco", "Almoço", <IconToolsKitchen2 size={14} />, "yellow", 0)}
         {renderToolButton("ocupado", "Ocupado", <IconBan size={14} />, "red", 0)}
     </>
   );
@@ -866,7 +948,7 @@ export default function EditContentPage() {
         <Table.Tbody>
           {HOURS_DISPLAY.map((hour) => (
             <Table.Tr key={hour}>
-              <Table.Td style={{ fontWeight: 500, color: "#888", height: ROW_HEIGHT, fontSize: '12px' }}>{hour}:00</Table.Td>
+              <Table.Td style={{ fontWeight: 500, color: "#888", height: ROW_HEIGHT, fontSize: '12px' }}>{hour}-{hour+1}h</Table.Td>
               {WEEKDAY_UI_INDICES.map((dayIndex) => {
                 const status = scheduleData?.[dayIndex]?.[hour];
                 const config = status ? getStatusConfig(status) : null;
@@ -876,7 +958,6 @@ export default function EditContentPage() {
                     key={`${dayIndex}-${hour}`}
                     p={0}
                     style={{ cursor: isReadOnly ? "default" : "pointer", height: ROW_HEIGHT }}
-                    // Mobile (tap) e Desktop (drag) - apenas se não for read-only
                     onClick={() => !isReadOnly && handleCellClick(dayIndex, hour)}
                     onMouseDown={(e) => !isReadOnly && handleMouseDown(dayIndex, hour, e)}
                     onMouseEnter={() => !isReadOnly && handleMouseEnter(dayIndex, hour)}
@@ -933,13 +1014,38 @@ export default function EditContentPage() {
                     Você está editando o horário de outro membro. Ao salvar, será enviada uma sugestão para <strong>{memberData?.name}</strong>.
                   </Alert>
                 )}
+                
+                {isAdminMode && (
+                  <Alert radius="md" variant="light" color="orange" title="👨‍💼 Modo Administrador" icon={<IconAlertCircle />}>
+                    Você está editando o horário de outro membro. Ao salvar, será enviada uma sugestão para <strong>{memberData?.name}</strong>.
+                  </Alert>
+                )}
 
                 <Stack gap={isMobile ? "xs" : "md"}>
                   <Paper p="sm" radius="md" withBorder shadow="sm">
                     <Group justify="space-between" align="center">
                         <Stack gap={0}>
+                          <Group gap="sm" align="center" wrap="wrap" mb={2}>
                             <Text fw={700} size="md" c="#0E1862" truncate>{memberData?.name || personId}</Text>
-                            <Text size="xs" c="dimmed" truncate style={{maxWidth: '200px'}}>{memberData?.email || personId}</Text>
+                            
+                            {memberData?.bolsa && memberData.bolsa.split(',').map((bolsaItem: string, idx: number) => {
+                              const bolsaName = bolsaItem.trim();
+                              if (!bolsaName) return null;
+                              
+                              return (
+                                <Badge 
+                                  key={idx}
+                                  size="xs" 
+                                  variant="light"
+                                  color={bolsasColors[bolsaName] || "blue"} 
+                                  style={{ textTransform: "none", fontWeight: 700 }}
+                                >
+                                  {bolsaName}
+                                </Badge>
+                              );
+                            })}
+                          </Group>
+                          <Text size="xs" c="dimmed" truncate style={{maxWidth: '200px'}}>{memberData?.email || personId}</Text>
                         </Stack>
                         <Badge variant="light" color={hasUnsavedChanges ? "orange" : "green"}>{hasUnsavedChanges ? "Não salvo" : "Salvo"}</Badge>
                     </Group>
@@ -960,7 +1066,6 @@ export default function EditContentPage() {
                             </Group>
                         </Stack>
                     ) : (
-                        // scroll horizontal se tiver mts frentes
                         isMobile ? (
                             <ScrollArea type="never" offsetScrollbars={false}>
                                 <Group gap="xs" wrap="nowrap" pb={4}>
@@ -996,12 +1101,18 @@ export default function EditContentPage() {
                             <ThemeIcon size="md" variant="light" color="blue"><IconAlertTriangle size={16} /></ThemeIcon>
                             <Text size="sm" fw={700} c="blue">Regras</Text>
                           </Group>
-                          <List size="xs" spacing={4} type="ordered">
-                            <List.Item>O horário de aulas deve refletir sua grade no SAU.</List.Item>
-                            <List.Item>É obrigatório 1h de almoço entre 11h e 14h.</List.Item>
-                            <List.Item>Pelo menos 4 slots diários em dias presenciais.</List.Item>
-                            <List.Item>Mínimo aceitável: 2 slots consecutivos.</List.Item>
-                          </List>
+                          {dynamicRules ? (
+                            <List size="xs" spacing={4}>
+                              <List.Item>O horário de aulas deve refletir sua grade no SAU</List.Item>
+                              <List.Item>Horário de trabalho: <strong>{dynamicRules.inicio}h - {dynamicRules.fim}h</strong></List.Item>
+                              <List.Item>Almoço obrigatório: <strong>{dynamicRules.intervaloAlmoco}h</strong></List.Item>
+                              <List.Item>Mínimo <strong>{dynamicRules.minimoSlotsConsecutivos} slots consecutivos</strong></List.Item>
+                              <List.Item>Mínimo <strong>{dynamicRules.minimoSlotsDiariosPresencial} slots presenciais</strong> por dia</List.Item>
+                              <List.Item>Você pode solicitar exceção em casos especiais</List.Item>
+                            </List>
+                          ) : (
+                            <Text size="xs" c="dimmed">Carregando regras...</Text>
+                          )}
                         </HoverCard.Dropdown>
                       </HoverCard>
                     </Group>
@@ -1009,14 +1120,12 @@ export default function EditContentPage() {
                     {!isMobile && <Text size="xs" c="dimmed" mb="xs">Clique em uma categoria abaixo para ativar o modo de pintura.</Text>}
                     
                     {isMobile ? (
-                        //scroll horizontal
                         <ScrollArea type="never" offsetScrollbars={false} mb="sm">
                             <Group gap="xs" wrap="nowrap" pb="xs">
                                 {renderTools()}
                             </Group>
                         </ScrollArea>
                     ) : (
-                        // Grid Vertical
                         <SimpleGrid cols={1} spacing="xs" verticalSpacing="xs">
                             {renderTools()}
                         </SimpleGrid>
@@ -1030,6 +1139,54 @@ export default function EditContentPage() {
             {/*tabela */}
             <Grid.Col span={{ base: 12, md: 7, lg: 8 }}>
               <Stack gap="md">
+                {suggestedSchedule && (
+                  <Alert variant="light" color="blue" title="📝 Nova Sugestão de Horário" icon={<IconInfoCircle />}>
+                    O administrador sugeriu um novo horário para você. Use as abas abaixo para comparar e decidir.
+                  </Alert>
+                )}
+                
+                {suggestedSchedule ? (
+                  <Tabs value={activeTab} onChange={(value) => setActiveTab(value as "original" | "suggested")}>
+                    <Tabs.List>
+                      <Tabs.Tab value="original">Meu Horário Atual</Tabs.Tab>
+                      <Tabs.Tab value="suggested">Sugestão do Admin</Tabs.Tab>
+                    </Tabs.List>
+                    
+                    <Tabs.Panel value="original" pt="md">
+                      {renderScheduleTable(schedule, false)}
+                    </Tabs.Panel>
+                    
+                    <Tabs.Panel value="suggested" pt="md">
+                      {renderScheduleTable(suggestedSchedule, true)}
+                      <Group justify="flex-end" mt="md">
+                        <Button 
+                          color="green" 
+                          leftSection={<IconCheck size={18} />}
+                          onClick={handleAcceptSuggestion}
+                          loading={isAcceptingSuggestion}
+                        >
+                          Aceitar Sugestão
+                        </Button>
+                        <Button 
+                          color="red" 
+                          variant="light"
+                          leftSection={<IconX size={18} />}
+                          onClick={() => {
+                            setSuggestedSchedule(null);
+                            setActiveTab("original");
+                          }}
+                        >
+                          Recusar
+                        </Button>
+                      </Group>
+                    </Tabs.Panel>
+                  </Tabs>
+                ) : (
+                  renderScheduleTable(schedule, false)
+                )}
+                
+                {(!suggestedSchedule || activeTab === "original") && (
+                  <Group justify={isMobile ? "space-between" : "flex-end"} mt="md">
                 {/* Alerta de sugestão pendente */}
                 {suggestedSchedule && (
                   <Alert variant="light" color="blue" title="📝 Nova Sugestão de Horário" icon={<IconInfoCircle />}>
@@ -1083,6 +1240,18 @@ export default function EditContentPage() {
                   <Group justify={isMobile ? "space-between" : "flex-end"} mt="md">
                     <Button leftSection={<IconRefresh size={18} />} variant="subtle" color="gray" onClick={handleReset} size={isMobile ? "xs" : "sm"}>Reset</Button>
                     <Button leftSection={<IconX size={18} />} variant="light" color="red" onClick={() => setSchedule({})} size={isMobile ? "xs" : "sm"}>Limpar</Button>
+                    <Button 
+                      leftSection={<IconDeviceFloppy size={18} />} 
+                      color={isAdminMode ? "orange" : "green"} 
+                      onClick={handleSave} 
+                      loading={isSaving} 
+                      disabled={!hasUnsavedChanges && !isNewMember} 
+                      size={isMobile ? "xs" : "sm"}
+                    >
+                      {isAdminMode ? "Sugerir Horário" : "Salvar"}
+                    </Button>
+                  </Group>
+                )}
                     <Button 
                       leftSection={<IconDeviceFloppy size={18} />} 
                       color={isAdminMode ? "orange" : "green"} 
@@ -1155,7 +1324,9 @@ export default function EditContentPage() {
 
         <Modal opened={rulesModalOpen} onClose={() => setRulesModalOpen(false)} title="Ajustes Necessários" centered size={isMobile ? "sm" : "lg"}>
           <Alert icon={<IconAlertCircle />} color="orange" mb="sm">Seu horário não cumpre as seguintes regras:</Alert>
-          <Stack gap="xs" mb="md">{rulesViolations.map((v, idx) => <Text key={idx} size="sm">{v.message}</Text>)}</Stack>
+          <ScrollArea h={rulesViolations.length > 5 ? 300 : "auto"} type="auto">
+            <Stack gap="xs" mb="md">{rulesViolations.map((v, idx) => <Text key={idx} size="sm">{v.message}</Text>)}</Stack>
+          </ScrollArea>
           <Text size="xs" c="dimmed" mb="md">
             Você pode ajustar seu horário ou solicitar uma exceção ao administrador caso seja um caso especial.
           </Text>
