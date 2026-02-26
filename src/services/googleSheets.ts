@@ -18,7 +18,9 @@ export interface TeamMemberData {
   editor?: number; // 1 = pode editar, 0 = sem acesso
   pendingAccess?: number; // 1 = pendente aprovação de cadastro, 0 = aprovado
   pendingTimeTable?: number; // 1 = horário pendente aprovação, 0 = aprovado
+  pendingSuggestion?: number; // 1 = admin sugeriu horário, 0 = sem sugestão pendente
   schedule?: ScheduleData;
+  suggestedSchedule?: ScheduleData; // horário sugerido pelo admin
   hp?: string; // nova coluna HP
   ho?: string; // nova coluna HO
 }
@@ -67,7 +69,7 @@ const normalizeCoutinho = (name: string, email: string): string => {
 };
 
 // Converte linha do Google Sheets (HORAISE) para objeto TeamMemberData
-// Formato atual: [Nome, Email, Frentes, Bolsa, Editor, Pending-Access, Pending-TimeTable, HP, HO, ...schedule columns]
+// Formato atual: [Nome, Email, Frentes, Bolsa, Editor, Pending-Access, Pending-TimeTable, Pending-Suggestion, HP, HO, ...schedule columns]
 const rowToTeamMember = (row: string[]): TeamMemberData => {
   const rawName = row[0] || "";
   const email = row[1] || "";
@@ -80,12 +82,13 @@ const rowToTeamMember = (row: string[]): TeamMemberData => {
     editor: Number(row[4] ?? 0) || 0,
     pendingAccess: Number(row[5] ?? 0) || 0,
     pendingTimeTable: Number(row[6] ?? 0) || 0,
-    hp: row[7] || "",
-    ho: row[8] || "",
+    pendingSuggestion: Number(row[7] ?? 0) || 0,
+    hp: row[8] || "",
+    ho: row[9] || "",
   };
 };
 // Converte objeto TeamMemberData para linha do Google Sheets (HORAISE)
-// Formato atual: [Nome, Email, Frentes, Bolsa, Editor, Pending-Access, Pending-TimeTable, HP, HO] (schedule é salvo separadamente)
+// Formato atual: [Nome, Email, Frentes, Bolsa, Editor, Pending-Access, Pending-TimeTable, Pending-Suggestion, HP, HO] (schedule é salvo separadamente)
 const teamMemberToRow = (member: TeamMemberData): string[] => {
   return [
     member.name,
@@ -95,6 +98,7 @@ const teamMemberToRow = (member: TeamMemberData): string[] => {
     String(member.editor ?? 0),
     String(member.pendingAccess ?? 0),
     String(member.pendingTimeTable ?? 0),
+    String(member.pendingSuggestion ?? 0),
     member.hp ?? "",
     member.ho ?? "",
   ];
@@ -424,12 +428,12 @@ export async function getAllMembers(): Promise<TeamMemberData[]> {
     const payload = await res.json();
     if (!payload || !payload.members) return [];
     // Converte cada linha para TeamMemberData
-    // Cada row vem com: [Nome, Email, Frentes, Bolsa, Editor, Pending-Access, Pending-TimeTable, HP, HO, ...scheduleColumns]
+    // Cada row vem com: [Nome, Email, Frentes, Bolsa, Editor, Pending-Access, Pending-TimeTable, Pending-Suggestion, HP, HO, ...scheduleColumns]
     const members: TeamMemberData[] = [];
     for (const row of payload.members) {
       const memberData = rowToTeamMember(row);
-          // Extrai o schedule a partir da coluna J (índice 9) em diante
-          const scheduleRow = row.slice(9);
+          // Extrai o schedule a partir da coluna K (índice 10) em diante
+          const scheduleRow = row.slice(10);
       if (scheduleRow && scheduleRow.length > 0) {
         const schedule = infoRowToSchedule(scheduleRow);
         if (schedule) {
@@ -489,5 +493,134 @@ export async function getBacklogOptions(): Promise<{
   } catch (error) {
     console.error("Erro ao buscar opções do backlog:", error);
     return { frentes: [], bolsas: [] };
+  }
+}
+/**
+ * Carrega o schedule sugerido pelo admin da aba SUGGESTED
+ */
+export async function loadSuggestedScheduleFromSheet(
+  email: string
+): Promise<ScheduleData | null> {
+  // Modo offline: retorna null
+  if (OFFLINE_MODE) {
+    console.log("🔌 MODO OFFLINE: Sugestões não disponíveis no modo offline");
+    return null;
+  }
+  
+  try {
+    const response = await fetch(`/api`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "load-suggested-schedule", email }),
+    });
+    
+    if (!response.ok) {
+      if (response.status === 404) return null;
+      throw new Error("Erro ao carregar sugestão de schedule");
+    }
+    
+    const payload = await response.json();
+    if (!payload || !payload.scheduleRow) return null;
+    
+    return infoRowToSchedule(payload.scheduleRow);
+  } catch (error) {
+    console.error("Erro ao carregar sugestão de schedule:", error);
+    return null;
+  }
+}
+
+/**
+ * Salva um schedule sugerido para um membro (apenas admins)
+ */
+export async function saveSuggestedSchedule(
+  adminEmail: string,
+  targetEmail: string,
+  schedule: ScheduleData
+): Promise<{ success: boolean; message: string }> {
+  // Modo offline: não permitido
+  if (OFFLINE_MODE) {
+    return {
+      success: false,
+      message: "Sugestões não disponíveis no modo offline"
+    };
+  }
+  
+  try {
+    let infoRow = scheduleToInfoRow(schedule);
+    
+    // Garantia: ajusta comprimento para exatamente 91 colunas
+    if (infoRow.length < 91) {
+      infoRow = [...infoRow, ...new Array(91 - infoRow.length).fill("")];
+    } else if (infoRow.length > 91) {
+      infoRow = infoRow.slice(0, 91);
+    }
+    
+    const response = await fetch("/api", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        action: "save-suggested-schedule", 
+        adminEmail, 
+        targetEmail, 
+        scheduleRow: infoRow 
+      }),
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      return {
+        success: false,
+        message: error.message || "Erro ao salvar sugestão"
+      };
+    }
+    
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error("Erro ao salvar sugestão:", error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Erro desconhecido ao salvar sugestão"
+    };
+  }
+}
+
+/**
+ * Aceita a sugestão de schedule do admin
+ */
+export async function acceptSuggestedSchedule(
+  email: string
+): Promise<{ success: boolean; message: string }> {
+  // Modo offline: não permitido
+  if (OFFLINE_MODE) {
+    return {
+      success: false,
+      message: "Sugestões não disponíveis no modo offline"
+    };
+  }
+  
+  try {
+    const response = await fetch("/api", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "accept-suggested-schedule", email }),
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      return {
+        success: false,
+        message: error.message || "Erro ao aceitar sugestão"
+      };
+    }
+    
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error("Erro ao aceitar sugestão:", error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Erro desconhecido ao aceitar sugestão"
+    };
   }
 }

@@ -10,6 +10,9 @@ import {
   approveSchedule,
   readBacklogOptions,
   readRulesFromSheet,
+  saveSuggestedSchedule,
+  loadSuggestedSchedule,
+  acceptSuggestedSchedule,
 } from "../../server/sheets";
 import { sendAdminNotification, sendUserApproval, sendAccessRequestToAdmin, sendScheduleEditedToAdmin, sendScheduleApprovedToUser } from "../../server/email";
 import { validateScheduleHours, parseHours } from "../../server/hoursValidation";
@@ -18,17 +21,24 @@ type Actions =
   | { action: "read-member"; email: string }
   | { action: "read-example" }
   | { action: "update-member"; member: { name: string; email: string; frentes: string; bolsa?: string; editor?: number | string; pending?: number | string; hp?: string; ho?: string }; isNew?: boolean }
+  | { action: "update-member-metadata"; email: string; hp?: string; ho?: string }
   | { action: "save-schedule"; email: string; scheduleRow: string[] }
   | { action: "load-schedule"; email: string }
+  | { action: "save-suggested-schedule"; adminEmail: string; targetEmail: string; scheduleRow: string[] }
+  | { action: "load-suggested-schedule"; email: string }
+  | { action: "accept-suggested-schedule"; email: string }
   | { action: "read-all-members" }
   | { action: "read-backlog-options" }
+  | { action: "read-rules" }
   | { action: "admin-precheck"; email: string }
   | { action: "admin-login"; email: string; password: string }
   | { action: "validate-hours"; scheduleRow: string[]; hp: number; ho: number }
+  | { action: "validate-dynamic-rules"; scheduleRow: string[] }
   | { action: "request-editor-access"; email: string }
   | { action: "request-schedule-exception"; email: string; schedule: any; violations: string[] }
   | { action: "approve-schedule-keep-editor"; email: string }
-  | { action: "approve-schedule-remove-editor"; email: string };
+  | { action: "approve-schedule-remove-editor"; email: string }
+  | { action: "notify-profile-change"; userEmail: string; userName: string; field: string; oldValue: string; newValue: string };
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Actions;
@@ -54,6 +64,32 @@ export async function POST(request: NextRequest) {
         }
         return NextResponse.json(result, { status: result.success ? 200 : 400 });
       }
+      case "update-member-metadata": {
+        if (!body.email) {
+          return NextResponse.json({ success: false, message: "Email é obrigatório" }, { status: 400 });
+        }
+        
+        // Busca membro existente
+        const existingMember = await readMemberByEmail(body.email);
+        if (!existingMember) {
+          return NextResponse.json({ success: false, message: "Membro não encontrado" }, { status: 404 });
+        }
+        
+        // Atualiza apenas HP e/ou HO sem validar schedule
+        const updatedMember = {
+          name: existingMember.row[0],
+          email: existingMember.row[1],
+          frentes: existingMember.row[2],
+          bolsa: existingMember.row[3],
+          editor: existingMember.row[4],
+          pending: existingMember.row[5],
+          hp: body.hp !== undefined ? body.hp : existingMember.row[8],
+          ho: body.ho !== undefined ? body.ho : existingMember.row[9],
+        };
+        
+        const result = await updateMemberRow(updatedMember, false);
+        return NextResponse.json(result, { status: result.success ? 200 : 400 });
+      }
       case "save-schedule": {
         if (!body.email || !body.scheduleRow) return NextResponse.json({ success: false, message: "email e scheduleRow são obrigatórios" }, { status: 400 });
         // Busca dados do membro para validar
@@ -62,9 +98,9 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ success: false, message: "Membro não encontrado" }, { status: 404 });
         }
         const editor = Number(member.row[4] || 0); // Editor é índice 4 (coluna E)
-        const pending = Number(member.row[5] || 0); // Pending é índice 5 (coluna F)
-        const hp = parseHours(member.row[7] || "0"); // HP é índice 7 (coluna H)
-        const ho = parseHours(member.row[8] || "0"); // HO é índice 8 (coluna I)
+        const pending = Number(member.row[5] || 0); // Pending-Access é índice 5 (coluna F)
+        const hp = parseHours(member.row[8] || "0"); // HP é índice 8 (coluna I)
+        const ho = parseHours(member.row[9] || "0"); // HO é índice 9 (coluna J)
         // Verifica se cadastro está pendente
         if (pending === 1) {
           return NextResponse.json({ 
@@ -127,6 +163,50 @@ export async function POST(request: NextRequest) {
         if (!row) return NextResponse.json({ message: "not found" }, { status: 404 });
         return NextResponse.json({ scheduleRow: row });
       }
+      case "save-suggested-schedule": {
+        if (!body.adminEmail || !body.targetEmail || !body.scheduleRow) {
+          return NextResponse.json({ success: false, message: "adminEmail, targetEmail e scheduleRow são obrigatórios" }, { status: 400 });
+        }
+        
+        // Verifica se o adminEmail é realmente admin
+        const adminEmailEnv = process.env.EMAIL_ADMIN || "";
+        if (body.adminEmail.toLowerCase() !== adminEmailEnv.toLowerCase()) {
+          return NextResponse.json({ success: false, message: "Apenas administradores podem sugerir horários" }, { status: 403 });
+        }
+        
+        // Busca dados do membro alvo
+        const targetMember = await readMemberByEmail(body.targetEmail);
+        if (!targetMember) {
+          return NextResponse.json({ success: false, message: "Membro não encontrado" }, { status: 404 });
+        }
+        
+        const targetName = targetMember.row[0] || "Usuário";
+        
+        // Salva o schedule sugerido
+        const result = await saveSuggestedSchedule(body.targetEmail, body.scheduleRow);
+        
+        // Envia email ao membro notificando sobre a sugestão
+        if (result.success) {
+          const { sendSuggestionToUser } = await import("../../server/email");
+          sendSuggestionToUser(body.targetEmail, targetName).catch((e: unknown) => console.error("Falha email usuário:", e));
+        }
+        
+        return NextResponse.json(result, { status: result.success ? 200 : 400 });
+      }
+      case "load-suggested-schedule": {
+        if (!body.email) return NextResponse.json({ message: "email é obrigatório" }, { status: 400 });
+        const row = await loadSuggestedSchedule(body.email);
+        if (!row) return NextResponse.json({ message: "not found" }, { status: 404 });
+        return NextResponse.json({ scheduleRow: row });
+      }
+      case "accept-suggested-schedule": {
+        if (!body.email) {
+          return NextResponse.json({ success: false, message: "email é obrigatório" }, { status: 400 });
+        }
+        
+        const result = await acceptSuggestedSchedule(body.email);
+        return NextResponse.json(result, { status: result.success ? 200 : 400 });
+      }
       case "read-all-members": {
         const members = await readAllMembers();
         return NextResponse.json({ members });
@@ -138,6 +218,15 @@ export async function POST(request: NextRequest) {
         } catch (error) {
           console.error("Erro ao ler backlog options:", error);
           return NextResponse.json({ frentes: [], bolsas: [] }, { status: 500 });
+        }
+      }
+      case "read-rules": {
+        try {
+          const rules = await readRulesFromSheet();
+          return NextResponse.json({ success: true, rules });
+        } catch (error) {
+          console.error("Erro ao buscar regras:", error);
+          return NextResponse.json({ success: false, message: "Erro ao buscar regras" }, { status: 500 });
         }
       }
       case "admin-precheck": {
@@ -166,6 +255,27 @@ export async function POST(request: NextRequest) {
         }
         const validation = validateScheduleHours(body.scheduleRow, body.hp, body.ho);
         return NextResponse.json(validation);
+      }
+      case "validate-dynamic-rules": {
+        if (!body.scheduleRow) {
+          return NextResponse.json({ isValid: false, message: "scheduleRow é obrigatório" }, { status: 400 });
+        }
+        
+        try {
+          const rules = await readRulesFromSheet();
+          const dynamicValidation = validateDynamicRules(body.scheduleRow, rules);
+          
+          return NextResponse.json({
+            isValid: dynamicValidation.isValid,
+            errors: dynamicValidation.errors
+          });
+        } catch (error) {
+          console.error("Erro ao validar regras dinâmicas:", error);
+          return NextResponse.json({ 
+            isValid: true, 
+            errors: [] 
+          }); // Retorna válido se houver erro para não bloquear
+        }
       }
       case "request-editor-access": {
         if (!body.email) {
@@ -289,6 +399,20 @@ export async function POST(request: NextRequest) {
         }
         
         return NextResponse.json(result, { status: result.success ? 200 : 500 });
+      }
+      case "notify-profile-change": {
+        if (!body.userEmail || !body.userName || !body.field || !body.oldValue || !body.newValue) {
+          return NextResponse.json({ success: false, message: "Dados incompletos" }, { status: 400 });
+        }
+        
+        try {
+          const { sendProfileChangeToUser } = await import("../../server/email");
+          await sendProfileChangeToUser(body.userEmail, body.userName, body.field, body.oldValue, body.newValue);
+          return NextResponse.json({ success: true });
+        } catch (error) {
+          console.error("Erro ao enviar email de mudança de perfil:", error);
+          return NextResponse.json({ success: false, message: "Erro ao enviar email" }, { status: 500 });
+        }
       }
       default:
         return NextResponse.json({ error: "ação inválida" }, { status: 400 });

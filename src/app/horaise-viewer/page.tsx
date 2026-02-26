@@ -346,7 +346,7 @@ export default function VisualizerPage() {
                       <Table.Tbody>
                         {HOURS_DISPLAY.map((hour) => (
                           <Table.Tr key={hour}>
-                            <Table.Td style={{ fontWeight: 500, color: "#888", height: ROW_HEIGHT }}>{hour}:00</Table.Td>
+                            <Table.Td style={{ fontWeight: 500, color: "#888", height: ROW_HEIGHT }}>{hour}-{hour+1}h</Table.Td>
                             {WEEKDAY_UI_INDICES.map((dayIndex) => {
                               const status = current.schedule?.[dayIndex]?.[hour];
                               const config = status ? getStatusConfig(status) : null;
@@ -371,7 +371,7 @@ export default function VisualizerPage() {
                                         </Box>
                                       </HoverCard.Target>
                                       <HoverCard.Dropdown>
-                                        <Group gap="xs"><IconClock size={16} color="gray" /><Text size="sm">{DAY_LABELS_SHORT[dayIndex]} - {hour}:00</Text></Group>
+                                        <Group gap="xs"><IconClock size={16} color="gray" /><Text size="sm">{DAY_LABELS_SHORT[dayIndex]} - {hour}-{hour+1}h</Text></Group>
                                         <Divider my={4} />
                                         <Text size="sm" fw={600} c={config.color}>{config.label}</Text>
                                       </HoverCard.Dropdown>

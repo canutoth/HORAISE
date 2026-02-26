@@ -3,6 +3,7 @@ const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ID || "";
 const SHEET_NAME = process.env.SHEET_NAME || "INFO";
 const BACKLOG_SHEET_NAME = process.env.BACKLOG_SHEET_NAME || "BACKLOG";
 const RULES_SHEET_NAME = process.env.RULES_SHEET_NAME || "RULES";
+const SUGGESTED_SHEET_NAME = process.env.SUGGESTED_SHEET_NAME || "SUGGESTION";
 export function escapeSheetName(name: string): string {
   if (!name) return name;
   return `'${name.replace(/'/g, "''")}'`;
@@ -43,8 +44,8 @@ export async function readMemberByEmail(email: string): Promise<{ row: string[];
   const sheetRef = escapeSheetName(SHEET_NAME);
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    // Includes columns A..I (Nome, Email, Frentes, Bolsa, Editor, Pending-Access, Pending-TimeTable, HP, HO)
-    range: `${sheetRef}!A${rowNumber}:I${rowNumber}`,
+    // Includes columns A..J (Nome, Email, Frentes, Bolsa, Editor, Pending-Access, Pending-TimeTable, Pending-Suggestion, HP, HO)
+    range: `${sheetRef}!A${rowNumber}:J${rowNumber}`,
   });
   const row = res.data.values?.[0] || [];
   return { row, rowNumber };
@@ -54,24 +55,25 @@ export async function readExample(): Promise<string[] | null> {
   const sheetRef = escapeSheetName(SHEET_NAME);
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    // Example includes Bolsa, Editor, Pending-Access, Pending-TimeTable, HP and HO
-    range: `${sheetRef}!A2:I2`,
+    // Example includes Bolsa, Editor, Pending-Access, Pending-TimeTable, Pending-Suggestion, HP and HO
+    range: `${sheetRef}!A2:J2`,
   });
   return res.data.values?.[0] || null;
 }
-export async function updateMemberRow(member: { name: string; email: string; frentes: string; bolsa?: string; editor?: number | string; pendingAccess?: number | string; pendingTimeTable?: number | string; hp?: string; ho?: string }, isNew: boolean) {
+export async function updateMemberRow(member: { name: string; email: string; frentes: string; bolsa?: string; editor?: number | string; pendingAccess?: number | string; pendingTimeTable?: number | string; pendingSuggestion?: number | string; hp?: string; ho?: string }, isNew: boolean) {
   const { sheets } = await getSheetsClient();
   const sheetRef = escapeSheetName(SHEET_NAME);
   const bolsa = member.bolsa ?? "";
   const editorFlag = isNew ? 0 : (member.editor ?? 0); // Novo cadastro sempre Editor=0
   const pendingAccessFlag = isNew ? 1 : (member.pendingAccess ?? 0); // Novo cadastro sempre Pending-Access=1
   const pendingTimeTableFlag = member.pendingTimeTable ?? 0; // Pending-TimeTable começa em 0
-  const values = [[member.name, member.email, member.frentes, bolsa, editorFlag, pendingAccessFlag, pendingTimeTableFlag, member.hp ?? "", member.ho ?? ""]];
+  const pendingSuggestionFlag = member.pendingSuggestion ?? 0; // Pending-Suggestion começa em 0
+  const values = [[member.name, member.email, member.frentes, bolsa, editorFlag, pendingAccessFlag, pendingTimeTableFlag, pendingSuggestionFlag, member.hp ?? "", member.ho ?? ""]];
   if (isNew) {
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      // Append through HO column (A..I)
-      range: `${sheetRef}!A:I`,
+      // Append through HO column (A..J)
+      range: `${sheetRef}!A:J`,
       valueInputOption: "RAW",
       requestBody: { values },
     });
@@ -83,8 +85,8 @@ export async function updateMemberRow(member: { name: string; email: string; fre
   }
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
-    // Update A..I (including Bolsa, Editor, Pending-Access, Pending-TimeTable, HP, HO)
-    range: `${sheetRef}!A${rowNumber}:I${rowNumber}`,
+    // Update A..J (including Bolsa, Editor, Pending-Access, Pending-TimeTable, Pending-Suggestion, HP, HO)
+    range: `${sheetRef}!A${rowNumber}:J${rowNumber}`,
     valueInputOption: "RAW",
     requestBody: { values },
   });
@@ -95,8 +97,8 @@ export async function saveScheduleRow(email: string, scheduleRow: string[]) {
   const sheetRef = escapeSheetName(SHEET_NAME);
   const rowNumber = await findRowByEmail(sheets, email);
   if (!rowNumber) return { success: false, message: `Email ${email} não encontrado` };
-  // 7 dias x 13 horas = 91 colunas -> agora J..DX (após Bolsa, Editor, Pending-Access, Pending-TimeTable, HP, HO)
-  const range = `${sheetRef}!J${rowNumber}:DX${rowNumber}`;
+  // 7 dias x 13 horas = 91 colunas -> agora K..EB (após Bolsa, Editor, Pending-Access, Pending-TimeTable, Pending-Suggestion, HP, HO)
+  const range = `${sheetRef}!K${rowNumber}:EB${rowNumber}`;
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
     range,
@@ -104,8 +106,8 @@ export async function saveScheduleRow(email: string, scheduleRow: string[]) {
     requestBody: { values: [scheduleRow] },
   });
   
-  // Marca Pending-TimeTable=1 após salvar (coluna G)
-  const rangePendingTimeTable = `${sheetRef}!G${rowNumber}`;
+  // Marca Pending-TimeTable=1 após salvar (coluna H)
+  const rangePendingTimeTable = `${sheetRef}!H${rowNumber}`;
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
     range: rangePendingTimeTable,
@@ -121,8 +123,8 @@ export async function saveScheduleRowAsException(email: string, scheduleRow: str
   const sheetRef = escapeSheetName(SHEET_NAME);
   const rowNumber = await findRowByEmail(sheets, email);
   if (!rowNumber) return { success: false, message: `Email ${email} não encontrado` };
-  // 7 dias x 13 horas = 91 colunas -> agora J..DX (após Bolsa, Editor, Pending-Access, Pending-TimeTable, HP, HO)
-  const range = `${sheetRef}!J${rowNumber}:DX${rowNumber}`;
+  // 7 dias x 13 horas = 91 colunas -> agora K..EB (após Bolsa, Editor, Pending-Access, Pending-TimeTable, Pending-Suggestion, HP, HO)
+  const range = `${sheetRef}!K${rowNumber}:EB${rowNumber}`;
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
     range,
@@ -130,8 +132,8 @@ export async function saveScheduleRowAsException(email: string, scheduleRow: str
     requestBody: { values: [scheduleRow] },
   });
   
-  // Marca Pending-TimeTable=2 para indicar exceção (coluna G)
-  const rangePendingTimeTable = `${sheetRef}!G${rowNumber}`;
+  // Marca Pending-TimeTable=2 para indicar exceção (coluna H)
+  const rangePendingTimeTable = `${sheetRef}!H${rowNumber}`;
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
     range: rangePendingTimeTable,
@@ -147,19 +149,19 @@ export async function loadScheduleRow(email: string): Promise<string[] | null> {
   const sheetRef = escapeSheetName(SHEET_NAME);
   const rowNumber = await findRowByEmail(sheets, email);
   if (!rowNumber) return null;
-  // 7 dias x 13 horas = 91 colunas -> agora J..DX
-  const range = `${sheetRef}!J${rowNumber}:DX${rowNumber}`;
+  // 7 dias x 13 horas = 91 colunas -> agora K..EB
+  const range = `${sheetRef}!K${rowNumber}:EB${rowNumber}`;
   const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range });
   return res.data.values?.[0] || [];
 }
 export async function readAllMembers(): Promise<string[][]> {
   const { sheets } = await getSheetsClient();
   const sheetRef = escapeSheetName(SHEET_NAME);
-  // Lê todos os dados de uma vez (A-DX = Nome, Email, Frentes, Bolsa, Editor, Pending-Access, Pending-TimeTable, HP, HO + Schedule)
+  // Lê todos os dados de uma vez (A-EB = Nome, Email, Frentes, Bolsa, Editor, Pending-Access, Pending-TimeTable, Pending-Suggestion, HP, HO + Schedule)
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    // Inclui toda a faixa até DX
-    range: `${sheetRef}!A2:DX`,
+    // Inclui toda a faixa até EB
+    range: `${sheetRef}!A2:EB`,
   });
   return res.data.values || [];
 }
@@ -206,14 +208,14 @@ export async function approveSchedule(email: string, keepEditor: boolean) {
   }
   
   const editorValue = keepEditor ? 1 : 0;
-  // Atualiza colunas E (Editor) e G (Pending-TimeTable)
-  const rangeEditorAndPendingTT = `${sheetRef}!E${rowNumber}:G${rowNumber}`;
+  // Atualiza colunas E (Editor) e H (Pending-TimeTable)
+  const rangeEditorAndPendingTT = `${sheetRef}!E${rowNumber}:H${rowNumber}`;
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
     range: rangeEditorAndPendingTT,
     valueInputOption: "RAW",
-    // Define Editor conforme parâmetro, mantém Pending-Access como está (posição F), e zera Pending-TimeTable (posição G)
-    requestBody: { values: [[editorValue, "", 0]] }, // Deixa F vazio para não alterar
+    // Define Editor conforme parâmetro, mantém Pending-Access (F) e Pending-Suggestion (G) como estão, e zera Pending-TimeTable (H)
+    requestBody: { values: [[editorValue, "", "", 0]] }, // Deixa F e G vazios para não alterar, zera H
   });
   
   return { success: true, message: keepEditor ? "Schedule aprovado. Editor mantido." : "Schedule aprovado. Acesso de edição removido." };
@@ -272,6 +274,8 @@ export async function readRulesFromSheet(): Promise<{
   minimoSlotsConsecutivos: number;
   minimoSlotsDiariosPresencial: number;
   intervaloAlmoco: string;
+  inicio: number;
+  fim: number;
 }> {
   const { sheets } = await getSheetsClient();
   const rulesSheetName = escapeSheetName(RULES_SHEET_NAME);
@@ -289,6 +293,8 @@ export async function readRulesFromSheet(): Promise<{
     let minimoSlotsConsecutivos = 2;
     let minimoSlotsDiariosPresencial = 4;
     let intervaloAlmoco = "11-14";
+    let inicio = 8; // Padrão: 8h
+    let fim = 20; // Padrão: 20h (fim do range, não inclusivo)
     
     for (const row of rows) {
       const regra = row[0]?.trim().toLowerCase();
@@ -301,6 +307,10 @@ export async function readRulesFromSheet(): Promise<{
         minimoSlotsDiariosPresencial = parseInt(valor || "2", 10);
       } else if (regra.includes("almoss") || regra.includes("almoco") || regra.includes("almoço")) {
         intervaloAlmoco = valor || "11-14";
+      } else if (regra.includes("inicio") || regra.includes("início")) {
+        inicio = parseInt(valor || "8", 10);
+      } else if (regra.includes("fim")) {
+        fim = parseInt(valor || "20", 10);
       }
     }
     
@@ -308,6 +318,8 @@ export async function readRulesFromSheet(): Promise<{
       minimoSlotsConsecutivos,
       minimoSlotsDiariosPresencial,
       intervaloAlmoco,
+      inicio,
+      fim,
     };
   } catch (error) {
     console.error("Erro ao ler aba RULES:", error);
@@ -316,8 +328,164 @@ export async function readRulesFromSheet(): Promise<{
       minimoSlotsConsecutivos: 2,
       minimoSlotsDiariosPresencial: 4,
       intervaloAlmoco: "11-14",
+      inicio: 8,
+      fim: 20,
     };
   }
 }
 
-export const sheetsConstants = { SPREADSHEET_ID, SHEET_NAME, BACKLOG_SHEET_NAME };
+/**
+ * Salva um schedule sugerido pelo admin na aba SUGGESTED
+ * A aba SUGGESTED tem colunas: Email (A) + 91 colunas de schedule (B..CL)
+ * @param targetEmail Email do membro que receberá a sugestão
+ * @param scheduleRow Array com 91 valores do schedule sugerido
+ */
+export async function saveSuggestedSchedule(targetEmail: string, scheduleRow: string[]) {
+  const { sheets } = await getSheetsClient();
+  const suggestedSheetName = escapeSheetName(SUGGESTED_SHEET_NAME);
+  
+  // Busca se já existe uma sugestão para este email
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${suggestedSheetName}!A:A`,
+  });
+  
+  const rows = res.data.values || [];
+  let rowNumber: number | null = null;
+  
+  // Procura pelo email (pula cabeçalho na linha 1)
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0]?.toLowerCase() === targetEmail.toLowerCase()) {
+      rowNumber = i + 1;
+      break;
+    }
+  }
+  
+  // Prepara a linha completa: [Email, ...scheduleRow]
+  const fullRow = [targetEmail, ...scheduleRow];
+  
+  if (rowNumber) {
+    // Atualiza a linha existente
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${suggestedSheetName}!A${rowNumber}:CL${rowNumber}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [fullRow] },
+    });
+  } else {
+    // Adiciona nova linha
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${suggestedSheetName}!A:CL`,
+      valueInputOption: "RAW",
+      requestBody: { values: [fullRow] },
+    });
+  }
+  
+  // Marca Pending-Suggestion=1 na aba principal (coluna H)
+  const mainRowNumber = await findRowByEmail(sheets, targetEmail);
+  if (mainRowNumber) {
+    const mainSheetRef = escapeSheetName(SHEET_NAME);
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${mainSheetRef}!H${mainRowNumber}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [[1]] },
+    });
+  }
+  
+  return { success: true, message: "Sugestão de horário salva com sucesso." };
+}
+
+/**
+ * Carrega o schedule sugerido da aba SUGGESTED
+ * @param email Email do membro
+ * @returns Array com 91 valores do schedule sugerido ou null se não existir
+ */
+export async function loadSuggestedSchedule(email: string): Promise<string[] | null> {
+  const { sheets } = await getSheetsClient();
+  const suggestedSheetName = escapeSheetName(SUGGESTED_SHEET_NAME);
+  
+  // Busca o email na aba SUGGESTED
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${suggestedSheetName}!A:CL`,
+  });
+  
+  const rows = res.data.values || [];
+  
+  // Procura pelo email (pula cabeçalho na linha 1)
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0]?.toLowerCase() === email.toLowerCase()) {
+      // Retorna as colunas B..CL (índices 1..91)
+      return rows[i].slice(1, 92);
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Aceita o schedule sugerido: move da aba SUGGESTED para a aba principal e limpa flags
+ * @param email Email do membro
+ */
+export async function acceptSuggestedSchedule(email: string) {
+  const { sheets } = await getSheetsClient();
+  
+  // 1. Carrega o schedule sugerido
+  const suggestedSchedule = await loadSuggestedSchedule(email);
+  if (!suggestedSchedule) {
+    return { success: false, message: "Nenhuma sugestão encontrada." };
+  }
+  
+  // 2. Salva o schedule sugerido na aba principal
+  const mainRowNumber = await findRowByEmail(sheets, email);
+  if (!mainRowNumber) {
+    return { success: false, message: "Membro não encontrado." };
+  }
+  
+  const mainSheetRef = escapeSheetName(SHEET_NAME);
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${mainSheetRef}!K${mainRowNumber}:EB${mainRowNumber}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [suggestedSchedule] },
+  });
+  
+  // 3. Limpa Pending-Suggestion=0 na aba principal (coluna H)
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${mainSheetRef}!H${mainRowNumber}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [[0]] },
+  });
+  
+  // 4. Remove a linha da aba SUGGESTED
+  const suggestedSheetName = escapeSheetName(SUGGESTED_SHEET_NAME);
+  const resFind = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${suggestedSheetName}!A:A`,
+  });
+  
+  const rows = resFind.data.values || [];
+  let suggestedRowNumber: number | null = null;
+  
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0]?.toLowerCase() === email.toLowerCase()) {
+      suggestedRowNumber = i + 1;
+      break;
+    }
+  }
+  
+  if (suggestedRowNumber) {
+    // Limpa a linha da aba SUGGESTED
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${suggestedSheetName}!A${suggestedRowNumber}:CL${suggestedRowNumber}`,
+    });
+  }
+  
+  return { success: true, message: "Sugestão aceita com sucesso!" };
+}
+
+export const sheetsConstants = { SPREADSHEET_ID, SHEET_NAME, BACKLOG_SHEET_NAME, SUGGESTED_SHEET_NAME };
