@@ -23,7 +23,7 @@ type Actions =
   | { action: "read-example" }
   | { action: "update-member"; member: { name: string; email: string; frentes: string; bolsa?: string; editor?: number | string; pending?: number | string; hp?: string; ho?: string }; isNew?: boolean }
   | { action: "update-member-metadata"; email: string; hp?: string; ho?: string }
-  | { action: "save-schedule"; email: string; scheduleRow: string[] }
+  | { action: "save-schedule"; email: string; scheduleRow: string[]; isAdmin?: boolean }
   | { action: "load-schedule"; email: string }
   | { action: "save-suggested-schedule"; adminEmail: string; targetEmail: string; scheduleRow: string[] }
   | { action: "load-suggested-schedule"; email: string }
