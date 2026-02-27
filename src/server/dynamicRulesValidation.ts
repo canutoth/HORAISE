@@ -63,6 +63,9 @@ export function validateConsecutiveSlots(
   const dayNames = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"];
   
   dayMap.forEach((slots, day) => {
+    // Ignora fins de semana (sábado=5, domingo=6)
+    if (day >= 5) return;
+    
     const streaks: number[] = []; // Armazena todos os grupos de trabalho consecutivos
     let currentStreak = 0;
     
@@ -87,7 +90,7 @@ export function validateConsecutiveSlots(
     if (violatingStreaks.length > 0) {
       const minFound = Math.min(...streaks);
       errors.push(
-        `${dayNames[day]}: Você tem grupo(s) de trabalho com menos de ${minimoSlots} slots consecutivos. Menor grupo encontrado: ${minFound} slot(s).`
+        `${dayNames[day]}: Você tem grupo(s) de trabalho com menos de ${minimoSlots} slots consecutivos.`
       );
     }
   });
@@ -111,6 +114,9 @@ export function validateDailyPresencialSlots(
   const dayNames = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"];
   
   dayMap.forEach((slots, day) => {
+    // Ignora fins de semana (sábado=5, domingo=6)
+    if (day >= 5) return;
+    
     const presencialCount = slots.filter(isPresencialSlot).length;
     
     // Se tem pelo menos 1 slot presencial mas não atingiu o mínimo
@@ -129,7 +135,8 @@ export function validateDailyPresencialSlots(
 
 /**
  * Valida a regra de intervalo de almoço
- * Só cobra almoço se a pessoa estiver trabalhando antes E depois do intervalo
+ * Só cobra almoço se a pessoa estiver trabalhando PRESENCIALMENTE antes E depois do intervalo
+ * Se trabalhar online antes ou depois, não precisa marcar almoço
  */
 export function validateLunchInterval(
   scheduleRow: string[],
@@ -157,26 +164,26 @@ export function validateLunchInterval(
     // Ignora fins de semana (sábado=5, domingo=6) - ajustar se necessário
     if (day >= 5) return;
     
-    // Verifica se tem trabalho antes do intervalo
-    let hasWorkBefore = false;
+    // CORREÇÃO: Verifica se tem trabalho PRESENCIAL antes do intervalo
+    let hasPresencialBefore = false;
     for (let h = lunchStart - baseHour - 1; h >= 0; h--) {
-      if (isWorkSlot(slots[h])) {
-        hasWorkBefore = true;
+      if (isPresencialSlot(slots[h])) {
+        hasPresencialBefore = true;
         break;
       }
     }
     
-    // Verifica se tem trabalho depois do intervalo
-    let hasWorkAfter = false;
+    // CORREÇÃO: Verifica se tem trabalho PRESENCIAL depois do intervalo
+    let hasPresencialAfter = false;
     for (let h = lunchEnd - baseHour; h < slots.length; h++) {
-      if (isWorkSlot(slots[h])) {
-        hasWorkAfter = true;
+      if (isPresencialSlot(slots[h])) {
+        hasPresencialAfter = true;
         break;
       }
     }
     
-    // Se tem trabalho antes E depois, mas não tem almoço no intervalo
-    if (hasWorkBefore && hasWorkAfter) {
+    // CORREÇÃO: Só cobra almoço se tiver trabalho PRESENCIAL antes E depois
+    if (hasPresencialBefore && hasPresencialAfter) {
       let hasLunch = false;
       for (let h = lunchStart - baseHour; h < lunchEnd - baseHour; h++) {
         if (h >= 0 && h < slots.length) {
@@ -189,7 +196,7 @@ export function validateLunchInterval(
       
       if (!hasLunch) {
         errors.push(
-          `${dayNames[day]}: Você está trabalhando antes e depois do intervalo ${intervaloAlmoco}h. É obrigatório alocar pelo menos 1h de almoço nesse período.`
+          `${dayNames[day]}: Você está trabalhando presencialmente antes e depois do intervalo ${intervaloAlmoco}h. É obrigatório alocar pelo menos 1h de almoço nesse período.`
         );
       }
     }
@@ -203,8 +210,9 @@ export function validateLunchInterval(
 
 /**
  * Valida se há preenchimentos fora do range de horário permitido (inicio-fim)
- * A aba INFO sempre tem 7-20h, mas se a pessoa preencher fora do range inicio-fim de RULES,
- * ela é sinalizada para poder solicitar exceção
+ * A aba INFO sempre tem 7-20h, mas se a pessoa preencher TRABALHO fora do range inicio-fim de RULES,
+ * ela é sinalizada para poder solicitar exceção.
+ * CORREÇÃO: Esta validação só se aplica a TRABALHO (P, O, R), não a aulas ou outros compromissos
  */
 export function validateWorkingHoursRange(
   scheduleRow: string[],
@@ -220,11 +228,14 @@ export function validateWorkingHoursRange(
   const baseHour = 7;
   
   dayMap.forEach((slots, day) => {
+    // Ignora fins de semana (sábado=5, domingo=6)
+    if (day >= 5) return;
+    
     const violatingHours: number[] = [];
     
     slots.forEach((slot, hourIndex) => {
-      // Se há algum preenchimento (qualquer valor não vazio)
-      if (slot && slot.trim() !== "") {
+      // CORREÇÃO: Só valida horários de TRABALHO (P, O, R), não valida aulas (A), ocupado (X) ou almoço (L)
+      if (isWorkSlot(slot)) {
         const actualHour = baseHour + hourIndex;
         
         // Verifica se está fora do range permitido
@@ -265,7 +276,7 @@ export function validateWorkingHoursRange(
       
       const rangesStr = ranges.join(", ");
       errors.push(
-        `${dayNames[day]}: Você preencheu horários fora do range permitido (${inicio}-${fim}h). Horários fora do range: ${rangesStr}.`
+        `${dayNames[day]}: Você preencheu horários de trabalho fora do range permitido (${inicio}-${fim}h).`
       );
     }
   });

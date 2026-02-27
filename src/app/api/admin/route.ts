@@ -4,7 +4,8 @@ import {
   updateMemberRow,
   readAllMembers,
   updateMemberAccess,
-  approveSchedule, 
+  approveSchedule,
+  getColumnValue,
 } from "../../../server/sheets";
 import { 
   sendUserApproval, 
@@ -76,20 +77,32 @@ export async function POST(request: NextRequest) {
 
       case "list-pending-members": {
         const allMembers = await readAllMembers();
-        const pending = allMembers
+        // Primeira linha é o cabeçalho
+        if (allMembers.length === 0) {
+          return NextResponse.json({ pending: [] });
+        }
+        
+        const headerRow = allMembers[0];
+        const columnMapping = new Map<string, number>();
+        headerRow.forEach((col: string, idx: number) => {
+          columnMapping.set(col, idx);
+        });
+        
+        const dataRows = allMembers.slice(1); // Pula o cabeçalho
+        const pending = dataRows
           .filter((row) => {
-            const pendingFlag = Number(row[5] || 0); 
+            const pendingFlag = Number(getColumnValue(row, "Pending-Access", columnMapping) || 0);
             return pendingFlag === 1;
           })
           .map((row) => ({
-            name: row[0] || "",
-            email: row[1] || "",
-            frentes: row[2] || "",
-            bolsa: row[3] || "",
-            editor: Number(row[4] || 0),
-            pending: Number(row[5] || 0),
-            hp: row[8] || "",
-            ho: row[9] || "",
+            name: getColumnValue(row, "Nome", columnMapping) || "",
+            email: getColumnValue(row, "Email", columnMapping) || "",
+            frentes: getColumnValue(row, "Frentes", columnMapping) || "",
+            bolsa: getColumnValue(row, "Bolsa", columnMapping) || "",
+            editor: Number(getColumnValue(row, "Editor", columnMapping) || 0),
+            pending: Number(getColumnValue(row, "Pending-Access", columnMapping) || 0),
+            hp: getColumnValue(row, "HP", columnMapping) || "",
+            ho: getColumnValue(row, "HO", columnMapping) || "",
           }));
         return NextResponse.json({ pending });
       }
@@ -101,7 +114,7 @@ export async function POST(request: NextRequest) {
         
         if (result.success) {
           const member = await readMemberByEmail(body.email);
-          const name = member ? member.row[0] : "Usuário";
+          const name = member ? getColumnValue(member.row, "Nome", member.columnMapping) : "Usuário";
           sendAccessGrantedToUser(body.email, name).catch(console.error);
         }
         return NextResponse.json(result, { status: result.success ? 200 : 400 });
@@ -114,7 +127,7 @@ export async function POST(request: NextRequest) {
 
         if (result.success) {
            const member = await readMemberByEmail(body.email);
-           const name = member ? member.row[0] : "Usuário";
+           const name = member ? getColumnValue(member.row, "Nome", member.columnMapping) : "Usuário";
            sendScheduleApprovedToUser(body.email, name, false).catch(console.error);
         }
         return NextResponse.json(result, { status: result.success ? 200 : 400 });
@@ -140,15 +153,16 @@ export async function POST(request: NextRequest) {
             { status: 404 }
           );
         }
+        const { row, columnMapping } = found;
         const member = {
-          name: found.row[0] || "",
-          email: found.row[1] || "",
-          frentes: found.row[2] || "",
-          bolsa: found.row[3] || "",
-          editor: Number(found.row[4] || 0),
-          pending: Number(found.row[5] || 0),
-          hp: found.row[8] || "",
-          ho: found.row[9] || "",
+          name: getColumnValue(row, "Nome", columnMapping),
+          email: getColumnValue(row, "Email", columnMapping),
+          frentes: getColumnValue(row, "Frentes", columnMapping),
+          bolsa: getColumnValue(row, "Bolsa", columnMapping),
+          editor: Number(getColumnValue(row, "Editor", columnMapping) || 0),
+          pending: Number(getColumnValue(row, "Pending-Access", columnMapping) || 0),
+          hp: getColumnValue(row, "HP", columnMapping),
+          ho: getColumnValue(row, "HO", columnMapping),
         };
         return NextResponse.json({ member });
       }
@@ -167,6 +181,7 @@ export async function POST(request: NextRequest) {
             { status: 404 }
           );
         }
+        const { row, columnMapping } = currentData;
         const hp = parseHours(body.hp);
         const ho = parseHours(body.ho);
         if (hp < 0 || ho < 0) {
@@ -176,10 +191,10 @@ export async function POST(request: NextRequest) {
           );
         }
         const memberData = {
-          name: currentData.row[0] || "",
+          name: getColumnValue(row, "Nome", columnMapping) || "",
           email: body.email,
-          frentes: body.frentes || currentData.row[2] || "",
-          bolsa: currentData.row[3] || "",
+          frentes: body.frentes || getColumnValue(row, "Frentes", columnMapping) || "",
+          bolsa: getColumnValue(row, "Bolsa", columnMapping) || "",
           editor: 1, 
           pending: 0, 
           hp: body.hp,
@@ -210,8 +225,9 @@ export async function POST(request: NextRequest) {
             { status: 404 }
           );
         }
-        const hp = parseHours(member.row[8] || "0"); 
-        const ho = parseHours(member.row[9] || "0"); 
+        const { row, columnMapping } = member;
+        const hp = parseHours(getColumnValue(row, "HP", columnMapping) || "0");
+        const ho = parseHours(getColumnValue(row, "HO", columnMapping) || "0");
         if (hp === 0 && ho === 0) {
           return NextResponse.json(
             {
@@ -243,7 +259,7 @@ export async function POST(request: NextRequest) {
           );
         }
         
-        const memberName = member.row[0] || "Usuário";
+        const memberName = getColumnValue(member.row, "Nome", member.columnMapping) || "Usuário";
         
         const updateResult = await updateMemberAccess(body.email, 1, 0);
         if (!updateResult.success) {
@@ -289,7 +305,7 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        const memberName = currentData.row[0] || "";
+        const memberName = getColumnValue(currentData.row, "Nome", currentData.columnMapping) || "";
         
         // Atualiza os dados do membro
         const memberData = {
@@ -391,7 +407,7 @@ export async function GET(request: NextRequest) {
         );
       }
       
-      const memberName = member.row[0] || "Usuário";
+      const memberName = getColumnValue(member.row, "Nome", member.columnMapping) || "Usuário";
       
       const updateResult = await updateMemberAccess(email, 1, 0);
       if (!updateResult.success) {

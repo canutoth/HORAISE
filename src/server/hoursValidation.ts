@@ -42,7 +42,7 @@ export function validateScheduleHours(
   if (totalGeral !== requiredTotal) {
     return {
       isValid: false,
-      message: `Total de horas inválido. Você preencheu ${totalGeral}h, mas precisa de ${requiredTotal}h (${requiredHP}h presencial + ${requiredHO}h online).`,
+      message: `Total de horas inválido. Você precisa de ${requiredHP}h presencial + ${requiredHO}h online.`,
       details,
     };
   }

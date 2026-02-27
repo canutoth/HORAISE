@@ -687,7 +687,7 @@ export default function SchedulerPage() {
 
           <Center mt="xl">
             <Text size="xs" c="dimmed" ta="center">
-              © 2025 AISE Lab
+              © 2025 AISE Lab - PUC-Rio
             </Text>
           </Center>
         </Container>

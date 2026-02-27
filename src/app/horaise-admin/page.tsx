@@ -47,6 +47,9 @@ export default function HoraiseAdminPage() {
       const data = await response.json();
 
       if (response.ok) {
+        // Salvar email do admin no sessionStorage
+        sessionStorage.setItem("adminEmail", email);
+        
         notifications.show({
           title: "Sucesso!",
           message: "Acesso autorizado",

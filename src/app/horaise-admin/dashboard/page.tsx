@@ -42,6 +42,7 @@ import {
 } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
 import TopNavBar from "@/components/TopNavBar";
+import { AdminSuggestionPanel } from "@/components/AdminSuggestionPanel";
 import { notifications } from "@mantine/notifications";
 import { useMediaQuery } from "@mantine/hooks"; 
 
@@ -274,19 +275,40 @@ export default function AdminDashboard() {
       });
       const data = await response.json();
       
-      if (response.ok && data.members) {
-        const mappedMembers = data.members.slice(1).map((row: any, index: number) => ({
-          name: normalizeCoutinho(row[0], row[1]),
-          email: row[1],
-          frentes: row[2],
-          bolsa: row[3],
-          editor: Number(row[4] || 0),
-          pendingAccess: Number(row[5] || 0),
-          pendingTimeTable: Number(row[6] || 0),
-          hp: Number(row[7] || 0),
-          ho: Number(row[8] || 0),
-          rowNumber: index + 2,
-        }));
+      if (response.ok && data.members && data.members.length > 0) {
+        // Primeira linha é o cabeçalho, usa para criar o mapeamento
+        const headerRow = data.members[0];
+        const columnMapping = new Map<string, number>();
+        headerRow.forEach((header: string, index: number) => {
+          const normalizedHeader = header?.trim();
+          if (normalizedHeader) {
+            columnMapping.set(normalizedHeader, index);
+          }
+        });
+        
+        // Helper para obter valor de coluna pelo nome
+        const getColumnValue = (row: any[], columnName: string): any => {
+          const index = columnMapping.get(columnName);
+          return index !== undefined ? row[index] : "";
+        };
+        
+        // Mapeia os dados (pula a primeira linha que é o cabeçalho)
+        const mappedMembers = data.members
+          .slice(1)
+          .map((row: any, index: number) => ({
+            name: normalizeCoutinho(getColumnValue(row, "Nome"), getColumnValue(row, "Email")),
+            email: getColumnValue(row, "Email"),
+            frentes: getColumnValue(row, "Frentes"),
+            bolsa: getColumnValue(row, "Bolsa"),
+            editor: Number(getColumnValue(row, "Editor") || 0),
+            pendingAccess: Number(getColumnValue(row, "Pending-Access") || 0),
+            pendingTimeTable: Number(getColumnValue(row, "Pending-TimeTable") || 0),
+            hp: Number(getColumnValue(row, "HP") || 0),
+            ho: Number(getColumnValue(row, "HO") || 0),
+            rowNumber: index + 2,
+          }))
+          // Filtra linhas vazias (sem email válido)
+          .filter((member: any) => member.email && member.email.trim() !== "");
         setMembers(mappedMembers);
       }
     } catch (error) {
@@ -299,9 +321,21 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
+    // Verificar se o admin está logado
+    const adminEmail = sessionStorage.getItem("adminEmail");
+    if (!adminEmail) {
+      notifications.show({
+        title: "Acesso Negado",
+        message: "Por favor, faça login como administrador",
+        color: "red",
+      });
+      router.push("/horaise-admin");
+      return;
+    }
+
     fetchBacklogOptions();
     fetchMembers();
-  }, []);
+  }, [router]);
 
   const handleSimpleAction = async (email: string, actionType: string) => {
     try {
@@ -685,6 +719,9 @@ export default function AdminDashboard() {
                 <Tabs.Tab value="acessos" leftSection={!isMobile && <IconLockOpen size={16} />} rightSection={activeEditors.length > 0 && <Badge size="xs" circle color="blue">{activeEditors.length}</Badge>}>
                   {isMobile ? "Acessos" : "Acessos de Edição"}
                 </Tabs.Tab>
+                <Tabs.Tab value="sugerir" leftSection={!isMobile && <IconPencil size={16} />}>
+                  Sugerir
+                </Tabs.Tab>
               </Tabs.List>
 
               <Tabs.Panel value="cadastros">
@@ -695,6 +732,12 @@ export default function AdminDashboard() {
               </Tabs.Panel>
               <Tabs.Panel value="acessos">
                 <Stack gap="xs"><MemberTable data={activeEditors} type="access" /></Stack>
+              </Tabs.Panel>
+              <Tabs.Panel value="sugerir">
+                <AdminSuggestionPanel 
+                  frentesOptions={frentesOptions}
+                  bolsasOptions={bolsasOptions}
+                />
               </Tabs.Panel>
             </Tabs>
           </Paper>

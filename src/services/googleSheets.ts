@@ -17,7 +17,7 @@ export interface TeamMemberData {
   bolsa?: string; // nova coluna Bolsa
   editor?: number; // 1 = pode editar, 0 = sem acesso
   pendingAccess?: number; // 1 = pendente aprovação de cadastro, 0 = aprovado
-  pendingTimeTable?: number; // 1 = horário pendente aprovação, 0 = aprovado
+  pendingTimeTable?: number; // 0 = horário aprovado, 1 = horário pendente aprovação, 2 = horário pendente com exceção solicitada
   pendingSuggestion?: number; // 1 = admin sugeriu horário, 0 = sem sugestão pendente
   schedule?: ScheduleData;
   suggestedSchedule?: ScheduleData; // horário sugerido pelo admin
@@ -68,23 +68,51 @@ const normalizeCoutinho = (name: string, email: string): string => {
   return name;
 };
 
+// Helper para obter o valor de uma coluna pelo nome ao invés do índice
+function getColumnValue(row: string[], columnName: string, columnMapping: Map<string, number>): string {
+  const index = columnMapping.get(columnName);
+  if (index === undefined) {
+    console.warn(`Coluna "${columnName}" não encontrada no cabeçalho`);
+    return "";
+  }
+  return row[index] || "";
+}
+
 // Converte linha do Google Sheets (HORAISE) para objeto TeamMemberData
-// Formato atual: [Nome, Email, Frentes, Bolsa, Editor, Pending-Access, Pending-TimeTable, Pending-Suggestion, HP, HO, ...schedule columns]
-const rowToTeamMember = (row: string[]): TeamMemberData => {
-  const rawName = row[0] || "";
-  const email = row[1] || "";
+// IMPORTANTE: Sempre requer columnMapping - sem fallback para índices fixos
+const rowToTeamMember = (row: string[], columnMapping?: Map<string, number>): TeamMemberData => {
+  if (!columnMapping) {
+    console.error("rowToTeamMember: columnMapping é obrigatório! As colunas devem ser mapeadas por nome.");
+    // Retorna dados mínimos para evitar crash
+    return {
+      name: "Erro: Sem Mapeamento",
+      email: "",
+      frentes: "",
+      bolsa: "",
+      editor: 0,
+      pendingAccess: 0,
+      pendingTimeTable: 0,
+      pendingSuggestion: 0,
+      hp: "",
+      ho: "",
+    };
+  }
+  
+  // Usa columnMapping para acessar por nome de coluna
+  const rawName = getColumnValue(row, "Nome", columnMapping);
+  const email = getColumnValue(row, "Email", columnMapping);
   
   return {
     name: normalizeCoutinho(rawName, email),
     email: email,
-    frentes: row[2] || "",
-    bolsa: row[3] || "",
-    editor: Number(row[4] ?? 0) || 0,
-    pendingAccess: Number(row[5] ?? 0) || 0,
-    pendingTimeTable: Number(row[6] ?? 0) || 0,
-    pendingSuggestion: Number(row[7] ?? 0) || 0,
-    hp: row[8] || "",
-    ho: row[9] || "",
+    frentes: getColumnValue(row, "Frentes", columnMapping),
+    bolsa: getColumnValue(row, "Bolsa", columnMapping),
+    editor: Number(getColumnValue(row, "Editor", columnMapping) || 0),
+    pendingAccess: Number(getColumnValue(row, "Pending-Access", columnMapping) || 0),
+    pendingTimeTable: Number(getColumnValue(row, "Pending-TimeTable", columnMapping) || 0),
+    pendingSuggestion: Number(getColumnValue(row, "Pending-Suggestion", columnMapping) || 0),
+    hp: getColumnValue(row, "HP", columnMapping),
+    ho: getColumnValue(row, "HO", columnMapping),
   };
 };
 // Converte objeto TeamMemberData para linha do Google Sheets (HORAISE)
@@ -126,7 +154,9 @@ export async function getMemberByEmail(
   // payload.member is an array (row) from the backend
     if (!payload || !payload.member) return null;
     const row: string[] = payload.member;
-    const memberData = rowToTeamMember(row);
+    // Converte o columnMapping de objeto para Map
+    const columnMapping = payload.columnMapping ? new Map<string, number>(Object.entries(payload.columnMapping)) : undefined;
+    const memberData = rowToTeamMember(row, columnMapping);
     // Carrega o schedule da planilha HORAISE
     try {
       const schedule = await loadScheduleFromSheet(email);
@@ -165,7 +195,9 @@ export async function getExampleData(): Promise<TeamMemberData> {
     const payload = await res.json();
     if (!payload || !payload.member) return fallback;
     const row: string[] = payload.member;
-    return rowToTeamMember(row);
+    // Converte o columnMapping de objeto para Map
+    const columnMapping = payload.columnMapping ? new Map<string, number>(Object.entries(payload.columnMapping)) : undefined;
+    return rowToTeamMember(row, columnMapping);
   } catch (error) {
     console.error("Erro ao buscar dados de exemplo:", error);
     return fallback;
@@ -173,7 +205,8 @@ export async function getExampleData(): Promise<TeamMemberData> {
 }
 export async function saveMember(
   member: TeamMemberData,
-  isNew: boolean = false
+  isNew: boolean = false,
+  isAdmin: boolean = false
 ): Promise<{ success: boolean; message: string; errors?: string[] }> {
   // Modo offline: salva no storage local
   if (OFFLINE_MODE) {
@@ -201,7 +234,7 @@ export async function saveMember(
     // Só salva o schedule se NÃO for um cadastro novo e se o schedule foi fornecido
     // Em cadastros novos, o schedule não deve ser salvo ainda (usuário ainda não tem acesso)
     if (!isNew && member.schedule !== undefined) {
-      const scheduleResult = await saveScheduleToSheet(member.email, member.schedule);
+      const scheduleResult = await saveScheduleToSheet(member.email, member.schedule, isAdmin);
       if (!scheduleResult.success) {
         // Se o schedule falhou, retorna o erro ao invés de ignorar
         return {
@@ -342,7 +375,8 @@ export function infoRowToSchedule(infoRow: string[]): ScheduleData {
 }
 export async function saveScheduleToSheet(
   email: string,
-  schedule: ScheduleData
+  schedule: ScheduleData,
+  isAdmin: boolean = false
 ): Promise<{ success: boolean; message: string; errors?: string[] }> {
   // Modo offline: salva no storage local (já está sendo feito no saveMember)
   if (OFFLINE_MODE) {
@@ -363,7 +397,7 @@ export async function saveScheduleToSheet(
     const response = await fetch("/api", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "save-schedule", email, scheduleRow: infoRow }),
+      body: JSON.stringify({ action: "save-schedule", email, scheduleRow: infoRow, isAdmin }),
     });
     if (!response.ok) {
       const error = await response.json();
@@ -427,13 +461,25 @@ export async function getAllMembers(): Promise<TeamMemberData[]> {
     }
     const payload = await res.json();
     if (!payload || !payload.members) return [];
-    // Converte cada linha para TeamMemberData
-    // Cada row vem com: [Nome, Email, Frentes, Bolsa, Editor, Pending-Access, Pending-TimeTable, Pending-Suggestion, HP, HO, ...scheduleColumns]
+    // Primeira linha é o cabeçalho
+    if (payload.members.length === 0) return [];
+    
+    const headerRow = payload.members[0];
+    const columnMapping = new Map<string, number>();
+    headerRow.forEach((col: string, idx: number) => {
+      columnMapping.set(col, idx);
+    });
+    
+    // Converte cada linha para TeamMemberData (pula o cabeçalho)
     const members: TeamMemberData[] = [];
-    for (const row of payload.members) {
-      const memberData = rowToTeamMember(row);
-          // Extrai o schedule a partir da coluna K (índice 10) em diante
-          const scheduleRow = row.slice(10);
+    for (let i = 1; i < payload.members.length; i++) {
+      const row = payload.members[i];
+      const memberData = rowToTeamMember(row, columnMapping);
+          
+          // Extrai o schedule a partir da coluna após HO
+          const hoIndex = columnMapping.get("HO");
+          if (hoIndex === undefined) continue;
+          const scheduleRow = row.slice(hoIndex + 1);
       if (scheduleRow && scheduleRow.length > 0) {
         const schedule = infoRowToSchedule(scheduleRow);
         if (schedule) {

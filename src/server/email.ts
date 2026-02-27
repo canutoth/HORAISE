@@ -101,6 +101,8 @@ export async function sendAccessRequestToAdmin(userName: string, userEmail: stri
 }
 
 export async function sendAccessGrantedToUser(userEmail: string, userName: string) {
+  console.log(`[sendAccessGrantedToUser] Iniciando envio para ${userEmail}`);
+  
   const mailOptions = {
     from: `"HORAISE" <${process.env.SMTP_USER}>`,
     to: userEmail,
@@ -118,12 +120,19 @@ export async function sendAccessGrantedToUser(userEmail: string, userName: strin
       </div>
     `,
   };
-  await transporter.sendMail(mailOptions);
+  
+  console.log(`[sendAccessGrantedToUser] Enviando email para ${userEmail}...`);
+  const result = await transporter.sendMail(mailOptions);
+  console.log(`[sendAccessGrantedToUser] Email enviado! MessageId: ${result.messageId}`);
+  return result;
 }
 /**
  * Envia email ao usuário notificando que o admin sugeriu um novo horário
  */
 export async function sendSuggestionToUser(userEmail: string, userName: string) {
+  console.log(`[sendSuggestionToUser] Iniciando envio para ${userEmail}`);
+  console.log(`[SMTP Config] Host: ${process.env.SMTP_HOST}, Port: ${process.env.SMTP_PORT}, User: ${process.env.SMTP_USER}`);
+  
   const mailOptions = {
     from: `"HORAISE" <${process.env.SMTP_USER}>`,
     to: userEmail,
@@ -140,7 +149,11 @@ export async function sendSuggestionToUser(userEmail: string, userName: string) 
       </div>
     `,
   };
-  await transporter.sendMail(mailOptions);
+  
+  console.log(`[sendSuggestionToUser] Enviando email para ${userEmail}...`);
+  const result = await transporter.sendMail(mailOptions);
+  console.log(`[sendSuggestionToUser] Email enviado! MessageId: ${result.messageId}`);
+  return result;
 }
 export async function sendExceptionRequestToAdmin(userName: string, userEmail: string, violations: string[]) {
   const adminEmail = process.env.EMAIL_ADMIN;

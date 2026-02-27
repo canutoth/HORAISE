@@ -90,7 +90,7 @@ export default function CadastroPage() {
         schedule: {}, // Schedule vazio
       };
       // Salva no Google Sheets
-      const result = await saveMember(newMember, true);
+      const result = await saveMember(newMember, true, false);
       if (result.success) {
         // Sucesso - mostra mensagem de pendente SEM redirecionar
         console.log("Cadastro realizado com sucesso:", newMember.name);

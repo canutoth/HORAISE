@@ -13,6 +13,7 @@ import {
   saveSuggestedSchedule,
   loadSuggestedSchedule,
   acceptSuggestedSchedule,
+  getColumnValue,
 } from "../../server/sheets";
 import { sendAdminNotification, sendUserApproval, sendAccessRequestToAdmin, sendScheduleEditedToAdmin, sendScheduleApprovedToUser } from "../../server/email";
 import { validateScheduleHours, parseHours } from "../../server/hoursValidation";
@@ -47,12 +48,16 @@ export async function POST(request: NextRequest) {
         if (!body.email) return NextResponse.json({ error: "email é obrigatório" }, { status: 400 });
         const found = await readMemberByEmail(body.email);
         if (!found) return NextResponse.json({ message: "not found" }, { status: 404 });
-        return NextResponse.json({ member: found.row, rowNumber: found.rowNumber });
+        // Converte Map para objeto para serialização JSON
+        const columnMapping = Object.fromEntries(found.columnMapping);
+        return NextResponse.json({ member: found.row, rowNumber: found.rowNumber, columnMapping });
       }
       case "read-example": {
-        const row = await readExample();
-        if (!row) return NextResponse.json({ message: "no example row" }, { status: 404 });
-        return NextResponse.json({ member: row });
+        const result = await readExample();
+        if (!result) return NextResponse.json({ message: "no example row" }, { status: 404 });
+        // Converte Map para objeto para serialização JSON
+        const columnMapping = Object.fromEntries(result.columnMapping);
+        return NextResponse.json({ member: result.row, columnMapping });
       }
       case "update-member": {
         if (!body.member) return NextResponse.json({ success: false, message: "member é obrigatório" }, { status: 400 });
@@ -75,16 +80,18 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ success: false, message: "Membro não encontrado" }, { status: 404 });
         }
         
+        const { row, columnMapping } = existingMember;
+        
         // Atualiza apenas HP e/ou HO sem validar schedule
         const updatedMember = {
-          name: existingMember.row[0],
-          email: existingMember.row[1],
-          frentes: existingMember.row[2],
-          bolsa: existingMember.row[3],
-          editor: existingMember.row[4],
-          pending: existingMember.row[5],
-          hp: body.hp !== undefined ? body.hp : existingMember.row[8],
-          ho: body.ho !== undefined ? body.ho : existingMember.row[9],
+          name: getColumnValue(row, "Nome", columnMapping),
+          email: getColumnValue(row, "Email", columnMapping),
+          frentes: getColumnValue(row, "Frentes", columnMapping),
+          bolsa: getColumnValue(row, "Bolsa", columnMapping),
+          editor: getColumnValue(row, "Editor", columnMapping),
+          pending: getColumnValue(row, "Pending-Access", columnMapping),
+          hp: body.hp !== undefined ? body.hp : getColumnValue(row, "HP", columnMapping),
+          ho: body.ho !== undefined ? body.ho : getColumnValue(row, "HO", columnMapping),
         };
         
         const result = await updateMemberRow(updatedMember, false);
@@ -92,58 +99,68 @@ export async function POST(request: NextRequest) {
       }
       case "save-schedule": {
         if (!body.email || !body.scheduleRow) return NextResponse.json({ success: false, message: "email e scheduleRow são obrigatórios" }, { status: 400 });
+        
+        const isAdmin = body.isAdmin === true;
+        
         // Busca dados do membro para validar
         const member = await readMemberByEmail(body.email);
         if (!member) {
           return NextResponse.json({ success: false, message: "Membro não encontrado" }, { status: 404 });
         }
-        const editor = Number(member.row[4] || 0); // Editor é índice 4 (coluna E)
-        const pending = Number(member.row[5] || 0); // Pending-Access é índice 5 (coluna F)
-        const hp = parseHours(member.row[8] || "0"); // HP é índice 8 (coluna I)
-        const ho = parseHours(member.row[9] || "0"); // HO é índice 9 (coluna J)
-        // Verifica se cadastro está pendente
-        if (pending === 1) {
-          return NextResponse.json({ 
-            success: false, 
-            message: "Seu cadastro está pendente de aprovação. Aguarde o administrador configurar suas horas e liberar o acesso.",
-            isPending: true
-          }, { status: 403 });
-        }
-        // Verifica se tem acesso ao editor
-        if (editor !== 1) {
-          return NextResponse.json({ 
-            success: false, 
-            message: "Você não tem permissão para editar. Solicite liberação ao administrador.",
-            isBlocked: true
-          }, { status: 403 });
-        }
-        // Se HP e HO estão configurados, valida o schedule
-        if (hp > 0 && ho > 0) {
-          const validation = validateScheduleHours(body.scheduleRow, hp, ho);
-          if (!validation.isValid) {
+        
+        const { row, columnMapping } = member;
+        
+        const editor = Number(getColumnValue(row, "Editor", columnMapping) || 0);
+        const pending = Number(getColumnValue(row, "Pending-Access", columnMapping) || 0);
+        const hp = parseHours(getColumnValue(row, "HP", columnMapping) || "0");
+        const ho = parseHours(getColumnValue(row, "HO", columnMapping) || "0");
+        
+        // Admin bypassa todas as validações
+        if (!isAdmin) {
+          // Verifica se cadastro está pendente
+          if (pending === 1) {
             return NextResponse.json({ 
               success: false, 
-              message: validation.message,
-              details: validation.details 
-            }, { status: 400 });
+              message: "Seu cadastro está pendente de aprovação. Aguarde o administrador configurar suas horas e liberar o acesso.",
+              isPending: true
+            }, { status: 403 });
           }
-        }
-        
-        // Busca e valida regras dinâmicas da aba RULES
-        try {
-          const rules = await readRulesFromSheet();
-          const dynamicValidation = validateDynamicRules(body.scheduleRow, rules);
+          // Verifica se tem acesso ao editor
+          if (editor !== 1) {
+            return NextResponse.json({ 
+              success: false, 
+              message: "Você não tem permissão para editar. Solicite liberação ao administrador.",
+              isBlocked: true
+            }, { status: 403 });
+          }
+          // Se HP e HO estão configurados, valida o schedule
+          if (hp > 0 && ho > 0) {
+            const validation = validateScheduleHours(body.scheduleRow, hp, ho);
+            if (!validation.isValid) {
+              return NextResponse.json({ 
+                success: false, 
+                message: validation.message,
+                details: validation.details 
+              }, { status: 400 });
+            }
+          }
           
-          if (!dynamicValidation.isValid) {
-            return NextResponse.json({
-              success: false,
-              message: "Seu horário viola as seguintes regras:\n" + dynamicValidation.errors.join("\n"),
-              errors: dynamicValidation.errors,
-            }, { status: 400 });
+          // Busca e valida regras dinâmicas da aba RULES
+          try {
+            const rules = await readRulesFromSheet();
+            const dynamicValidation = validateDynamicRules(body.scheduleRow, rules);
+            
+            if (!dynamicValidation.isValid) {
+              return NextResponse.json({
+                success: false,
+                message: "Seu horário viola as seguintes regras:\n" + dynamicValidation.errors.join("\n"),
+                errors: dynamicValidation.errors,
+              }, { status: 400 });
+            }
+          } catch (rulesError) {
+            console.error("Erro ao validar regras dinâmicas:", rulesError);
+            // Continua sem validação dinâmica se houver erro
           }
-        } catch (rulesError) {
-          console.error("Erro ao validar regras dinâmicas:", rulesError);
-          // Continua sem validação dinâmica se houver erro
         }
         
         const lockAfterSave = true;
@@ -151,7 +168,7 @@ export async function POST(request: NextRequest) {
         
         // Envia email ao admin notificando sobre schedule editado
         if (result.success) {
-          const memberName = member.row[0] || "Usuário";
+          const memberName = getColumnValue(row, "Nome", columnMapping) || "Usuário";
           sendScheduleEditedToAdmin(memberName, body.email).catch((e: unknown) => console.error("Falha email admin:", e));
         }
         
@@ -160,7 +177,7 @@ export async function POST(request: NextRequest) {
       case "load-schedule": {
         if (!body.email) return NextResponse.json({ message: "email é obrigatório" }, { status: 400 });
         const row = await loadScheduleRow(body.email);
-        if (!row) return NextResponse.json({ message: "not found" }, { status: 404 });
+        if (!row || row.length === 0) return NextResponse.json({ message: "not found" }, { status: 404 });
         return NextResponse.json({ scheduleRow: row });
       }
       case "save-suggested-schedule": {
@@ -180,15 +197,28 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ success: false, message: "Membro não encontrado" }, { status: 404 });
         }
         
-        const targetName = targetMember.row[0] || "Usuário";
+        const targetName = getColumnValue(targetMember.row, "Nome", targetMember.columnMapping) || "Usuário";
+        const hadEditorAccess = Number(getColumnValue(targetMember.row, "Editor", targetMember.columnMapping) || 0) === 1;
         
-        // Salva o schedule sugerido
+        // Salva o schedule sugerido (também concede Editor=1 automaticamente)
         const result = await saveSuggestedSchedule(body.targetEmail, body.scheduleRow);
         
-        // Envia email ao membro notificando sobre a sugestão
         if (result.success) {
-          const { sendSuggestionToUser } = await import("../../server/email");
-          sendSuggestionToUser(body.targetEmail, targetName).catch((e: unknown) => console.error("Falha email usuário:", e));
+          const { sendSuggestionToUser, sendAccessGrantedToUser } = await import("../../server/email");
+          
+          // Se não tinha acesso de editor antes, notifica sobre o acesso liberado
+          if (!hadEditorAccess) {
+            console.log(`📧 Enviando email de acesso liberado para ${body.targetEmail}...`);
+            sendAccessGrantedToUser(body.targetEmail, targetName)
+              .then(() => console.log(`✅ Email de acesso liberado enviado com sucesso para ${body.targetEmail}`))
+              .catch((e: unknown) => console.error("❌ Falha ao enviar email de acesso:", e));
+          }
+          
+          // Notifica sobre a sugestão de horário
+          console.log(`📧 Enviando email de sugestão para ${body.targetEmail}...`);
+          sendSuggestionToUser(body.targetEmail, targetName)
+            .then(() => console.log(`✅ Email de sugestão enviado com sucesso para ${body.targetEmail}`))
+            .catch((e: unknown) => console.error("❌ Falha ao enviar email de sugestão:", e));
         }
         
         return NextResponse.json(result, { status: result.success ? 200 : 400 });
@@ -288,7 +318,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ success: false, message: "Membro não encontrado" }, { status: 404 });
         }
         
-        const memberName = member.row[0] || "Usuário";
+        const memberName = getColumnValue(member.row, "Nome", member.columnMapping) || "Usuário";
         
         // Atualiza para Pending=1 (solicita acesso)
         const updateResult = await updateMemberAccess(body.email, 0, 1);
@@ -320,15 +350,15 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ success: false, message: "Membro não encontrado" }, { status: 404 });
         }
         
-        const memberName = member.row[0] || "Usuário";
+        const memberName = getColumnValue(member.row, "Nome", member.columnMapping) || "Usuário";
         
-        // Salva o schedule e marca como pendente de aprovação (Pending-TimeTable = 2 para exceção)
+        // Salva o schedule e marca como pendente de aprovação (Pending-Suggestion = 1 para exceção)
         try {
           // Importa a função de conversão do schedule
           const { scheduleToInfoRow } = await import("../../services/googleSheets");
           const scheduleRow = scheduleToInfoRow(body.schedule);
           
-          // Salva como exceção (Pending-TimeTable = 2)
+          // Salva como exceção (Pending-Suggestion = 1)
           const { saveScheduleRowAsException } = await import("../../server/sheets");
           const saveResult = await saveScheduleRowAsException(body.email, scheduleRow);
           
@@ -363,7 +393,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ success: false, message: "Membro não encontrado" }, { status: 404 });
         }
         
-        const memberName = member.row[0] || "Usuário";
+        const memberName = getColumnValue(member.row, "Nome", member.columnMapping) || "Usuário";
         
         // Aprova mantendo editor
         const result = await approveSchedule(body.email, true);
@@ -387,7 +417,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ success: false, message: "Membro não encontrado" }, { status: 404 });
         }
         
-        const memberName = member.row[0] || "Usuário";
+        const memberName = getColumnValue(member.row, "Nome", member.columnMapping) || "Usuário";
         
         // Aprova removendo editor
         const result = await approveSchedule(body.email, false);

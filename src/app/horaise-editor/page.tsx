@@ -9,21 +9,14 @@ import {
   Text,
   Stack,
   Anchor,
-  Select,
-  Group,
-  Divider,
-  Select,
-  Group,
-  Divider,
 } from "@mantine/core";
-import { IconEdit, IconMail, IconUsers, IconUsers } from "@tabler/icons-react";
+import { IconEdit, IconMail } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
 import TopNavBar from "@/components/TopNavBar";
 import { notifications } from "@mantine/notifications";
 import {
   getMemberByEmail,
   validateEmail,
-  getAllMembers,
 } from "../../services/googleSheets";
 export default function EditorLoginPage() {
   const router = useRouter();
@@ -31,41 +24,10 @@ export default function EditorLoginPage() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [errorType, setErrorType] = useState<"not-found" | "no-access" | "">("");
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [allMembers, setAllMembers] = useState<Array<{name: string, email: string}>>([]);
-  const [selectedMember, setSelectedMember] = useState<string | null>(null);
   
 
   useEffect(() => {
     document.title = "HORAISE | Editor";
-    
-    // Verifica se é admin e carrega lista de membros
-    const checkAdmin = async () => {
-      const savedEmail = sessionStorage.getItem("adminEmail");
-      if (savedEmail) {
-        try {
-          const response = await fetch("/api", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "admin-precheck", email: savedEmail }),
-          });
-          const result = await response.json();
-          if (result.isAdmin) {
-            setIsAdmin(true);
-            setEmail(savedEmail);
-            // Carrega todos os membros
-            const members = await getAllMembers();
-            const memberList = members
-              .filter(m => m.email && m.name)
-              .map(m => ({ name: m.name, email: m.email }));
-            setAllMembers(memberList);
-          }
-        } catch (error) {
-          console.error("Erro ao verificar admin:", error);
-        }
-      }
-    };
-    checkAdmin();
   }, []);
 
   const handleLogin = async () => {
@@ -85,6 +47,32 @@ export default function EditorLoginPage() {
     setLoading(true);
 
     try {
+      // Salva email no sessionStorage para detectar modo admin
+      sessionStorage.setItem("adminEmail", email);
+
+      // Verifica se é admin PRIMEIRO
+      const adminCheckResponse = await fetch("/api", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "admin-precheck", email }),
+      });
+      const adminResult = await adminCheckResponse.json();
+
+      if (adminResult.isAdmin) {
+        // Admin sempre tem acesso automático, redireciona direto
+        notifications.show({
+          title: "Bem-vindo, Admin!",
+          message: "Acesso autorizado",
+          color: "blue",
+          autoClose: 2000,
+        });
+
+        const encodedEmail = encodeURIComponent(email);
+        router.push(`/edit-content/${encodedEmail}`);
+        return;
+      }
+
+      // Se não for admin, verifica se existe no sistema e se tem permissão
       const member = await getMemberByEmail(email);
 
       if (!member) {
@@ -94,7 +82,7 @@ export default function EditorLoginPage() {
         return;
       }
 
-      // Verifica permissão de edição
+      // Verifica permissão de edição para não-admin
       if ((member as any).editor !== 1) {
         setErrorType("no-access");
         setErrorMessage("Sem autorização de edição");
@@ -102,47 +90,16 @@ export default function EditorLoginPage() {
         return;
       }
 
-      // Salva email no sessionStorage para detectar modo admin
-      sessionStorage.setItem("adminEmail", email);
-
-      // Verifica se é admin
-      const adminCheckResponse = await fetch("/api", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "admin-precheck", email }),
+      // Se passou todas as validações, redireciona
+      notifications.show({
+        title: "Sucesso!",
+        message: "Acesso autorizado",
+        color: "green",
+        autoClose: 2000,
       });
-      const adminResult = await adminCheckResponse.json();
 
-      if (adminResult.isAdmin) {
-        // Se for admin, carrega membros e mostra seletor
-        notifications.show({
-          title: "Bem-vindo, Admin!",
-          message: "Você pode editar seu horário ou de outros membros",
-          color: "blue",
-          autoClose: 3000,
-        });
-
-        setIsAdmin(true);
-        setEmail(email);
-        
-        const members = await getAllMembers();
-        const memberList = members
-          .filter(m => m.email && m.name)
-          .map(m => ({ name: m.name, email: m.email }));
-        setAllMembers(memberList);
-        setLoading(false);
-      } else {
-        // Se não for admin, redireciona direto para seu horário
-        notifications.show({
-          title: "Sucesso!",
-          message: "Acesso autorizado",
-          color: "green",
-          autoClose: 2000,
-        });
-
-        const encodedEmail = encodeURIComponent(email);
-        router.push(`/edit-content/${encodedEmail}`);
-      }
+      const encodedEmail = encodeURIComponent(email);
+      router.push(`/edit-content/${encodedEmail}`);
     } catch (err) {
       console.error("Erro ao fazer login:", err);
       setErrorMessage("Erro ao conectar com o servidor");
@@ -218,21 +175,6 @@ export default function EditorLoginPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleEditMemberSchedule = () => {
-    if (!selectedMember) {
-      notifications.show({
-        title: "Erro",
-        message: "Selecione um membro para editar",
-        color: "red",
-        autoClose: 3000,
-      });
-      return;
-    }
-    
-    const encodedEmail = encodeURIComponent(selectedMember);
-    router.push(`/edit-content/${encodedEmail}`);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -354,7 +296,6 @@ export default function EditorLoginPage() {
               size="md"
               onClick={handleLogin}
               loading={loading}
-              disabled={isAdmin}
               style={{
                 backgroundColor: "#0E1862",
                 "&:hover": {
@@ -364,65 +305,6 @@ export default function EditorLoginPage() {
             >
               Login
             </Button>
-
-            {isAdmin && (
-              <>
-                <Divider label="Você está logado como admin" labelPosition="center" w="100%" />
-                
-                <Group grow>
-                  <Button
-                    size="md"
-                    onClick={() => router.push(`/edit-content/${encodeURIComponent(email)}`)}
-                    style={{
-                      backgroundColor: "#0E1862",
-                      "&:hover": {
-                        backgroundColor: "#0A1145",
-                      },
-                    }}
-                  >
-                    Meu Horário
-                  </Button>
-                </Group>
-              </>
-            )}
-
-            {isAdmin && allMembers.length > 0 && (
-              <>
-                <Divider label="ou edite como administrador" labelPosition="center" w="100%" />
-                
-                <Select
-                  label="Selecionar membro para editar"
-                  placeholder="Escolha um membro da equipe"
-                  data={allMembers.map(m => ({ 
-                    value: m.email, 
-                    label: `${m.name} (${m.email})` 
-                  }))}
-                  value={selectedMember}
-                  onChange={setSelectedMember}
-                  searchable
-                  leftSection={<IconUsers size={16} />}
-                  w="100%"
-                  styles={{
-                    label: { color: "#0E1862", fontWeight: 500 },
-                  }}
-                />
-                
-                <Button
-                  fullWidth
-                  size="md"
-                  onClick={handleEditMemberSchedule}
-                  disabled={!selectedMember}
-                  style={{
-                    backgroundColor: "#FF8C00",
-                    "&:hover": {
-                      backgroundColor: "#FF7700",
-                    },
-                  }}
-                >
-                  Editar como Admin
-                </Button>
-              </>
-            )}
 
             <Text size="xs" c="dimmed" ta="center">
               Não possui cadastro?{" "}

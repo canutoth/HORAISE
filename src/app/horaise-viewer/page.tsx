@@ -271,8 +271,8 @@ export default function VisualizerPage() {
                       )}
 
                       <Box mt="xs">
-                        <Text size="sm" fw={600} style={{ textDecoration: 'underline', marginBottom: 8, color: '#4A5568' }}>
-                          distribuição de horas:
+                        <Text size="sm" fw={600} style={{marginBottom: 8, color: '#4A5568' }}>
+                          Distribuição de horas:
                         </Text>
                         
                         <SimpleGrid cols={isMobile ? 2 : 1} spacing="sm" verticalSpacing="sm">
@@ -434,7 +434,7 @@ export default function VisualizerPage() {
               )}
             </Grid.Col>
           </Grid>
-          <Center mt="xl"><Text size="xs" c="dimmed" ta="center">© 2025 AISE Lab</Text></Center>
+          <Center mt="xl"><Text size="xs" c="dimmed" ta="center">© 2025 AISE Lab - PUC-Rio</Text></Center>
         </Container>
       </Box>
     </>

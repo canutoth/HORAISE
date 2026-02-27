@@ -29,10 +29,6 @@ import {
   Tabs,
   TextInput,
   NumberInput, 
-  ScrollArea,
-  Tabs,
-  TextInput,
-  NumberInput, 
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks"; 
 import {
@@ -64,8 +60,6 @@ import {
   getBacklogOptions,
   loadSuggestedScheduleFromSheet,
   acceptSuggestedSchedule,
-  loadSuggestedScheduleFromSheet,
-  acceptSuggestedSchedule,
   type TeamMemberData,
   type ScheduleData,
 } from "../../../services/googleSheets";
@@ -90,18 +84,11 @@ export default function EditContentPage() {
   const [suggestedSchedule, setSuggestedSchedule] = useState<ScheduleData | null>(null);
   const [activeTab, setActiveTab] = useState<"original" | "suggested">("original");
   const [isAcceptingSuggestion, setIsAcceptingSuggestion] = useState(false);
-  const [suggestedSchedule, setSuggestedSchedule] = useState<ScheduleData | null>(null);
-  const [activeTab, setActiveTab] = useState<"original" | "suggested">("original");
-  const [isAcceptingSuggestion, setIsAcceptingSuggestion] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isNewMember, setIsNewMember] = useState(false);
   const [isEditingFrentes, setIsEditingFrentes] = useState(false);
   const [editedFrentes, setEditedFrentes] = useState<string[]>([]);
-  const [isEditingHP, setIsEditingHP] = useState(false);
-  const [editedHP, setEditedHP] = useState<string>("");
-  const [isEditingHO, setIsEditingHO] = useState(false);
-  const [editedHO, setEditedHO] = useState<string>("");
   const [isEditingHP, setIsEditingHP] = useState(false);
   const [editedHP, setEditedHP] = useState<string>("");
   const [isEditingHO, setIsEditingHO] = useState(false);
@@ -114,6 +101,12 @@ export default function EditContentPage() {
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [adminEmail, setAdminEmail] = useState<string | null>(null);
   
+  const [activeTool, setActiveTool] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [frentesOptions, setFrentesOptions] = useState<string[]>([]);
+  const [frentesEmojis, setFrentesEmojis] = useState<Record<string, string>>({});
+  const [bolsasColors, setBolsasColors] = useState<Record<string, string>>({}); 
+  
   const [dynamicRules, setDynamicRules] = useState<{
     minimoSlotsConsecutivos: number;
     minimoSlotsDiariosPresencial: number;
@@ -121,15 +114,6 @@ export default function EditContentPage() {
     inicio: number;
     fim: number;
   } | null>(null);
-  
-  const [isAdminMode, setIsAdminMode] = useState(false);
-  const [adminEmail, setAdminEmail] = useState<string | null>(null);
-  
-  const [activeTool, setActiveTool] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [frentesOptions, setFrentesOptions] = useState<string[]>([]);
-  const [frentesEmojis, setFrentesEmojis] = useState<Record<string, string>>({});
-  const [bolsasColors, setBolsasColors] = useState<Record<string, string>>({}); 
 
   const hp = memberData?.hp ? parseFloat(memberData.hp) : 0;
   const ho = memberData?.ho ? parseFloat(memberData.ho) : 0;
@@ -284,7 +268,7 @@ export default function EditContentPage() {
               body: JSON.stringify({ action: "admin-precheck", email: loggedEmail }),
             });
             const result = await checkAdmin.json();
-            if (result.isAdmin && loggedEmail.toLowerCase() !== personId.toLowerCase()) {
+            if (result.isAdmin) {
               setIsAdminMode(true);
               setAdminEmail(loggedEmail);
             }
@@ -311,7 +295,8 @@ export default function EditContentPage() {
 
         const member = await getMemberByEmail(personId);
         if (member) {
-          if (member.editor !== 1) {
+          // Admin sempre tem acesso, independente da permissão do membro
+          if (member.editor !== 1 && !isAdminMode) {
             const isPending = member.pendingAccess === 1;
             const errorMsg = isPending
               ? "Seu cadastro está pendente de aprovação."
@@ -389,7 +374,7 @@ export default function EditContentPage() {
 
     try {
       const updatedMember: TeamMemberData = { ...memberData, frentes: editedFrentes.join(", "), schedule };
-      const result = await saveMember(updatedMember, false);
+      const result = await saveMember(updatedMember, false, false);
 
       if (result.success) {
         setMemberData(updatedMember);
@@ -557,58 +542,61 @@ export default function EditContentPage() {
   const handleSave = async () => {
     if (!currentData || !validation.valid) return false;
 
-    const allViolations: RuleViolation[] = [];
-    
-    const scheduleArray: string[] = [];
-    for (let day = 0; day <= 6; day++) {
-      for (let hour = 7; hour <= 19; hour++) {
-        const status = schedule?.[day]?.[hour];
-        let code = "";
-        if (status === "presencial") code = "P";
-        else if (status === "online") code = "O";
-        else if (status === "reuniao") code = "R";
-        else if (status === "aula") code = "A";
-        else if (status === "ocupado") code = "X";
-        else if (status === "almoco") code = "L";
-        scheduleArray.push(code);
-      }
-    }
-    
-    if (hp > 0 && ho > 0) {
-      const hoursValidation = await fetch("/api", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "validate-hours", scheduleRow: scheduleArray, hp, ho })
-      }).then(res => res.json());
+    // Admin pode sugerir o que quiser, sem validações de regras
+    if (!isAdminMode) {
+      const allViolations: RuleViolation[] = [];
       
-      if (!hoursValidation.isValid) {
-        allViolations.push({ code: "weekday-lunch-11-14" as any, day: -1, message: `❌ ${hoursValidation.message}` });
+      const scheduleArray: string[] = [];
+      for (let day = 0; day <= 6; day++) {
+        for (let hour = 7; hour <= 19; hour++) {
+          const status = schedule?.[day]?.[hour];
+          let code = "";
+          if (status === "presencial") code = "P";
+          else if (status === "online") code = "O";
+          else if (status === "reuniao") code = "R";
+          else if (status === "aula") code = "A";
+          else if (status === "ocupado") code = "X";
+          else if (status === "almoco") code = "L";
+          scheduleArray.push(code);
+        }
       }
-    }
-    
-    const scheduleResult = validateSchedule(schedule);
-    if (!scheduleResult.ok) allViolations.push(...scheduleResult.violations);
-    
-    try {
-      const dynamicValidation = await fetch("/api", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "validate-dynamic-rules", scheduleRow: scheduleArray })
-      }).then(res => res.json());
       
-      if (!dynamicValidation.isValid && dynamicValidation.errors) {
-        dynamicValidation.errors.forEach((msg: string) => {
-          allViolations.push({ code: "dynamic-rule" as any, day: -1, message: msg });
-        });
+      if (hp > 0 && ho > 0) {
+        const hoursValidation = await fetch("/api", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "validate-hours", scheduleRow: scheduleArray, hp, ho })
+        }).then(res => res.json());
+        
+        if (!hoursValidation.isValid) {
+          allViolations.push({ code: "weekday-lunch-11-14" as any, day: -1, message: `❌ ${hoursValidation.message}` });
+        }
       }
-    } catch (error) {
-      console.error("Erro ao validar regras dinâmicas:", error);
-    }
-    
-    if (allViolations.length > 0) {
-      setRulesViolations(allViolations);
-      setRulesModalOpen(true);
-      return false;
+      
+      const scheduleResult = validateSchedule(schedule);
+      if (!scheduleResult.ok) allViolations.push(...scheduleResult.violations);
+      
+      try {
+        const dynamicValidation = await fetch("/api", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "validate-dynamic-rules", scheduleRow: scheduleArray })
+        }).then(res => res.json());
+        
+        if (!dynamicValidation.isValid && dynamicValidation.errors) {
+          dynamicValidation.errors.forEach((msg: string) => {
+            allViolations.push({ code: "dynamic-rule" as any, day: -1, message: msg });
+          });
+        }
+      } catch (error) {
+        console.error("Erro ao validar regras dinâmicas:", error);
+      }
+      
+      if (allViolations.length > 0) {
+        setRulesViolations(allViolations);
+        setRulesModalOpen(true);
+        return false;
+      }
     }
 
     if (currentData.email === "exemplo@example.com") {
@@ -619,26 +607,30 @@ export default function EditContentPage() {
     setIsSaving(true);
     try {
       if (isAdminMode && adminEmail) {
-        const { saveSuggestedSchedule } = await import("../../../services/googleSheets");
-        const result = await saveSuggestedSchedule(adminEmail, currentData.email, schedule);
-        
-        if (result.success) {
-          notifications.show({ 
-            title: "Sugestão Enviada!", 
-            message: `Horário sugerido para ${memberData?.name}. O membro será notificado por email.`, 
-            color: "blue", 
-            icon: <IconCheck />,
-            autoClose: 5000
-          });
-          setSavedSchedule(cloneSchedule(schedule));
-          return true;
-        } else {
-          notifications.show({ title: "Erro", message: result.message, color: "red" });
-          return false;
+        // Admin editando outro membro: usa saveSuggestedSchedule
+        if (personId.toLowerCase() !== adminEmail.toLowerCase()) {
+          const { saveSuggestedSchedule } = await import("../../../services/googleSheets");
+          const result = await saveSuggestedSchedule(adminEmail, currentData.email, schedule);
+          
+          if (result.success) {
+            notifications.show({ 
+              title: "Sugestão Enviada!", 
+              message: `Horário sugerido para ${memberData?.name}. O membro será notificado por email.`, 
+              color: "blue", 
+              icon: <IconCheck />,
+              autoClose: 5000
+            });
+            setSavedSchedule(cloneSchedule(schedule));
+            return true;
+          } else {
+            notifications.show({ title: "Erro", message: result.message, color: "red" });
+            return false;
+          }
         }
+        // Admin editando próprio horário: usa saveMember com isAdmin=true
       }
       
-      const result = await saveMember(currentData, isNewMember);
+      const result = await saveMember(currentData, isNewMember, isAdminMode);
       if (result.success) {
         notifications.show({ title: "Sucesso!", message: "Dados salvos", color: "green", icon: <IconCheck /> });
         setMemberData(currentData); 
@@ -737,27 +729,23 @@ export default function EditContentPage() {
       if (result.success) {
         notifications.show({
           title: "Sugestão Aceita!",
-          message: "O horário sugerido foi aplicado com sucesso.",
+          message: "O horário sugerido foi aplicado. A página será recarregada.",
           color: "green",
           icon: <IconCheck />,
-          autoClose: 3000
+          autoClose: 2000
         });
         
-        if (suggestedSchedule) {
-          setSchedule(suggestedSchedule);
-          setSavedSchedule(cloneSchedule(suggestedSchedule));
-        }
-        
-        setSuggestedSchedule(null);
-        setActiveTab("original");
-        
-        setMemberData({ ...memberData, pendingSuggestion: 0 });
+        // Recarrega a página após 2 segundos para atualizar o estado de acesso
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
       } else {
         notifications.show({
           title: "Erro",
           message: result.message || "Erro ao aceitar sugestão",
           color: "red"
         });
+        setIsAcceptingSuggestion(false);
       }
     } catch (error) {
       console.error("Erro ao aceitar sugestão:", error);
@@ -815,55 +803,8 @@ export default function EditContentPage() {
   const renderToolButton = (tool: string, label: string, icon: React.ReactNode, color: string, value: string | number) => {
     const isActive = activeTool === tool;
     const canEdit = isAdminMode && (tool === 'online' || tool === 'presencial');
-    const canEdit = isAdminMode && (tool === 'online' || tool === 'presencial');
     
     return (
-      <Group gap={4} w="100%" wrap="nowrap">
-        <UnstyledButton
-          onClick={() => setActiveTool(isActive ? null : tool)}
-          style={{
-            width: isMobile ? "auto" : "100%", 
-            minWidth: isMobile ? "85px" : "auto", 
-            padding: "8px",
-            borderRadius: "8px",
-            backgroundColor: isActive ? `var(--mantine-color-${color}-1)` : "white", 
-            border: isActive ? `2px solid var(--mantine-color-${color}-6)` : "1px solid #eee",
-            transition: "all 0.2s",
-            flexShrink: 0,
-            flex: 1,
-          }}
-        >
-          <Group gap="xs" w="100%" wrap="nowrap" justify={isMobile ? "center" : "flex-start"}>
-            <ThemeIcon variant="light" color={color} size="sm">
-              {icon}
-            </ThemeIcon>
-            <Stack gap={0} align={isMobile ? "center" : "flex-start"}>
-               <Text size="xs" c={isActive ? color : "dimmed"} style={{ fontWeight: isActive ? 700 : 400, lineHeight: 1.1 }}>
-                  {label}
-               </Text>
-               {tool !== 'almoco' && tool !== 'ocupado' && (
-                  <Text size={isMobile ? "9px" : "xs"} c="dimmed" fw={600} style={{lineHeight: 1}}>
-                      {value}h 
-                  </Text>
-               )}
-            </Stack>
-          </Group>
-        </UnstyledButton>
-        {canEdit && !isMobile && (
-          <ActionIcon 
-            variant="subtle" 
-            color="gray" 
-            onClick={(e) => {
-              e.stopPropagation();
-              if (tool === 'online') handleStartEditHO();
-              else if (tool === 'presencial') handleStartEditHP();
-            }}
-            size="xs"
-          >
-            <IconPencil size={14} />
-          </ActionIcon>
-        )}
-      </Group>
       <Group gap={4} w="100%" wrap="nowrap">
         <UnstyledButton
           onClick={() => setActiveTool(isActive ? null : tool)}
@@ -1009,18 +950,6 @@ export default function EditContentPage() {
 
                 {isNewMember && <Alert radius="md" variant="light" color="blue" title="Novo Perfil" icon={<IconAlertCircle />}>Dados de exemplo.</Alert>}
                 
-                {isAdminMode && (
-                  <Alert radius="md" variant="light" color="orange" title="👨‍💼 Modo Administrador" icon={<IconAlertCircle />}>
-                    Você está editando o horário de outro membro. Ao salvar, será enviada uma sugestão para <strong>{memberData?.name}</strong>.
-                  </Alert>
-                )}
-                
-                {isAdminMode && (
-                  <Alert radius="md" variant="light" color="orange" title="👨‍💼 Modo Administrador" icon={<IconAlertCircle />}>
-                    Você está editando o horário de outro membro. Ao salvar, será enviada uma sugestão para <strong>{memberData?.name}</strong>.
-                  </Alert>
-                )}
-
                 <Stack gap={isMobile ? "xs" : "md"}>
                   <Paper p="sm" radius="md" withBorder shadow="sm">
                     <Group justify="space-between" align="center">
@@ -1089,7 +1018,7 @@ export default function EditContentPage() {
                   
                   <Box mt={isMobile ? 0 : "xs"}>
                     <Group justify="space-between" mb="xs">
-                      <Text size="sm" fw={600} style={{ textDecoration: 'underline', color: '#4A5568' }}>distribuição de horas:</Text>
+                      <Text size="sm" fw={600} style={{ color: '#4A5568' }}>Distribuição de horas:</Text>
                       <HoverCard width={320} shadow="md" withArrow position="left">
                         <HoverCard.Target>
                           <ActionIcon variant="subtle" color="gray" size="sm">
@@ -1139,6 +1068,12 @@ export default function EditContentPage() {
             {/*tabela */}
             <Grid.Col span={{ base: 12, md: 7, lg: 8 }}>
               <Stack gap="md">
+                {isAdminMode && personId.toLowerCase() !== adminEmail?.toLowerCase() && (
+                  <Alert radius="md" variant="light" color="orange" title="👨‍💼 Modo Administrador" icon={<IconAlertCircle />}>
+                    Você está editando o horário de outro membro. Ao salvar, você estará sugerindo um horário de trabalho para <strong>{memberData?.name}</strong>.
+                  </Alert>
+                )}
+                
                 {suggestedSchedule && (
                   <Alert variant="light" color="blue" title="📝 Nova Sugestão de Horário" icon={<IconInfoCircle />}>
                     O administrador sugeriu um novo horário para você. Use as abas abaixo para comparar e decidir.
@@ -1187,80 +1122,16 @@ export default function EditContentPage() {
                 
                 {(!suggestedSchedule || activeTab === "original") && (
                   <Group justify={isMobile ? "space-between" : "flex-end"} mt="md">
-                {/* Alerta de sugestão pendente */}
-                {suggestedSchedule && (
-                  <Alert variant="light" color="blue" title="📝 Nova Sugestão de Horário" icon={<IconInfoCircle />}>
-                    O administrador sugeriu um novo horário para você. Use as abas abaixo para comparar e decidir.
-                  </Alert>
-                )}
-                
-                {/* Tabs para original e sugestão */}
-                {suggestedSchedule ? (
-                  <Tabs value={activeTab} onChange={(value) => setActiveTab(value as "original" | "suggested")}>
-                    <Tabs.List>
-                      <Tabs.Tab value="original">Meu Horário Atual</Tabs.Tab>
-                      <Tabs.Tab value="suggested">Sugestão do Admin</Tabs.Tab>
-                    </Tabs.List>
-                    
-                    <Tabs.Panel value="original" pt="md">
-                      {renderScheduleTable(schedule, false)}
-                    </Tabs.Panel>
-                    
-                    <Tabs.Panel value="suggested" pt="md">
-                      {renderScheduleTable(suggestedSchedule, true)}
-                      <Group justify="flex-end" mt="md">
-                        <Button 
-                          color="green" 
-                          leftSection={<IconCheck size={18} />}
-                          onClick={handleAcceptSuggestion}
-                          loading={isAcceptingSuggestion}
-                        >
-                          Aceitar Sugestão
-                        </Button>
-                        <Button 
-                          color="red" 
-                          variant="light"
-                          leftSection={<IconX size={18} />}
-                          onClick={() => {
-                            setSuggestedSchedule(null);
-                            setActiveTab("original");
-                          }}
-                        >
-                          Recusar
-                        </Button>
-                      </Group>
-                    </Tabs.Panel>
-                  </Tabs>
-                ) : (
-                  renderScheduleTable(schedule, false)
-                )}
-                
-                {/* Botões de ação (apenas na aba original sem sugestão) */}
-                {(!suggestedSchedule || activeTab === "original") && (
-                  <Group justify={isMobile ? "space-between" : "flex-end"} mt="md">
-                    <Button leftSection={<IconRefresh size={18} />} variant="subtle" color="gray" onClick={handleReset} size={isMobile ? "xs" : "sm"}>Reset</Button>
                     <Button leftSection={<IconX size={18} />} variant="light" color="red" onClick={() => setSchedule({})} size={isMobile ? "xs" : "sm"}>Limpar</Button>
                     <Button 
                       leftSection={<IconDeviceFloppy size={18} />} 
-                      color={isAdminMode ? "orange" : "green"} 
+                      color={(isAdminMode && personId.toLowerCase() !== adminEmail?.toLowerCase()) ? "orange" : "green"} 
                       onClick={handleSave} 
                       loading={isSaving} 
                       disabled={!hasUnsavedChanges && !isNewMember} 
                       size={isMobile ? "xs" : "sm"}
                     >
-                      {isAdminMode ? "Sugerir Horário" : "Salvar"}
-                    </Button>
-                  </Group>
-                )}
-                    <Button 
-                      leftSection={<IconDeviceFloppy size={18} />} 
-                      color={isAdminMode ? "orange" : "green"} 
-                      onClick={handleSave} 
-                      loading={isSaving} 
-                      disabled={!hasUnsavedChanges && !isNewMember} 
-                      size={isMobile ? "xs" : "sm"}
-                    >
-                      {isAdminMode ? "Sugerir Horário" : "Salvar"}
+                      {isAdminMode && personId.toLowerCase() !== adminEmail?.toLowerCase() ? "Sugerir Horário" : "Salvar"}
                     </Button>
                   </Group>
                 )}
@@ -1268,7 +1139,7 @@ export default function EditContentPage() {
             </Grid.Col>
           </Grid>
 
-          <Center mt="xl"><Text size="xs" c="dimmed" ta="center">© 2025 AISE Lab</Text></Center>
+          <Center mt="xl"><Text size="xs" c="dimmed" ta="center">© 2025 AISE Lab - PUC-Rio</Text></Center>
         </Container>
 
 
@@ -1328,7 +1199,7 @@ export default function EditContentPage() {
             <Stack gap="xs" mb="md">{rulesViolations.map((v, idx) => <Text key={idx} size="sm">{v.message}</Text>)}</Stack>
           </ScrollArea>
           <Text size="xs" c="dimmed" mb="md">
-            Você pode ajustar seu horário ou solicitar uma exceção ao administrador caso seja um caso especial.
+            Ajuste seu horário ou solicite uma exceção ao administrador caso seja um caso especial.
           </Text>
           <Group justify="flex-end" gap="sm">
             <Button variant="default" onClick={() => setRulesModalOpen(false)}>Ajustar Horário</Button>

@@ -4,6 +4,78 @@ const SHEET_NAME = process.env.SHEET_NAME || "INFO";
 const BACKLOG_SHEET_NAME = process.env.BACKLOG_SHEET_NAME || "BACKLOG";
 const RULES_SHEET_NAME = process.env.RULES_SHEET_NAME || "RULES";
 const SUGGESTED_SHEET_NAME = process.env.SUGGESTED_SHEET_NAME || "SUGGESTION";
+
+// Cache para o mapeamento de colunas (para não precisar buscar toda vez)
+let columnMappingCache: Map<string, number> | null = null;
+
+/**
+ * Lê o cabeçalho da planilha e retorna um Map de nome da coluna -> índice
+ * Usa cache para evitar múltiplas leituras
+ */
+export async function getColumnMapping(sheets: any, forceRefresh = false): Promise<Map<string, number>> {
+  if (columnMappingCache && !forceRefresh) {
+    return columnMappingCache;
+  }
+  
+  const sheetRef = escapeSheetName(SHEET_NAME);
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetRef}!1:1`, // Lê apenas a primeira linha (cabeçalho)
+  });
+  
+  const headers = response.data.values?.[0] || [];
+  const mapping = new Map<string, number>();
+  
+  headers.forEach((header: string, index: number) => {
+    // Normaliza o nome da coluna removendo espaços extras
+    const normalizedHeader = header?.trim();
+    if (normalizedHeader) {
+      mapping.set(normalizedHeader, index);
+    }
+  });
+  
+  columnMappingCache = mapping;
+  return mapping;
+}
+
+/**
+ * Helper para obter o valor de uma coluna pelo nome ao invés do índice
+ */
+export function getColumnValue(row: string[], columnName: string, columnMapping: Map<string, number>): string {
+  const index = columnMapping.get(columnName);
+  if (index === undefined) {
+    console.warn(`Coluna "${columnName}" não encontrada no cabeçalho`);
+    return "";
+  }
+  return row[index] || "";
+}
+
+/**
+ * Helper para obter o índice de uma coluna pelo nome
+ */
+export function getColumnIndex(columnName: string, columnMapping: Map<string, number>): number {
+  const index = columnMapping.get(columnName);
+  if (index === undefined) {
+    throw new Error(`Coluna "${columnName}" não encontrada no cabeçalho`);
+  }
+  return index;
+}
+
+/**
+ * Converte índice de coluna (0-based) para letra de coluna do Excel (A, B, ..., Z, AA, AB, ...)
+ */
+export function columnIndexToLetter(index: number): string {
+  let letter = '';
+  let num = index;
+  
+  while (num >= 0) {
+    letter = String.fromCharCode((num % 26) + 65) + letter;
+    num = Math.floor(num / 26) - 1;
+  }
+  
+  return letter;
+}
+
 export function escapeSheetName(name: string): string {
   if (!name) return name;
   return `'${name.replace(/'/g, "''")}'`;
@@ -24,6 +96,10 @@ export async function getSheetsClient() {
 }
 export async function findRowByEmail(sheets: any, email: string): Promise<number | null> {
   const sheetRef = escapeSheetName(SHEET_NAME);
+  const columnMapping = await getColumnMapping(sheets);
+  const emailIndex = getColumnIndex("Email", columnMapping);
+  
+  // Lê as primeiras 3 colunas para encontrar o email (otimização)
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
     range: `${sheetRef}!A:C`,
@@ -31,49 +107,82 @@ export async function findRowByEmail(sheets: any, email: string): Promise<number
   const rows = response.data.values || [];
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
-    if (row[1] && row[1].toLowerCase() === email.toLowerCase()) {
+    // Usa o índice da coluna Email
+    if (row[emailIndex] && row[emailIndex].toLowerCase() === email.toLowerCase()) {
       return i + 1;
     }
   }
   return null;
 }
-export async function readMemberByEmail(email: string): Promise<{ row: string[]; rowNumber: number } | null> {
+export async function readMemberByEmail(email: string): Promise<{ row: string[]; rowNumber: number; columnMapping: Map<string, number> } | null> {
   const { sheets } = await getSheetsClient();
+  const columnMapping = await getColumnMapping(sheets);
   const rowNumber = await findRowByEmail(sheets, email);
   if (!rowNumber) return null;
   const sheetRef = escapeSheetName(SHEET_NAME);
+  
+  // Lê até a coluna HO
+  const hoIndex = getColumnIndex("HO", columnMapping);
+  const lastColumn = columnIndexToLetter(hoIndex);
+  
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    // Includes columns A..J (Nome, Email, Frentes, Bolsa, Editor, Pending-Access, Pending-TimeTable, Pending-Suggestion, HP, HO)
-    range: `${sheetRef}!A${rowNumber}:J${rowNumber}`,
+    range: `${sheetRef}!A${rowNumber}:${lastColumn}${rowNumber}`,
   });
   const row = res.data.values?.[0] || [];
-  return { row, rowNumber };
+  return { row, rowNumber, columnMapping };
 }
-export async function readExample(): Promise<string[] | null> {
+export async function readExample(): Promise<{ row: string[]; columnMapping: Map<string, number> } | null> {
   const { sheets } = await getSheetsClient();
   const sheetRef = escapeSheetName(SHEET_NAME);
+  const columnMapping = await getColumnMapping(sheets);
+  
+  // Lê até a coluna HO
+  const hoIndex = getColumnIndex("HO", columnMapping);
+  const lastColumn = columnIndexToLetter(hoIndex);
+  
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    // Example includes Bolsa, Editor, Pending-Access, Pending-TimeTable, Pending-Suggestion, HP and HO
-    range: `${sheetRef}!A2:J2`,
+    range: `${sheetRef}!A2:${lastColumn}2`,
   });
-  return res.data.values?.[0] || null;
+  const row = res.data.values?.[0];
+  if (!row) return null;
+  return { row, columnMapping };
 }
 export async function updateMemberRow(member: { name: string; email: string; frentes: string; bolsa?: string; editor?: number | string; pendingAccess?: number | string; pendingTimeTable?: number | string; pendingSuggestion?: number | string; hp?: string; ho?: string }, isNew: boolean) {
   const { sheets } = await getSheetsClient();
   const sheetRef = escapeSheetName(SHEET_NAME);
+  const columnMapping = await getColumnMapping(sheets);
+  
   const bolsa = member.bolsa ?? "";
   const editorFlag = isNew ? 0 : (member.editor ?? 0); // Novo cadastro sempre Editor=0
   const pendingAccessFlag = isNew ? 1 : (member.pendingAccess ?? 0); // Novo cadastro sempre Pending-Access=1
   const pendingTimeTableFlag = member.pendingTimeTable ?? 0; // Pending-TimeTable começa em 0
   const pendingSuggestionFlag = member.pendingSuggestion ?? 0; // Pending-Suggestion começa em 0
-  const values = [[member.name, member.email, member.frentes, bolsa, editorFlag, pendingAccessFlag, pendingTimeTableFlag, pendingSuggestionFlag, member.hp ?? "", member.ho ?? ""]];
+  
+  // Cria um array com o tamanho correto baseado no mapeamento de colunas
+  const hoIndex = getColumnIndex("HO", columnMapping);
+  const rowArray = new Array(hoIndex + 1).fill("");
+  
+  // Preenche os valores usando os nomes das colunas
+  rowArray[getColumnIndex("Nome", columnMapping)] = member.name;
+  rowArray[getColumnIndex("Email", columnMapping)] = member.email;
+  rowArray[getColumnIndex("Frentes", columnMapping)] = member.frentes;
+  rowArray[getColumnIndex("Bolsa", columnMapping)] = bolsa;
+  rowArray[getColumnIndex("Editor", columnMapping)] = editorFlag;
+  rowArray[getColumnIndex("Pending-Access", columnMapping)] = pendingAccessFlag;
+  rowArray[getColumnIndex("Pending-TimeTable", columnMapping)] = pendingTimeTableFlag;
+  rowArray[getColumnIndex("Pending-Suggestion", columnMapping)] = pendingSuggestionFlag;
+  rowArray[getColumnIndex("HP", columnMapping)] = member.hp ?? "";
+  rowArray[getColumnIndex("HO", columnMapping)] = member.ho ?? "";
+  
+  const values = [rowArray];
+  
   if (isNew) {
+    const lastColumn = columnIndexToLetter(hoIndex);
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      // Append through HO column (A..J)
-      range: `${sheetRef}!A:J`,
+      range: `${sheetRef}!A:${lastColumn}`,
       valueInputOption: "RAW",
       requestBody: { values },
     });
@@ -83,10 +192,11 @@ export async function updateMemberRow(member: { name: string; email: string; fre
   if (!rowNumber) {
     return { success: false, message: "Membro não encontrado para atualização" };
   }
+  
+  const lastColumn = columnIndexToLetter(hoIndex);
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
-    // Update A..J (including Bolsa, Editor, Pending-Access, Pending-TimeTable, Pending-Suggestion, HP, HO)
-    range: `${sheetRef}!A${rowNumber}:J${rowNumber}`,
+    range: `${sheetRef}!A${rowNumber}:${lastColumn}${rowNumber}`,
     valueInputOption: "RAW",
     requestBody: { values },
   });
@@ -95,10 +205,17 @@ export async function updateMemberRow(member: { name: string; email: string; fre
 export async function saveScheduleRow(email: string, scheduleRow: string[]) {
   const { sheets } = await getSheetsClient();
   const sheetRef = escapeSheetName(SHEET_NAME);
+  const columnMapping = await getColumnMapping(sheets);
   const rowNumber = await findRowByEmail(sheets, email);
   if (!rowNumber) return { success: false, message: `Email ${email} não encontrado` };
-  // 7 dias x 13 horas = 91 colunas -> agora K..EB (após Bolsa, Editor, Pending-Access, Pending-TimeTable, Pending-Suggestion, HP, HO)
-  const range = `${sheetRef}!K${rowNumber}:EB${rowNumber}`;
+  
+  // Calcula o range das colunas de schedule (começa após HO)
+  const hoIndex = getColumnIndex("HO", columnMapping);
+  const scheduleStartCol = columnIndexToLetter(hoIndex + 1);
+  // 7 dias x 13 horas = 91 colunas
+  const scheduleEndCol = columnIndexToLetter(hoIndex + 91);
+  const range = `${sheetRef}!${scheduleStartCol}${rowNumber}:${scheduleEndCol}${rowNumber}`;
+  
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
     range,
@@ -106,8 +223,10 @@ export async function saveScheduleRow(email: string, scheduleRow: string[]) {
     requestBody: { values: [scheduleRow] },
   });
   
-  // Marca Pending-TimeTable=1 após salvar (coluna H)
-  const rangePendingTimeTable = `${sheetRef}!H${rowNumber}`;
+  // Marca Pending-TimeTable=1 após salvar
+  const pendingTimeTableIndex = getColumnIndex("Pending-TimeTable", columnMapping);
+  const pendingTimeTableCol = columnIndexToLetter(pendingTimeTableIndex);
+  const rangePendingTimeTable = `${sheetRef}!${pendingTimeTableCol}${rowNumber}`;
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
     range: rangePendingTimeTable,
@@ -121,10 +240,17 @@ export async function saveScheduleRow(email: string, scheduleRow: string[]) {
 export async function saveScheduleRowAsException(email: string, scheduleRow: string[]) {
   const { sheets } = await getSheetsClient();
   const sheetRef = escapeSheetName(SHEET_NAME);
+  const columnMapping = await getColumnMapping(sheets);
   const rowNumber = await findRowByEmail(sheets, email);
   if (!rowNumber) return { success: false, message: `Email ${email} não encontrado` };
-  // 7 dias x 13 horas = 91 colunas -> agora K..EB (após Bolsa, Editor, Pending-Access, Pending-TimeTable, Pending-Suggestion, HP, HO)
-  const range = `${sheetRef}!K${rowNumber}:EB${rowNumber}`;
+  
+  // Calcula o range das colunas de schedule (começa após HO)
+  const hoIndex = getColumnIndex("HO", columnMapping);
+  const scheduleStartCol = columnIndexToLetter(hoIndex + 1);
+  // 7 dias x 13 horas = 91 colunas
+  const scheduleEndCol = columnIndexToLetter(hoIndex + 91);
+  const range = `${sheetRef}!${scheduleStartCol}${rowNumber}:${scheduleEndCol}${rowNumber}`;
+  
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
     range,
@@ -132,13 +258,15 @@ export async function saveScheduleRowAsException(email: string, scheduleRow: str
     requestBody: { values: [scheduleRow] },
   });
   
-  // Marca Pending-TimeTable=2 para indicar exceção (coluna H)
-  const rangePendingTimeTable = `${sheetRef}!H${rowNumber}`;
+  // Marca Pending-TimeTable=2 para indicar exceção solicitada
+  const pendingTimeTableIndex = getColumnIndex("Pending-TimeTable", columnMapping);
+  const pendingTimeTableCol = columnIndexToLetter(pendingTimeTableIndex);
+  const rangePendingTimeTable = `${sheetRef}!${pendingTimeTableCol}${rowNumber}`;
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
     range: rangePendingTimeTable,
     valueInputOption: "RAW",
-    requestBody: { values: [[2]] }, // Define Pending-TimeTable=2 (exceção)
+    requestBody: { values: [[2]] }, // Define Pending-TimeTable=2 (exceção solicitada)
   });
   
   return { success: true, message: "Schedule salvo como exceção e enviado para aprovação." };
@@ -147,21 +275,28 @@ export async function saveScheduleRowAsException(email: string, scheduleRow: str
 export async function loadScheduleRow(email: string): Promise<string[] | null> {
   const { sheets } = await getSheetsClient();
   const sheetRef = escapeSheetName(SHEET_NAME);
+  const columnMapping = await getColumnMapping(sheets);
   const rowNumber = await findRowByEmail(sheets, email);
   if (!rowNumber) return null;
-  // 7 dias x 13 horas = 91 colunas -> agora K..EB
-  const range = `${sheetRef}!K${rowNumber}:EB${rowNumber}`;
+  
+  // Calcula o range das colunas de schedule (começa após HO)
+  const hoIndex = getColumnIndex("HO", columnMapping);
+  const scheduleStartCol = columnIndexToLetter(hoIndex + 1);
+  // 7 dias x 13 horas = 91 colunas
+  const scheduleEndCol = columnIndexToLetter(hoIndex + 91);
+  const range = `${sheetRef}!${scheduleStartCol}${rowNumber}:${scheduleEndCol}${rowNumber}`;
+  
   const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range });
   return res.data.values?.[0] || [];
 }
 export async function readAllMembers(): Promise<string[][]> {
   const { sheets } = await getSheetsClient();
   const sheetRef = escapeSheetName(SHEET_NAME);
-  // Lê todos os dados de uma vez (A-EB = Nome, Email, Frentes, Bolsa, Editor, Pending-Access, Pending-TimeTable, Pending-Suggestion, HP, HO + Schedule)
+  // Lê todos os dados incluindo o cabeçalho (A1-EB = Nome, Email, Frentes, Bolsa, Editor, Pending-Access, Pending-TimeTable, Pending-Suggestion, HP, HO + Schedule)
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    // Inclui toda a faixa até EB
-    range: `${sheetRef}!A2:EB`,
+    // Inclui toda a faixa até EB, começando do cabeçalho
+    range: `${sheetRef}!A1:EB`,
   });
   return res.data.values || [];
 }
@@ -175,19 +310,31 @@ export async function readAllMembers(): Promise<string[][]> {
 export async function updateMemberAccess(email: string, editor: number, pendingAccess: number) {
   const { sheets } = await getSheetsClient();
   const sheetRef = escapeSheetName(SHEET_NAME);
+  const columnMapping = await getColumnMapping(sheets);
   const rowNumber = await findRowByEmail(sheets, email);
   
   if (!rowNumber) {
     return { success: false, message: "Membro não encontrado" };
   }
   
-  // Atualiza colunas E (Editor) e F (Pending-Access)
-  const rangeEditorAndPending = `${sheetRef}!E${rowNumber}:F${rowNumber}`;
+  // Atualiza coluna Editor
+  const editorIndex = getColumnIndex("Editor", columnMapping);
+  const editorCol = columnIndexToLetter(editorIndex);
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
-    range: rangeEditorAndPending,
+    range: `${sheetRef}!${editorCol}${rowNumber}`,
     valueInputOption: "RAW",
-    requestBody: { values: [[editor, pendingAccess]] },
+    requestBody: { values: [[editor]] },
+  });
+  
+  // Atualiza coluna Pending-Access
+  const pendingAccessIndex = getColumnIndex("Pending-Access", columnMapping);
+  const pendingAccessCol = columnIndexToLetter(pendingAccessIndex);
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetRef}!${pendingAccessCol}${rowNumber}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [[pendingAccess]] },
   });
   
   return { success: true, message: "Acesso atualizado com sucesso" };
@@ -201,6 +348,7 @@ export async function updateMemberAccess(email: string, editor: number, pendingA
 export async function approveSchedule(email: string, keepEditor: boolean) {
   const { sheets } = await getSheetsClient();
   const sheetRef = escapeSheetName(SHEET_NAME);
+  const columnMapping = await getColumnMapping(sheets);
   const rowNumber = await findRowByEmail(sheets, email);
   
   if (!rowNumber) {
@@ -208,14 +356,38 @@ export async function approveSchedule(email: string, keepEditor: boolean) {
   }
   
   const editorValue = keepEditor ? 1 : 0;
-  // Atualiza colunas E (Editor) e H (Pending-TimeTable)
-  const rangeEditorAndPendingTT = `${sheetRef}!E${rowNumber}:H${rowNumber}`;
+  
+  // Zera tanto Pending-TimeTable quanto Pending-Suggestion ao aprovar
+  const editorIndex = getColumnIndex("Editor", columnMapping);
+  const pendingTimeTableIndex = getColumnIndex("Pending-TimeTable", columnMapping);
+  const pendingSuggestionIndex = getColumnIndex("Pending-Suggestion", columnMapping);
+  
+  const editorCol = columnIndexToLetter(editorIndex);
+  const pendingTimeTableCol = columnIndexToLetter(pendingTimeTableIndex);
+  const pendingSuggestionCol = columnIndexToLetter(pendingSuggestionIndex);
+  
+  // Atualiza Editor
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
-    range: rangeEditorAndPendingTT,
+    range: `${sheetRef}!${editorCol}${rowNumber}`,
     valueInputOption: "RAW",
-    // Define Editor conforme parâmetro, mantém Pending-Access (F) e Pending-Suggestion (G) como estão, e zera Pending-TimeTable (H)
-    requestBody: { values: [[editorValue, "", "", 0]] }, // Deixa F e G vazios para não alterar, zera H
+    requestBody: { values: [[editorValue]] },
+  });
+  
+  // Zera Pending-TimeTable
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetRef}!${pendingTimeTableCol}${rowNumber}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [[0]] },
+  });
+  
+  // Zera Pending-Suggestion
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetRef}!${pendingSuggestionCol}${rowNumber}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [[0]] },
   });
   
   return { success: true, message: keepEditor ? "Schedule aprovado. Editor mantido." : "Schedule aprovado. Acesso de edição removido." };
@@ -233,21 +405,32 @@ export async function readBacklogOptions(): Promise<{
   const backlogSheetName = escapeSheetName(BACKLOG_SHEET_NAME);
   
   try {
-    // Lê todas as linhas das colunas A até D (ignorando a primeira linha que é o cabeçalho)
+    // Lê todas as linhas incluindo o cabeçalho
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${backlogSheetName}!A2:D`,
+      range: `${backlogSheetName}!A1:D`,
     });
     
     const rows = res.data.values || [];
+    if (rows.length === 0) return { frentes: [], bolsas: [] };
+    
+    // Primeira linha é o cabeçalho
+    const headerRow = rows[0];
+    const columnMapping = new Map<string, number>();
+    headerRow.forEach((col: string, idx: number) => {
+      columnMapping.set(col, idx);
+    });
+    
     const frentes: Array<{ name: string; emoji: string }> = [];
     const bolsas: Array<{ name: string; color: string }> = [];
     
-    for (const row of rows) {
-      const frenteName = row[0]?.trim();
-      const frenteEmoji = row[1]?.trim() || "📌";
-      const bolsaName = row[2]?.trim();
-      const bolsaColor = row[3]?.trim() || "#888888";
+    // Processa linhas de dados (pula o cabeçalho)
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const frenteName = getColumnValue(row, "Frentes", columnMapping)?.trim();
+      const frenteEmoji = getColumnValue(row, "Emoji-Frente", columnMapping)?.trim() || "📌";
+      const bolsaName = getColumnValue(row, "Bolsa", columnMapping)?.trim();
+      const bolsaColor = getColumnValue(row, "Cor-Bolsa", columnMapping)?.trim() || "#888888";
       
       if (frenteName && frenteName !== "") {
         frentes.push({ name: frenteName, emoji: frenteEmoji });
@@ -281,13 +464,30 @@ export async function readRulesFromSheet(): Promise<{
   const rulesSheetName = escapeSheetName(RULES_SHEET_NAME);
   
   try {
-    // Lê todas as linhas das colunas A até B (ignorando a primeira linha que é o cabeçalho)
+    // Lê todas as linhas incluindo o cabeçalho
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${rulesSheetName}!A2:B`,
+      range: `${rulesSheetName}!A1:B`,
     });
     
     const rows = res.data.values || [];
+    if (rows.length === 0) {
+      // Retorna valores padrão se não houver dados
+      return {
+        minimoSlotsConsecutivos: 2,
+        minimoSlotsDiariosPresencial: 4,
+        intervaloAlmoco: "11-14",
+        inicio: 8,
+        fim: 20,
+      };
+    }
+    
+    // Primeira linha é o cabeçalho
+    const headerRow = rows[0];
+    const columnMapping = new Map<string, number>();
+    headerRow.forEach((col: string, idx: number) => {
+      columnMapping.set(col, idx);
+    });
     
     // Valores padrão caso não encontre na planilha
     let minimoSlotsConsecutivos = 2;
@@ -296,9 +496,11 @@ export async function readRulesFromSheet(): Promise<{
     let inicio = 8; // Padrão: 8h
     let fim = 20; // Padrão: 20h (fim do range, não inclusivo)
     
-    for (const row of rows) {
-      const regra = row[0]?.trim().toLowerCase();
-      const valor = row[1]?.trim();
+    // Processa linhas de dados (pula o cabeçalho)
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const regra = getColumnValue(row, "Regra", columnMapping)?.trim().toLowerCase();
+      const valor = getColumnValue(row, "Valor", columnMapping)?.trim();
       
       // Aceita vários formatos para as regras
       if (regra.includes("slots seguidos") || regra.includes("slots_seguidos")) {
@@ -364,11 +566,17 @@ export async function saveSuggestedSchedule(targetEmail: string, scheduleRow: st
   // Prepara a linha completa: [Email, ...scheduleRow]
   const fullRow = [targetEmail, ...scheduleRow];
   
+  console.log(`saveSuggestedSchedule: scheduleRow length=${scheduleRow.length}, fullRow length=${fullRow.length}`);
+  
+  if (fullRow.length !== 92) {
+    console.error(`ERRO: fullRow deveria ter 92 elementos (1 email + 91 schedule) mas tem ${fullRow.length}`);
+  }
+  
   if (rowNumber) {
     // Atualiza a linha existente
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${suggestedSheetName}!A${rowNumber}:CL${rowNumber}`,
+      range: `${suggestedSheetName}!A${rowNumber}:CN${rowNumber}`,
       valueInputOption: "RAW",
       requestBody: { values: [fullRow] },
     });
@@ -376,21 +584,48 @@ export async function saveSuggestedSchedule(targetEmail: string, scheduleRow: st
     // Adiciona nova linha
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${suggestedSheetName}!A:CL`,
+      range: `${suggestedSheetName}!A:CN`,
       valueInputOption: "RAW",
       requestBody: { values: [fullRow] },
     });
   }
   
-  // Marca Pending-Suggestion=1 na aba principal (coluna H)
+  // Marca Pending-Suggestion=1 E concede acesso de edição (Editor=1) na aba principal
   const mainRowNumber = await findRowByEmail(sheets, targetEmail);
   if (mainRowNumber) {
     const mainSheetRef = escapeSheetName(SHEET_NAME);
+    const mainColumnMapping = await getColumnMapping(sheets);
+    
+    const pendingSuggestionIndex = getColumnIndex("Pending-Suggestion", mainColumnMapping);
+    const pendingSuggestionCol = columnIndexToLetter(pendingSuggestionIndex);
+    
+    const editorIndex = getColumnIndex("Editor", mainColumnMapping);
+    const editorCol = columnIndexToLetter(editorIndex);
+    
+    const pendingAccessIndex = getColumnIndex("Pending-Access", mainColumnMapping);
+    const pendingAccessCol = columnIndexToLetter(pendingAccessIndex);
+    
+    // Atualiza Pending-Suggestion=1
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${mainSheetRef}!H${mainRowNumber}`,
+      range: `${mainSheetRef}!${pendingSuggestionCol}${mainRowNumber}`,
       valueInputOption: "RAW",
       requestBody: { values: [[1]] },
+    });
+    
+    // Concede acesso de edição (Editor=1, Pending-Access=0)
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${mainSheetRef}!${editorCol}${mainRowNumber}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [[1]] },
+    });
+    
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${mainSheetRef}!${pendingAccessCol}${mainRowNumber}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [[0]] },
     });
   }
   
@@ -409,7 +644,7 @@ export async function loadSuggestedSchedule(email: string): Promise<string[] | n
   // Busca o email na aba SUGGESTED
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${suggestedSheetName}!A:CL`,
+    range: `${suggestedSheetName}!A:CN`,
   });
   
   const rows = res.data.values || [];
@@ -417,7 +652,7 @@ export async function loadSuggestedSchedule(email: string): Promise<string[] | n
   // Procura pelo email (pula cabeçalho na linha 1)
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][0]?.toLowerCase() === email.toLowerCase()) {
-      // Retorna as colunas B..CL (índices 1..91)
+      // Retorna as colunas B..CN (índices 1..92), mas limitado a 91 elementos
       return rows[i].slice(1, 92);
     }
   }
@@ -445,17 +680,39 @@ export async function acceptSuggestedSchedule(email: string) {
   }
   
   const mainSheetRef = escapeSheetName(SHEET_NAME);
+  const columnMapping = await getColumnMapping(sheets);
+  
+  // Calcula o range das colunas de schedule (começa após HO)
+  const hoIndex = getColumnIndex("HO", columnMapping);
+  const scheduleStartCol = columnIndexToLetter(hoIndex + 1);
+  // 7 dias x 13 horas = 91 colunas
+  const scheduleEndCol = columnIndexToLetter(hoIndex + 91);
+  
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${mainSheetRef}!K${mainRowNumber}:EB${mainRowNumber}`,
+    range: `${mainSheetRef}!${scheduleStartCol}${mainRowNumber}:${scheduleEndCol}${mainRowNumber}`,
     valueInputOption: "RAW",
     requestBody: { values: [suggestedSchedule] },
   });
   
-  // 3. Limpa Pending-Suggestion=0 na aba principal (coluna H)
+  // 3. Limpa Pending-Suggestion=0 e Editor=0 na aba principal
+  const pendingSuggestionIndex = getColumnIndex("Pending-Suggestion", columnMapping);
+  const pendingSuggestionCol = columnIndexToLetter(pendingSuggestionIndex);
+  
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${mainSheetRef}!H${mainRowNumber}`,
+    range: `${mainSheetRef}!${pendingSuggestionCol}${mainRowNumber}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [[0]] },
+  });
+  
+  // Remove acesso de edição ao aceitar sugestão
+  const editorIndex = getColumnIndex("Editor", columnMapping);
+  const editorCol = columnIndexToLetter(editorIndex);
+  
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${mainSheetRef}!${editorCol}${mainRowNumber}`,
     valueInputOption: "RAW",
     requestBody: { values: [[0]] },
   });
