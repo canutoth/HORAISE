@@ -113,7 +113,7 @@ export default function HomePage() {
                       Scheduler
                     </Title>
                     <Text size="sm" c="dimmed" mt="xs">
-                      Encontre os melhores horários para agendar reuniões com a equipe
+                      Encontre horários para agendar reuniões com o seu time
                     </Text>
                   </Box>
 
@@ -172,7 +172,7 @@ export default function HomePage() {
                       Editor
                     </Title>
                     <Text size="sm" c="dimmed" mt="xs">
-                      Aloque e edite sua disponibilidade semanal e as frentes que você atua
+                      Aloque e edite sua disponibilidade semanal
                     </Text>
                   </Box>
 
@@ -231,7 +231,7 @@ export default function HomePage() {
                       Viewer
                     </Title>
                     <Text size="sm" c="dimmed" mt="xs">
-                      Visualize os horários de todos os membros
+                      Visualize os horários de todos os membros do time
                     </Text>
                   </Box>
 

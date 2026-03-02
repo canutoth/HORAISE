@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     template: "%s | HORAISE",
     default: "HORAISE"
   },
-  description: "Editor de horários da equipe AISE - PUC-Rio",
+  description: "Editor de horários do AISELab - PUC-Rio",
 };
 export default function RootLayout({
   children,
