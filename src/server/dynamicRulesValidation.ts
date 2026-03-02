@@ -52,7 +52,17 @@ function isPresencialSlot(value: string): boolean {
 
 /**
  * Valida a regra de mínimo de slots consecutivos
- * Se a pessoa trabalha (P, O ou R), TODOS os grupos de trabalho precisam ter pelo menos X slots seguidos
+ * Se a pessoa trabalha PRESENCIALMENTE (P), os blocos de P + R (reunião) precisam ter pelo menos X slots seguidos
+ * NOTA: 
+ * - R (reunião) conta como parte do bloco consecutivo quando há P no mesmo bloco
+ * - L (almoço) NÃO interrompe o bloco, mas NÃO conta no total de slots
+ * - Blocos que são apenas R não são validados (não violam a regra)
+ * - O (online) NÃO faz parte dessa validação
+ * 
+ * Exemplos (regra mínima = 3):
+ * - PLPR = 3 slots válidos (P,P,R) ✅
+ * - PPLP = 3 slots válidos (P,P,P) ✅
+ * - PLP = 2 slots válidos (P,P) ❌
  */
 export function validateConsecutiveSlots(
   scheduleRow: string[],
@@ -66,29 +76,53 @@ export function validateConsecutiveSlots(
     // Ignora fins de semana (sábado=5, domingo=6)
     if (day >= 5) return;
     
-    const streaks: number[] = []; // Armazena todos os grupos de trabalho consecutivos
-    let currentStreak = 0;
+    const streaks: { length: number; hasPresencial: boolean }[] = [];
+    let currentStreakLength = 0; // Conta apenas P e R
+    let currentStreakHasPresencial = false;
+    let inBlock = false; // Indica se estamos dentro de um bloco
     
     for (const slot of slots) {
-      if (isWorkSlot(slot)) {
-        currentStreak++;
-      } else {
-        if (currentStreak > 0) {
-          streaks.push(currentStreak);
-          currentStreak = 0;
+      // P, R ou L fazem parte do bloco consecutivo
+      if (slot === "P" || slot === "R" || slot === "L") {
+        inBlock = true;
+        
+        // Apenas P e R contam no comprimento
+        if (slot === "P" || slot === "R") {
+          currentStreakLength++;
+          if (slot === "P") {
+            currentStreakHasPresencial = true;
+          }
         }
+        // L não interrompe mas não conta
+      } else {
+        // Fim do bloco, salva se houver algo
+        if (inBlock && currentStreakLength > 0) {
+          streaks.push({
+            length: currentStreakLength,
+            hasPresencial: currentStreakHasPresencial
+          });
+        }
+        currentStreakLength = 0;
+        currentStreakHasPresencial = false;
+        inBlock = false;
       }
     }
     
-    // Adiciona o último grupo se terminou trabalhando
-    if (currentStreak > 0) {
-      streaks.push(currentStreak);
+    // Adiciona o último grupo se terminou no bloco
+    if (inBlock && currentStreakLength > 0) {
+      streaks.push({
+        length: currentStreakLength,
+        hasPresencial: currentStreakHasPresencial
+      });
     }
     
-    // Verifica se ALGUM grupo tem menos que o mínimo
-    const violatingStreaks = streaks.filter(s => s < minimoSlots);
+    // Verifica apenas os blocos que TÊM presencial (P)
+    // Blocos que são apenas R não são validados
+    const violatingStreaks = streaks.filter(
+      s => s.hasPresencial && s.length < minimoSlots
+    );
+    
     if (violatingStreaks.length > 0) {
-      const minFound = Math.min(...streaks);
       errors.push(
         `${dayNames[day]}: Você tem grupo(s) de trabalho com menos de ${minimoSlots} slots consecutivos.`
       );

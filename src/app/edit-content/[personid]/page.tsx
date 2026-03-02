@@ -1036,7 +1036,9 @@ export default function EditContentPage() {
                               <List.Item>Horário de trabalho: <strong>{dynamicRules.inicio}h - {dynamicRules.fim}h</strong></List.Item>
                               <List.Item>Almoço obrigatório: <strong>{dynamicRules.intervaloAlmoco}h</strong></List.Item>
                               <List.Item>Mínimo <strong>{dynamicRules.minimoSlotsConsecutivos} slots consecutivos</strong></List.Item>
-                              <List.Item>Mínimo <strong>{dynamicRules.minimoSlotsDiariosPresencial} slots presenciais</strong> por dia</List.Item>
+                              {dynamicRules.minimoSlotsDiariosPresencial > 0 && (
+                                <List.Item>Mínimo <strong>{dynamicRules.minimoSlotsDiariosPresencial} slots presenciais</strong> por dia</List.Item>
+                              )}
                               <List.Item>Você pode solicitar exceção em casos especiais</List.Item>
                             </List>
                           ) : (
