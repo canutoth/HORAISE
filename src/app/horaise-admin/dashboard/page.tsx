@@ -165,7 +165,7 @@ export default function AdminDashboard() {
         position="bottom-end" 
         withArrow 
         shadow="md"
-        closeOnClickOutside={true}
+        closeOnClickOutside={false}
         closeOnEscape={true}
       >
         <Popover.Target>
@@ -181,7 +181,17 @@ export default function AdminDashboard() {
 
         <Popover.Dropdown>
           <Stack gap="sm">
-            <Text size="sm" fw={700} c="dimmed">Editar Dados</Text>
+            <Group justify="space-between" align="center">
+              <Text size="sm" fw={700} c="dimmed">Editar Dados</Text>
+              <ActionIcon 
+                variant="subtle" 
+                color="gray" 
+                size="sm"
+                onClick={() => setOpened(false)}
+              >
+                <IconX size={16} />
+              </ActionIcon>
+            </Group>
             
             <MultiSelect
               label="Frente(s)"
