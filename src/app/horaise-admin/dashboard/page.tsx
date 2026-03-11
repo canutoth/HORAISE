@@ -100,6 +100,14 @@ export default function AdminDashboard() {
   const isMobile = useMediaQuery('(max-width: 768px)');
   const [frentesOptions, setFrentesOptions] = useState<{ value: string; label: string }[]>([]);
   const [bolsasOptions, setBolsasOptions] = useState<{ value: string; label: string; color: string }[]>([]);
+  
+  // Estado para armazenar edições pendentes (não salvas na planilha ainda)
+  const [pendingEdits, setPendingEdits] = useState<Record<string, {
+    frentes: string;
+    bolsa: string;
+    hp: number;
+    ho: number;
+  }>>({});
 
   // Pendentes (editor !== 1) aparecem primeiro e depois ordem alfabética
   const sortedMembers = useMemo(() => {
@@ -122,38 +130,49 @@ export default function AdminDashboard() {
 
   // Componente interno para ter acesso aos estados
   const EditMemberPopover = ({ 
-    member, 
-    onSave 
+    member
   }: { 
-    member: AdminMember; 
-    onSave: (data: any) => void 
+    member: AdminMember;
   }) => {
     const [opened, setOpened] = useState(false);
+    
+    // Inicializa com os dados pendentes se existirem, senão usa os do membro
+    const pendingData = pendingEdits[member.email];
     const [frentesSelecionadas, setFrentesSelecionadas] = useState<string[]>(
-      member.frentes ? member.frentes.split(",").map((s) => s.trim()).filter(Boolean) : []
+      pendingData?.frentes 
+        ? pendingData.frentes.split(",").map((s) => s.trim()).filter(Boolean)
+        : member.frentes ? member.frentes.split(",").map((s) => s.trim()).filter(Boolean) : []
     );
     
     const [bolsasSelecionadas, setBolsasSelecionadas] = useState<string[]>(
-      member.bolsa && member.bolsa !== "nan" && member.bolsa.trim() !== '' 
-        ? member.bolsa.split(",").map((s) => s.trim()).filter(Boolean) 
-        : []
+      pendingData?.bolsa && pendingData.bolsa !== "nan" && pendingData.bolsa.trim() !== ''
+        ? pendingData.bolsa.split(",").map((s) => s.trim()).filter(Boolean)
+        : member.bolsa && member.bolsa !== "nan" && member.bolsa.trim() !== '' 
+          ? member.bolsa.split(",").map((s) => s.trim()).filter(Boolean) 
+          : []
     );
 
     const [hours, setHours] = useState({
-      hp: member.hp,
-      ho: member.ho,
+      hp: pendingData?.hp ?? member.hp,
+      ho: pendingData?.ho ?? member.ho,
     });
 
     const handleSave = () => {
+      // Salva apenas no estado local (não envia para planilha)
+      setPendingEdits(prev => ({
+        ...prev,
+        [member.email]: {
+          frentes: frentesSelecionadas.join(", "),
+          bolsa: bolsasSelecionadas.join(", "),
+          hp: hours.hp,
+          ho: hours.ho,
+        }
+      }));
       setOpened(false);
-      onSave({
-        email: member.email,
-        frentes: frentesSelecionadas.join(", "),
-        bolsa: bolsasSelecionadas.join(", "),
-        hp: hours.hp,
-        ho: hours.ho,
-        pending: member.pendingAccess,
-        editor: member.editor
+      notifications.show({ 
+        title: "Salvo localmente", 
+        message: "Clique no ✓ para confirmar o cadastro", 
+        color: "blue" 
       });
     };
 
@@ -377,6 +396,79 @@ export default function AdminDashboard() {
     setConfirmationModal({ type: null, email: '', name: '' });
   };
 
+  // Confirmar cadastro pendente (envia para planilha)
+  const handleConfirmRegistration = async (member: AdminMember) => {
+    const editData = pendingEdits[member.email];
+    
+    // Se não há edições pendentes, valida os dados atuais do membro
+    if (!editData) {
+      const hasBothHoursZero = member.ho === 0 && member.hp === 0;
+      const hasMissingBolsa = !member.bolsa || member.bolsa === 'nan' || member.bolsa.trim() === '';
+      
+      if (hasBothHoursZero || hasMissingBolsa) {
+        notifications.show({ 
+          title: "Dados incompletos", 
+          message: hasBothHoursZero ? "Defina ao menos HO ou HP (não ambos zerados)" : "Preencha a bolsa antes de confirmar", 
+          color: "orange" 
+        });
+        return;
+      }
+    } else {
+      // Se há edições pendentes, valida os dados editados
+      const hasBothHoursZero = editData.ho === 0 && editData.hp === 0;
+      const hasMissingBolsa = !editData.bolsa || editData.bolsa === 'nan' || editData.bolsa.trim() === '';
+      
+      if (hasBothHoursZero || hasMissingBolsa) {
+        notifications.show({ 
+          title: "Dados incompletos", 
+          message: hasBothHoursZero ? "Defina ao menos HO ou HP (não ambos zerados)" : "Preencha a bolsa antes de confirmar", 
+          color: "orange" 
+        });
+        return;
+      }
+    }
+    
+    const dataToSend = editData || {
+      frentes: member.frentes,
+      bolsa: member.bolsa,
+      hp: member.hp,
+      ho: member.ho,
+    };
+    
+    try {
+      const response = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          action: "update-member-data",
+          email: member.email,
+          frentes: dataToSend.frentes,
+          bolsa: dataToSend.bolsa,
+          hp: dataToSend.hp,
+          ho: dataToSend.ho,
+        }),
+      });
+
+      const resJson = await response.json();
+      
+      if (response.ok) {
+        notifications.show({ title: "Sucesso", message: "Cadastro aprovado e acesso liberado!", color: "green" });
+        // Remove do estado de edições pendentes
+        setPendingEdits(prev => {
+          const newState = { ...prev };
+          delete newState[member.email];
+          return newState;
+        });
+        fetchMembers();
+      } else {
+        notifications.show({ title: "Erro", message: resJson.error || "Falha ao salvar", color: "red" });
+      }
+    } catch (error) {
+      console.error(error);
+      notifications.show({ title: "Erro", message: "Erro de conexão", color: "red" });
+    }
+  };
+
   // salvar edicao
   const handleUpdateData = async (data: any) => {
     try {
@@ -411,18 +503,19 @@ export default function AdminDashboard() {
     router.push("/horaise-admin");
   };
 
-  // Cadastro pendente = HP ou HO zerados/vazios OU sem bolsa definida
+  // Cadastro pendente = (HP E HO ambos zerados) OU sem bolsa definida
   const pendingRegistrations = sortedMembers.filter(m => {
-    const hasMissingHours = m.ho === 0 || m.hp === 0;
+    const hasBothHoursZero = m.ho === 0 && m.hp === 0;
     const hasMissingBolsa = !m.bolsa || m.bolsa === 'nan' || m.bolsa.trim() === '';
-    return hasMissingHours || hasMissingBolsa;
+    return hasBothHoursZero || hasMissingBolsa;
   });
   
   const pendingSchedules = sortedMembers.filter(m => m.pendingTimeTable === 1 || m.pendingTimeTable === 2);
   
-  // Acessos de Edição = Apenas pessoas COM todos os dados preenchidos (HP, HO, Bolsa)
+  // Acessos de Edição = Apenas pessoas COM todos os dados preenchidos (HP+HO > 0, Bolsa)
   const activeEditors = sortedMembers.filter(m => {
-    const hasAllData = m.ho > 0 && m.hp > 0 && m.bolsa && m.bolsa !== 'nan' && m.bolsa.trim() !== '';
+    const hasValidHours = (m.ho > 0 || m.hp > 0);
+    const hasAllData = hasValidHours && m.bolsa && m.bolsa !== 'nan' && m.bolsa.trim() !== '';
     return hasAllData && (m.pendingAccess === 1 || m.editor === 1);
   });
 
@@ -469,8 +562,14 @@ export default function AdminDashboard() {
             </Table.Tr>
           ) : (
             data.map((member) => {
-              const hasMissingHours = member.ho === 0 || member.hp === 0;
-              const frentesList = member.frentes ? member.frentes.split(',').map(s => s.trim()).filter(Boolean) : [];
+              const hasMissingHours = member.ho === 0 && member.hp === 0;
+              
+              // Usa dados pendentes se existirem, senão usa os dados do membro
+              const pendingData = pendingEdits[member.email];
+              const currentFrentes = pendingData?.frentes ?? member.frentes;
+              const currentBolsa = pendingData?.bolsa ?? member.bolsa;
+              
+              const frentesList = currentFrentes ? currentFrentes.split(',').map(s => s.trim()).filter(Boolean) : [];
               const maxVisibleFrentes = 1; 
               const visibleFrentes = frentesList.slice(0, maxVisibleFrentes);
               const hiddenCount = frentesList.length - maxVisibleFrentes;
@@ -497,7 +596,9 @@ export default function AdminDashboard() {
                       <Text size="sm" c="dimmed">-</Text>
                     ) : (
                       <Group gap={6} wrap="nowrap" style={{ maxWidth: '180px' }}>
-                        <Text size="sm" truncate>{visibleFrentes.join(', ')}</Text>
+                        <Text size="sm" truncate>
+                          {visibleFrentes.join(', ')}
+                        </Text>
                         {hiddenCount > 0 && (
                           <Tooltip label={hiddenFrentesList} withArrow multiline w={200}>
                             <Badge size="sm" variant="light" color="gray" circle style={{ cursor: 'help', minWidth: '24px', height: '24px' }}>
@@ -512,8 +613,8 @@ export default function AdminDashboard() {
                   {/* bolsa */}
                   <Table.Td visibleFrom="md" style={{ textAlign: 'center' }}>
                     {(() => {
-                      const bolsasList = member.bolsa && member.bolsa !== 'nan' && member.bolsa.trim() !== '' 
-                        ? member.bolsa.split(',').map(s => s.trim()).filter(Boolean) 
+                      const bolsasList = currentBolsa && currentBolsa !== 'nan' && currentBolsa.trim() !== '' 
+                        ? currentBolsa.split(',').map(s => s.trim()).filter(Boolean) 
                         : [];
                       
                       if (bolsasList.length === 0) {
@@ -530,7 +631,9 @@ export default function AdminDashboard() {
                         return (
                           <Group gap={6} justify="center" wrap="nowrap">
                             <Box w={8} h={8} style={{ borderRadius: '50%', backgroundColor: color }} />
-                            <Text size="sm" fw={500}>{bolsasList[0]}</Text>
+                            <Text size="sm" fw={500}>
+                              {bolsasList[0]}
+                            </Text>
                           </Group>
                         );
                       }
@@ -544,7 +647,9 @@ export default function AdminDashboard() {
                         <Group gap={6} justify="center" wrap="nowrap">
                           <Group gap={4} wrap="nowrap">
                             <Box w={8} h={8} style={{ borderRadius: '50%', backgroundColor: color }} />
-                            <Text size="sm" fw={500}>{visibleBolsas[0]}</Text>
+                            <Text size="sm" fw={500}>
+                              {visibleBolsas[0]}
+                            </Text>
                           </Group>
                           <Tooltip label={hiddenBolsasList} withArrow multiline w={200}>
                             <Badge size="sm" variant="light" color="gray" circle style={{ cursor: 'help', minWidth: '24px', height: '24px' }}>
@@ -560,14 +665,26 @@ export default function AdminDashboard() {
                   {type === 'registration' && (
                     <>
                       <Table.Td style={{ textAlign: 'center' }}>
-                        <Text fw={600} c={member.ho === 0 ? "red" : "green"}>{member.ho || 0}h</Text>
+                        <Text fw={600} c={((pendingEdits[member.email]?.ho ?? member.ho) === 0 && (pendingEdits[member.email]?.hp ?? member.hp) === 0) ? "red" : "green"}>
+                          {(pendingEdits[member.email]?.ho ?? member.ho) || 0}h
+                        </Text>
                       </Table.Td>
                       <Table.Td style={{ textAlign: 'center' }}>
-                        <Text fw={600} c={member.hp === 0 ? "red" : "green"}>{member.hp || 0}h</Text>
+                        <Text fw={600} c={((pendingEdits[member.email]?.ho ?? member.ho) === 0 && (pendingEdits[member.email]?.hp ?? member.hp) === 0) ? "red" : "green"}>
+                          {(pendingEdits[member.email]?.hp ?? member.hp) || 0}h
+                        </Text>
                       </Table.Td>
                       <Table.Td style={{ textAlign: 'center' }}>
                         <Group gap={8} justify="center" wrap="nowrap">
-                          <EditMemberPopover member={member} onSave={handleUpdateData} />
+                          <EditMemberPopover member={member} />
+                          <ActionIcon
+                            variant="light"
+                            color="blue"
+                            size="lg"
+                            onClick={() => handleConfirmRegistration(member)}
+                          >
+                            <IconCheck size={20} />
+                          </ActionIcon>
                         </Group>
                       </Table.Td>
                     </>
