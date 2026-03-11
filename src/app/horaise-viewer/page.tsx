@@ -83,7 +83,17 @@ export default function VisualizerPage() {
       try {
         setLoading(true);
         const list = await getAllMembers();
-        const sorted = [...list].sort((a, b) => a.name.localeCompare(b.name));
+        // Filtra apenas membros que têm schedule preenchido (não vazios)
+        const hasScheduleData = (schedule: any) => {
+          if (!schedule) return false;
+          // Verifica se há pelo menos uma célula preenchida
+          return Object.values(schedule).some((daySlots: any) => 
+            Object.values(daySlots).some((status: any) => status !== null)
+          );
+        };
+        
+        const withSchedule = list.filter(member => hasScheduleData(member.schedule));
+        const sorted = [...withSchedule].sort((a, b) => a.name.localeCompare(b.name));
         setMembers(sorted);
         
         // Verifica se há um personid na URL
