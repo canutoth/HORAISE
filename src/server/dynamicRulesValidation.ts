@@ -207,31 +207,45 @@ export function validateLunchInterval(
       }
     }
     
-    // CORREÇÃO: Verifica se tem trabalho PRESENCIAL depois do intervalo
-    let hasPresencialAfter = false;
-    for (let h = lunchEnd - baseHour; h < slots.length; h++) {
+    // CORREÇÃO: Verifica se tem trabalho PRESENCIAL a partir do início do intervalo (incluindo dentro do intervalo)
+    let hasPresencialAfterStart = false;
+    for (let h = lunchStart - baseHour; h < slots.length; h++) {
       if (isPresencialSlot(slots[h])) {
-        hasPresencialAfter = true;
+        hasPresencialAfterStart = true;
         break;
       }
     }
     
-    // CORREÇÃO: Só cobra almoço se tiver trabalho PRESENCIAL antes E depois
-    if (hasPresencialBefore && hasPresencialAfter) {
-      let hasLunch = false;
+    // CORREÇÃO: Só cobra almoço se tiver trabalho PRESENCIAL antes E a partir do início do intervalo
+    if (hasPresencialBefore && hasPresencialAfterStart) {
+      // Verifica se o intervalo de almoço está completamente coberto por aulas
+      let fullClassWindow = true;
       for (let h = lunchStart - baseHour; h < lunchEnd - baseHour; h++) {
         if (h >= 0 && h < slots.length) {
-          if (slots[h] === "L") { // L = Almoço
-            hasLunch = true;
+          if (slots[h] !== "A") { // A = Aula
+            fullClassWindow = false;
             break;
           }
         }
       }
       
-      if (!hasLunch) {
-        errors.push(
-          `${dayNames[day]}: Você está trabalhando presencialmente antes e depois do intervalo ${intervaloAlmoco}h. É obrigatório alocar pelo menos 1h de almoço nesse período.`
-        );
+      // Se o intervalo de almoço está completamente coberto por aulas, não precisa marcar almoço
+      if (!fullClassWindow) {
+        let hasLunch = false;
+        for (let h = lunchStart - baseHour; h < lunchEnd - baseHour; h++) {
+          if (h >= 0 && h < slots.length) {
+            if (slots[h] === "L") { // L = Almoço
+              hasLunch = true;
+              break;
+            }
+          }
+        }
+        
+        if (!hasLunch) {
+          errors.push(
+            `${dayNames[day]}: Você está trabalhando presencialmente antes e depois do intervalo ${intervaloAlmoco}h. É obrigatório alocar pelo menos 1h de almoço nesse período.`
+          );
+        }
       }
     }
   });
