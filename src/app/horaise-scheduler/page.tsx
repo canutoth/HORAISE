@@ -38,25 +38,7 @@ import {
   IconSchool,
 } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
-import { getAllMembers } from "../../services/googleSheets";
-
-const FRENTES_LIST = [
-  "AI4Health",
-  "AISE_Website",
-  "Annotaise",
-  "Diversity4SE",
-  "EcoSustain",
-  "EyesOnSmells",
-  "IA4Law",
-  "LLMs4SA",
-  "ML4NFR",
-  "ML4Smells",
-  "ML4SPL",
-  "SE4Finance",
-  "SLR_ML4SPL",
-  "SM&P",
-  "StoneLab",
-];
+import { getAllMembers, getBacklogOptions } from "../../services/googleSheets";
 
 const WEEKDAY_UI_INDICES = [0, 1, 2, 3, 4];
 const DAY_LABELS_SHORT = ["Seg", "Ter", "Qua", "Qui", "Sex"];
@@ -90,6 +72,7 @@ export default function SchedulerPage() {
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
   const [excludedFromFrente, setExcludedFromFrente] = useState<string[]>([]);
   const [allMembers, setAllMembers] = useState<any[]>([]);
+  const [frentesOptions, setFrentesOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [result, setResult] = useState<CompatibilityResult | null>(null);
@@ -100,13 +83,23 @@ export default function SchedulerPage() {
   useEffect(() => {
     document.title = "HORAISE | Scheduler";
     loadAllMembers();
+    loadFrentesOptions();
   }, []);
+
+  const loadFrentesOptions = async () => {
+    try {
+      const options = await getBacklogOptions();
+      setFrentesOptions(options.frentes.map((frente) => frente.name));
+    } catch (error) {
+      console.error("Erro ao carregar frentes do backlog:", error);
+    }
+  };
 
   const loadAllMembers = async () => {
     const timeoutId = setTimeout(() => {
       setLoadingMembers(false);
       setErrorMessage(
-        "Timeout ao carregar dados. Você pode buscar por frente usando a lista pré-definida."
+        "Timeout ao carregar dados. Tente novamente em instantes."
       );
     }, 5000);
 
@@ -119,7 +112,7 @@ export default function SchedulerPage() {
     } catch (error) {
       console.error("Erro ao carregar membros:", error);
       setErrorMessage(
-        "Erro ao carregar dados do Google Sheets. Você ainda pode buscar por frente usando a lista pré-definida."
+        "Erro ao carregar dados do Google Sheets."
       );
       clearTimeout(timeoutId);
     } finally {
@@ -445,13 +438,14 @@ export default function SchedulerPage() {
                       <Select
                         label="Selecione a frente"
                         placeholder="Escolha uma frente"
-                        data={FRENTES_LIST}
+                        data={frentesOptions}
                         value={selectedFrente}
                         onChange={(value) => {
                           setSelectedFrente(value);
                           setExcludedFromFrente([]);
                         }}
                         searchable
+                        disabled={frentesOptions.length === 0}
                         comboboxProps={{ position: "bottom" }}
                       />
                       {selectedFrente && !loadingMembers && (

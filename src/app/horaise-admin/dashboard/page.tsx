@@ -45,24 +45,7 @@ import TopNavBar from "@/components/TopNavBar";
 import { AdminSuggestionPanel } from "@/components/AdminSuggestionPanel";
 import { notifications } from "@mantine/notifications";
 import { useMediaQuery } from "@mantine/hooks"; 
-
-const FRENTES_EMOJIS: Record<string, string> = {
-  "StoneLab": "💚",
-  "AISE_Website": "🌐",
-  "EyesOnSmells": "👁️",
-  "IA4Law": "⚖️",
-  "LLMs4SA": "🧠",
-  "ML4NFR": "🤖",
-  "ML4Smells": "👃",
-  "ML4SPL": "🧩",
-  "SM&P": "🤯",
-  "SE4Finance": "💵",
-  "SLR_ML4SPL": "📚",
-  "Diversity4SE": "🫶",
-  "AI4Health": "💉",
-  "EcoSustain": "🌱",
-  "Annotaise": "📝",
-};
+import { getBacklogOptions } from "../../../services/googleSheets";
 // 🎯 Easter egg: Normaliza o nome do Coutinho
 const normalizeCoutinho = (name: string, email: string): string => {
   const nameLower = name.toLowerCase().trim();
@@ -268,27 +251,20 @@ export default function AdminDashboard() {
 
   const fetchBacklogOptions = async () => {
     try {
-      const response = await fetch("/api", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "read-backlog-options" }),
-      });
-      const data = await response.json();
-      
-      if (response.ok) {
-        const frentesWithEmojis = (data.frentes || []).map((frente: { name: string; emoji: string }) => ({
-          value: frente.name,
-          label: `${frente.emoji} ${frente.name}`,
-        }));
-        setFrentesOptions(frentesWithEmojis);
-        
-        const bolsasWithColors = (data.bolsas || []).map((bolsa: { name: string; color: string }) => ({
-          value: bolsa.name,
-          label: bolsa.name,
-          color: bolsa.color,
-        }));
-        setBolsasOptions(bolsasWithColors);
-      }
+      const data = await getBacklogOptions();
+
+      const frentesWithEmojis = (data.frentes || []).map((frente: { name: string; emoji: string }) => ({
+        value: frente.name,
+        label: `${frente.emoji} ${frente.name}`,
+      }));
+      setFrentesOptions(frentesWithEmojis);
+
+      const bolsasWithColors = (data.bolsas || []).map((bolsa: { name: string; color: string }) => ({
+        value: bolsa.name,
+        label: bolsa.name,
+        color: bolsa.color,
+      }));
+      setBolsasOptions(bolsasWithColors);
     } catch (error) {
       console.error("Erro ao carregar opções:", error);
     }
