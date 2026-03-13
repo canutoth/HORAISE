@@ -39,6 +39,7 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
+import { formatAdminDisplayName } from "@/services/memberNameDisplay";
 
 const WEEKDAY_UI_INDICES = [0, 1, 2, 3, 4, 5, 6];
 const DAY_LABELS_SHORT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
@@ -155,6 +156,7 @@ export function AdminSuggestionPanel({
             .slice(1)
             .map((row: any) => {
               const name = getColumnValue(row, "Nome");
+              const nickname = getColumnValue(row, "Apelido");
               const email = getColumnValue(row, "Email");
               const frentes = getColumnValue(row, "Frentes");
               const bolsa = getColumnValue(row, "Bolsa");
@@ -183,7 +185,7 @@ export function AdminSuggestionPanel({
                 }
               }
 
-              return { name, email, frentes, bolsa, hp, ho, schedule };
+              return { name, nickname, email, frentes, bolsa, hp, ho, schedule };
             })
             .filter((m: any) => m.email && m.name);
 
@@ -372,7 +374,7 @@ export function AdminSuggestionPanel({
       if (result.success) {
         notifications.show({
           title: "Sugestão Enviada!",
-          message: `Horário sugerido para ${current.name}. O membro será notificado por email.`,
+          message: `Horário sugerido para ${formatAdminDisplayName({ name: current.name, nickname: current.nickname })}. O membro será notificado por email.`,
           color: "blue",
           icon: <IconCheck />,
           autoClose: 5000,
@@ -546,7 +548,7 @@ export function AdminSuggestionPanel({
             label="Selecionar membro"
             placeholder="Busque por nome"
             searchable
-            data={members.map((m, idx) => ({ value: idx.toString(), label: m.name }))}
+            data={members.map((m, idx) => ({ value: idx.toString(), label: formatAdminDisplayName({ name: m.name, nickname: m.nickname }) }))}
             value={currentIndex.toString()}
             onChange={(val) => { if (val !== null) setCurrentIndex(parseInt(val)); }}
             styles={{ label: { color: "var(--primary)", fontWeight: 600, marginBottom: 4 } }}
@@ -556,7 +558,7 @@ export function AdminSuggestionPanel({
             <Group justify="space-between" align="center" mb="xs">
               <Stack gap={0}>
                 <Group gap="sm" align="center" wrap="wrap" mb={2}>
-                  <Text fw={700} size="md" c="#0E1862" truncate>{current.name}</Text>
+                  <Text fw={700} size="md" c="#0E1862" truncate>{formatAdminDisplayName({ name: current.name, nickname: current.nickname })}</Text>
                   {editedBolsas.map((bolsaItem: string, idx: number) => (
                     <Badge
                       key={idx}
@@ -697,7 +699,7 @@ export function AdminSuggestionPanel({
         <Stack gap="md">
           {isAdminMode && (
             <Alert radius="md" variant="light" color="orange" title="👨‍💼 Modo Administrador" icon={<IconAlertCircle />}>
-              Você está sugerindo um horário de trabalho para <strong>{current.name}</strong>.
+              Você está sugerindo um horário de trabalho para <strong>{formatAdminDisplayName({ name: current.name, nickname: current.nickname })}</strong>.
             </Alert>
           )}
 
@@ -803,7 +805,7 @@ export function AdminSuggestionPanel({
                     px="md"
                     style={{ whiteSpace: "nowrap", transition: "all 0.2s", flexShrink: 0 }}
                   >
-                    {m.name}
+                    {formatAdminDisplayName({ name: m.name, nickname: m.nickname })}
                   </Button>
                 );
               })}

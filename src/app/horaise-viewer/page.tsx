@@ -31,6 +31,7 @@ import {
 } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
 import { getAllMembers, getBacklogOptions } from "../../services/googleSheets";
+import { getViewerDisplayName } from "../../services/memberNameDisplay";
 import TopNavBar from "@/components/TopNavBar";
 
 const WEEKDAY_UI_INDICES = [0, 1, 2, 3, 4, 5, 6];
@@ -92,8 +93,13 @@ export default function VisualizerPage() {
           );
         };
         
-        const withSchedule = list.filter(member => hasScheduleData(member.schedule));
-        const sorted = [...withSchedule].sort((a, b) => a.name.localeCompare(b.name));
+        const withSchedule = list
+          .filter(member => hasScheduleData(member.schedule))
+          .map((member) => ({
+            ...member,
+            displayName: getViewerDisplayName({ name: member.name, nickname: member.nickname }),
+          }));
+        const sorted = [...withSchedule].sort((a, b) => a.displayName.localeCompare(b.displayName));
         setMembers(sorted);
         
         // Verifica se há um personid na URL
@@ -210,7 +216,7 @@ export default function VisualizerPage() {
                       label="Selecionar membro"
                       placeholder="Busque por nome"
                       searchable
-                      data={members.map((m, idx) => ({ value: idx.toString(), label: m.name }))}
+                      data={members.map((m, idx) => ({ value: idx.toString(), label: m.displayName }))}
                       value={currentIndex.toString()}
                       onChange={(val) => { if (val !== null) setCurrentIndex(parseInt(val)); }}
                       styles={{ label: { color: "var(--primary)", fontWeight: 600, marginBottom: 4 } }}
@@ -220,7 +226,7 @@ export default function VisualizerPage() {
                       <Group justify="space-between" w="100%">
                         <Stack gap={0} align="left">
                           <Group gap="sm" align="center" wrap="wrap">
-                            <Text fw={700} size="lg" c="#0E1862">{current.name}</Text>
+                            <Text fw={700} size="lg" c="#0E1862">{current.displayName}</Text>
                             
                             {current.bolsa && current.bolsa.split(',').map((bolsaItem: string, idx: number) => {
                               const bolsaName = bolsaItem.trim();
@@ -430,7 +436,7 @@ export default function VisualizerPage() {
                               px="md"
                               style={{ whiteSpace: "nowrap", transition: "all 0.2s", flexShrink: 0 }}
                             >
-                              {m.name}
+                              {m.displayName}
                             </Button>
                           );
                         })}

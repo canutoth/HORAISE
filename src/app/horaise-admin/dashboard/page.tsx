@@ -46,6 +46,7 @@ import { AdminSuggestionPanel } from "@/components/AdminSuggestionPanel";
 import { notifications } from "@mantine/notifications";
 import { useMediaQuery } from "@mantine/hooks"; 
 import { getBacklogOptions } from "../../../services/googleSheets";
+import { formatAdminDisplayName } from "../../../services/memberNameDisplay";
 // 🎯 Easter egg: Normaliza o nome do Coutinho
 const normalizeCoutinho = (name: string, email: string): string => {
   const nameLower = name.toLowerCase().trim();
@@ -64,6 +65,7 @@ const normalizeCoutinho = (name: string, email: string): string => {
 
 type AdminMember = {
   name: string;
+  nickname?: string;
   email: string;
   frentes: string;
   bolsa: string;
@@ -302,6 +304,7 @@ export default function AdminDashboard() {
           .slice(1)
           .map((row: any, index: number) => ({
             name: normalizeCoutinho(getColumnValue(row, "Nome"), getColumnValue(row, "Email")),
+            nickname: getColumnValue(row, "Apelido"),
             email: getColumnValue(row, "Email"),
             frentes: getColumnValue(row, "Frentes"),
             bolsa: getColumnValue(row, "Bolsa"),
@@ -557,7 +560,7 @@ export default function AdminDashboard() {
                     <Group gap="sm">
                       <Stack gap={0}>
                         <Text size="sm" fw={500} style={{ maxWidth: isMobile ? 'auto' : 'auto' }} truncate>
-                          {member.name}
+                          {formatAdminDisplayName({ name: member.name, nickname: member.nickname })}
                         </Text>
                         <Text size="xs" c="dimmed" style={{ maxWidth: isMobile ? '0' : 'auto' }} truncate>
                           {member.email}
@@ -724,7 +727,7 @@ export default function AdminDashboard() {
                             color="red" 
                             variant="subtle"
                             size="lg"
-                            onClick={() => setConfirmationModal({ type: 'revoke', email: member.email, name: member.name })}
+                            onClick={() => setConfirmationModal({ type: 'revoke', email: member.email, name: formatAdminDisplayName({ name: member.name, nickname: member.nickname }) })}
                           >
                             <IconLock size={20} />
                           </ActionIcon>
@@ -735,7 +738,7 @@ export default function AdminDashboard() {
                               variant={hasMissingHours ? "light" : "filled"}
                               size="lg" 
                               disabled={hasMissingHours}
-                              onClick={() => !hasMissingHours && setConfirmationModal({ type: 'approve', email: member.email, name: member.name })}
+                              onClick={() => !hasMissingHours && setConfirmationModal({ type: 'approve', email: member.email, name: formatAdminDisplayName({ name: member.name, nickname: member.nickname }) })}
                             >
                               <IconCheck size={20} />
                             </ActionIcon>
@@ -744,7 +747,7 @@ export default function AdminDashboard() {
                               color="red" 
                               variant="light" 
                               size="lg" 
-                              onClick={() => setConfirmationModal({ type: 'revoke', email: member.email, name: member.name })}
+                              onClick={() => setConfirmationModal({ type: 'revoke', email: member.email, name: formatAdminDisplayName({ name: member.name, nickname: member.nickname }) })}
                             >
                               <IconX size={20} />
                             </ActionIcon>

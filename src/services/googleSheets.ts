@@ -12,6 +12,7 @@ export interface ScheduleData {
 // Interface simplificada para HORAISE (Nome, Email, Frentes + Schedule)
 export interface TeamMemberData {
   name: string;
+  nickname?: string;
   email: string;
   frentes: string;
   bolsa?: string; // nova coluna Bolsa
@@ -104,6 +105,7 @@ const rowToTeamMember = (row: string[], columnMapping?: Map<string, number>): Te
   
   return {
     name: normalizeCoutinho(rawName, email),
+    nickname: columnMapping.has("Apelido") ? getColumnValue(row, "Apelido", columnMapping) : "",
     email: email,
     frentes: getColumnValue(row, "Frentes", columnMapping),
     bolsa: getColumnValue(row, "Bolsa", columnMapping),
@@ -120,6 +122,7 @@ const rowToTeamMember = (row: string[], columnMapping?: Map<string, number>): Te
 const teamMemberToRow = (member: TeamMemberData): string[] => {
   return [
     member.name,
+    member.nickname ?? "",
     member.email,
     member.frentes,
     member.bolsa ?? "",

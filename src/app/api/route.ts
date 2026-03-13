@@ -21,7 +21,7 @@ import { validateDynamicRules } from "../../server/dynamicRulesValidation";
 type Actions =
   | { action: "read-member"; email: string }
   | { action: "read-example" }
-  | { action: "update-member"; member: { name: string; email: string; frentes: string; bolsa?: string; editor?: number | string; pending?: number | string; hp?: string; ho?: string }; isNew?: boolean }
+  | { action: "update-member"; member: { name: string; nickname?: string; email: string; frentes: string; bolsa?: string; editor?: number | string; pending?: number | string; hp?: string; ho?: string }; isNew?: boolean }
   | { action: "update-member-metadata"; email: string; hp?: string; ho?: string }
   | { action: "save-schedule"; email: string; scheduleRow: string[]; isAdmin?: boolean }
   | { action: "load-schedule"; email: string }
@@ -85,6 +85,7 @@ export async function POST(request: NextRequest) {
         // Atualiza apenas HP e/ou HO sem validar schedule
         const updatedMember = {
           name: getColumnValue(row, "Nome", columnMapping),
+          nickname: getColumnValue(row, "Apelido", columnMapping),
           email: getColumnValue(row, "Email", columnMapping),
           frentes: getColumnValue(row, "Frentes", columnMapping),
           bolsa: getColumnValue(row, "Bolsa", columnMapping),

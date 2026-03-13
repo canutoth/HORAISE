@@ -121,9 +121,11 @@ export async function readMemberByEmail(email: string): Promise<{ row: string[];
   if (!rowNumber) return null;
   const sheetRef = escapeSheetName(SHEET_NAME);
   
-  // Lê até a coluna HO
+  // Lê até a maior coluna entre HO e Apelido
   const hoIndex = getColumnIndex("HO", columnMapping);
-  const lastColumn = columnIndexToLetter(hoIndex);
+  const nicknameIndex = columnMapping.get("Apelido") ?? -1;
+  const lastBaseIndex = Math.max(hoIndex, nicknameIndex);
+  const lastColumn = columnIndexToLetter(lastBaseIndex);
   
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
@@ -137,9 +139,11 @@ export async function readExample(): Promise<{ row: string[]; columnMapping: Map
   const sheetRef = escapeSheetName(SHEET_NAME);
   const columnMapping = await getColumnMapping(sheets);
   
-  // Lê até a coluna HO
+  // Lê até a maior coluna entre HO e Apelido
   const hoIndex = getColumnIndex("HO", columnMapping);
-  const lastColumn = columnIndexToLetter(hoIndex);
+  const nicknameIndex = columnMapping.get("Apelido") ?? -1;
+  const lastBaseIndex = Math.max(hoIndex, nicknameIndex);
+  const lastColumn = columnIndexToLetter(lastBaseIndex);
   
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
@@ -149,7 +153,7 @@ export async function readExample(): Promise<{ row: string[]; columnMapping: Map
   if (!row) return null;
   return { row, columnMapping };
 }
-export async function updateMemberRow(member: { name: string; email: string; frentes: string; bolsa?: string; editor?: number | string; pendingAccess?: number | string; pendingTimeTable?: number | string; pendingSuggestion?: number | string; hp?: string; ho?: string }, isNew: boolean) {
+export async function updateMemberRow(member: { name: string; nickname?: string; email: string; frentes: string; bolsa?: string; editor?: number | string; pendingAccess?: number | string; pendingTimeTable?: number | string; pendingSuggestion?: number | string; hp?: string; ho?: string }, isNew: boolean) {
   const { sheets } = await getSheetsClient();
   const sheetRef = escapeSheetName(SHEET_NAME);
   const columnMapping = await getColumnMapping(sheets);
@@ -162,10 +166,15 @@ export async function updateMemberRow(member: { name: string; email: string; fre
   
   // Cria um array com o tamanho correto baseado no mapeamento de colunas
   const hoIndex = getColumnIndex("HO", columnMapping);
-  const rowArray = new Array(hoIndex + 1).fill("");
+  const nicknameIndex = columnMapping.get("Apelido") ?? -1;
+  const lastBaseIndex = Math.max(hoIndex, nicknameIndex);
+  const rowArray = new Array(lastBaseIndex + 1).fill("");
   
   // Preenche os valores usando os nomes das colunas
   rowArray[getColumnIndex("Nome", columnMapping)] = member.name;
+  if (nicknameIndex >= 0) {
+    rowArray[nicknameIndex] = member.nickname ?? "";
+  }
   rowArray[getColumnIndex("Email", columnMapping)] = member.email;
   rowArray[getColumnIndex("Frentes", columnMapping)] = member.frentes;
   rowArray[getColumnIndex("Bolsa", columnMapping)] = bolsa;
@@ -179,7 +188,7 @@ export async function updateMemberRow(member: { name: string; email: string; fre
   const values = [rowArray];
   
   if (isNew) {
-    const lastColumn = columnIndexToLetter(hoIndex);
+    const lastColumn = columnIndexToLetter(lastBaseIndex);
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
       range: `${sheetRef}!A:${lastColumn}`,
@@ -193,7 +202,7 @@ export async function updateMemberRow(member: { name: string; email: string; fre
     return { success: false, message: "Membro não encontrado para atualização" };
   }
   
-  const lastColumn = columnIndexToLetter(hoIndex);
+  const lastColumn = columnIndexToLetter(lastBaseIndex);
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
     range: `${sheetRef}!A${rowNumber}:${lastColumn}${rowNumber}`,
@@ -292,11 +301,14 @@ export async function loadScheduleRow(email: string): Promise<string[] | null> {
 export async function readAllMembers(): Promise<string[][]> {
   const { sheets } = await getSheetsClient();
   const sheetRef = escapeSheetName(SHEET_NAME);
-  // Lê todos os dados incluindo o cabeçalho (A1-EB = Nome, Email, Frentes, Bolsa, Editor, Pending-Access, Pending-TimeTable, Pending-Suggestion, HP, HO + Schedule)
+  const columnMapping = await getColumnMapping(sheets);
+  const hoIndex = getColumnIndex("HO", columnMapping);
+  const endColumn = columnIndexToLetter(hoIndex + 91);
+
+  // Lê todos os dados incluindo o cabeçalho e as 91 colunas de schedule
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    // Inclui toda a faixa até EB, começando do cabeçalho
-    range: `${sheetRef}!A1:EB`,
+    range: `${sheetRef}!A1:${endColumn}`,
   });
   return res.data.values || [];
 }

@@ -39,6 +39,7 @@ import {
 } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
 import { getAllMembers, getBacklogOptions } from "../../services/googleSheets";
+import { getViewerDisplayName } from "../../services/memberNameDisplay";
 
 const WEEKDAY_UI_INDICES = [0, 1, 2, 3, 4];
 const DAY_LABELS_SHORT = ["Seg", "Ter", "Qua", "Qui", "Sex"];
@@ -106,7 +107,10 @@ export default function SchedulerPage() {
     try {
       setLoadingMembers(true);
       setErrorMessage("");
-      const members = await getAllMembers();
+      const members = (await getAllMembers()).map((member) => ({
+        ...member,
+        displayName: getViewerDisplayName({ name: member.name, nickname: member.nickname }),
+      }));
       setAllMembers(members);
       clearTimeout(timeoutId);
     } catch (error) {
@@ -273,7 +277,7 @@ export default function SchedulerPage() {
 
           if (offset === 0) {
             slotStatuses = members.map((member) => ({
-              name: member.name,
+              name: member.displayName,
               status: member.schedule?.[day]?.[realHour] || null,
             }));
           }
@@ -310,7 +314,7 @@ export default function SchedulerPage() {
     };
 
     statuses.forEach((ms) => {
-      const name = ms.name.split(" ")[0];
+      const name = ms.name;
       if (ms.status === "presencial") groups.presencial.push(name);
       else if (ms.status === "online") groups.online.push(name);
       else if (ms.status === "reuniao") groups.reuniao.push(name);
@@ -462,7 +466,7 @@ export default function SchedulerPage() {
                                   .includes(selectedFrente)
                               )
                               .map((member) => {
-                                const firstName = member.name.split(" ")[0];
+                                const firstName = member.displayName;
                                 const isExcluded = excludedFromFrente.includes(
                                   member.email
                                 );
@@ -515,7 +519,7 @@ export default function SchedulerPage() {
                       label="Selecione as pessoas"
                       placeholder="Escolha uma pessoa"
                       data={allMembers
-                        .map((m) => ({ value: m.email, label: m.name }))
+                        .map((m) => ({ value: m.email, label: m.displayName }))
                         .sort((a, b) => a.label.localeCompare(b.label))}
                       value={selectedPeople}
                       onChange={setSelectedPeople}
