@@ -4,6 +4,7 @@ const SHEET_NAME = process.env.SHEET_NAME || "INFO";
 const BACKLOG_SHEET_NAME = process.env.BACKLOG_SHEET_NAME || "BACKLOG";
 const RULES_SHEET_NAME = process.env.RULES_SHEET_NAME || "RULES";
 const SUGGESTED_SHEET_NAME = process.env.SUGGESTED_SHEET_NAME || "SUGGESTION";
+const PRESENCIAL_BOLSA_SHEET_NAME = process.env.PRESENCIAL_BOLSA_SHEET_NAME || "PRESENCIAL_BOLSA";
 
 // Cache para o mapeamento de colunas (para não precisar buscar toda vez)
 let columnMappingCache: Map<string, number> | null = null;
@@ -673,6 +674,72 @@ export async function loadSuggestedSchedule(email: string): Promise<string[] | n
 }
 
 /**
+ * Salva o detalhamento por bolsa dos slots presenciais na aba PRESENCIAL_BOLSA
+ * Formato: Email (A) + 91 colunas de schedule (B..CN)
+ */
+export async function savePresencialBolsaRow(email: string, presencialBolsaRow: string[]) {
+  const { sheets } = await getSheetsClient();
+  const presencialBolsaSheetName = escapeSheetName(PRESENCIAL_BOLSA_SHEET_NAME);
+
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${presencialBolsaSheetName}!A:A`,
+  });
+
+  const rows = res.data.values || [];
+  let rowNumber: number | null = null;
+
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0]?.toLowerCase() === email.toLowerCase()) {
+      rowNumber = i + 1;
+      break;
+    }
+  }
+
+  const fullRow = [email, ...presencialBolsaRow];
+
+  if (rowNumber) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${presencialBolsaSheetName}!A${rowNumber}:CN${rowNumber}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [fullRow] },
+    });
+  } else {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${presencialBolsaSheetName}!A:CN`,
+      valueInputOption: "RAW",
+      requestBody: { values: [fullRow] },
+    });
+  }
+
+  return { success: true, message: "Detalhamento presencial por bolsa salvo com sucesso." };
+}
+
+/**
+ * Carrega o detalhamento por bolsa dos slots presenciais da aba PRESENCIAL_BOLSA
+ */
+export async function loadPresencialBolsaRow(email: string): Promise<string[] | null> {
+  const { sheets } = await getSheetsClient();
+  const presencialBolsaSheetName = escapeSheetName(PRESENCIAL_BOLSA_SHEET_NAME);
+
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${presencialBolsaSheetName}!A:CN`,
+  });
+
+  const rows = res.data.values || [];
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0]?.toLowerCase() === email.toLowerCase()) {
+      return rows[i].slice(1, 92);
+    }
+  }
+
+  return null;
+}
+
+/**
  * Aceita o schedule sugerido: move da aba SUGGESTED para a aba principal e limpa flags
  * @param email Email do membro
  */
@@ -757,4 +824,10 @@ export async function acceptSuggestedSchedule(email: string) {
   return { success: true, message: "Sugestão aceita com sucesso!" };
 }
 
-export const sheetsConstants = { SPREADSHEET_ID, SHEET_NAME, BACKLOG_SHEET_NAME, SUGGESTED_SHEET_NAME };
+export const sheetsConstants = {
+  SPREADSHEET_ID,
+  SHEET_NAME,
+  BACKLOG_SHEET_NAME,
+  SUGGESTED_SHEET_NAME,
+  PRESENCIAL_BOLSA_SHEET_NAME,
+};

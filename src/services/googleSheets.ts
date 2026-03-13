@@ -379,7 +379,8 @@ export function infoRowToSchedule(infoRow: string[]): ScheduleData {
 export async function saveScheduleToSheet(
   email: string,
   schedule: ScheduleData,
-  isAdmin: boolean = false
+  isAdmin: boolean = false,
+  presencialBolsaRow?: string[]
 ): Promise<{ success: boolean; message: string; errors?: string[] }> {
   // Modo offline: salva no storage local (já está sendo feito no saveMember)
   if (OFFLINE_MODE) {
@@ -400,7 +401,7 @@ export async function saveScheduleToSheet(
     const response = await fetch("/api", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "save-schedule", email, scheduleRow: infoRow, isAdmin }),
+      body: JSON.stringify({ action: "save-schedule", email, scheduleRow: infoRow, presencialBolsaRow, isAdmin }),
     });
     if (!response.ok) {
       const error = await response.json();
@@ -423,7 +424,7 @@ export async function saveScheduleToSheet(
 }
 export async function loadScheduleFromSheet(
   email: string
-): Promise<ScheduleData | null> {
+): Promise<(ScheduleData & { presencialBolsaRow?: string[] }) | null> {
   // Modo offline: retorna schedule do storage local
   if (OFFLINE_MODE) {
     console.log("🔌 MODO OFFLINE: Schedule carregado do storage local");
@@ -441,7 +442,11 @@ export async function loadScheduleFromSheet(
     }
     const payload = await response.json();
     if (!payload || !payload.scheduleRow) return null;
-    return infoRowToSchedule(payload.scheduleRow);
+    const schedule = infoRowToSchedule(payload.scheduleRow);
+    if (payload.presencialBolsaRow && Array.isArray(payload.presencialBolsaRow)) {
+      (schedule as ScheduleData & { presencialBolsaRow?: string[] }).presencialBolsaRow = payload.presencialBolsaRow;
+    }
+    return schedule;
   } catch (error) {
     console.error("Erro ao carregar schedule:", error);
     return null;

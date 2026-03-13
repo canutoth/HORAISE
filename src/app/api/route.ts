@@ -13,6 +13,8 @@ import {
   saveSuggestedSchedule,
   loadSuggestedSchedule,
   acceptSuggestedSchedule,
+  savePresencialBolsaRow,
+  loadPresencialBolsaRow,
   getColumnValue,
 } from "../../server/sheets";
 import { sendAdminNotification, sendUserApproval, sendAccessRequestToAdmin, sendScheduleEditedToAdmin, sendScheduleApprovedToUser } from "../../server/email";
@@ -23,7 +25,7 @@ type Actions =
   | { action: "read-example" }
   | { action: "update-member"; member: { name: string; nickname?: string; email: string; frentes: string; bolsa?: string; editor?: number | string; pending?: number | string; hp?: string; ho?: string }; isNew?: boolean }
   | { action: "update-member-metadata"; email: string; hp?: string; ho?: string }
-  | { action: "save-schedule"; email: string; scheduleRow: string[]; isAdmin?: boolean }
+  | { action: "save-schedule"; email: string; scheduleRow: string[]; presencialBolsaRow?: string[]; isAdmin?: boolean }
   | { action: "load-schedule"; email: string }
   | { action: "save-suggested-schedule"; adminEmail: string; targetEmail: string; scheduleRow: string[] }
   | { action: "load-suggested-schedule"; email: string }
@@ -110,6 +112,113 @@ export async function POST(request: NextRequest) {
         }
         
         const { row, columnMapping } = member;
+
+        const normalizeText = (value: string): string =>
+          value
+            .trim()
+            .toLocaleLowerCase("pt-BR")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "");
+
+        const bolsasRaw = (getColumnValue(row, "Bolsa", columnMapping) || "")
+          .split(",")
+          .map((b) => b.trim())
+          .filter(Boolean);
+
+        const bolsaByKey = new Map<string, string>();
+        bolsasRaw.forEach((bolsa) => bolsaByKey.set(normalizeText(bolsa), bolsa));
+
+        const scheduleRowNormalized = body.scheduleRow.map((c) => (c || "").toString().trim().toUpperCase());
+
+        let presencialBolsaRow: string[] | undefined = body.presencialBolsaRow?.map((c) => (c || "").toString().trim());
+
+        // Fallback compatível com clientes antigos:
+        // - se houver uma única bolsa cadastrada, preenche automaticamente todos os slots P.
+        // - se houver múltiplas bolsas, exige explícito presencialBolsaRow.
+        if (!presencialBolsaRow || presencialBolsaRow.length === 0) {
+          const hasPresencialSlot = scheduleRowNormalized.some((status) => status === "P");
+          if (!hasPresencialSlot) {
+            presencialBolsaRow = new Array(91).fill("");
+          } else if (bolsasRaw.length === 1) {
+            presencialBolsaRow = scheduleRowNormalized.map((status) => (status === "P" ? bolsasRaw[0] : ""));
+          } else {
+            return NextResponse.json(
+              {
+                success: false,
+                message:
+                  "presencialBolsaRow é obrigatório quando há slots presenciais e o usuário possui mais de uma bolsa.",
+              },
+              { status: 400 }
+            );
+          }
+        }
+
+        if (!Array.isArray(presencialBolsaRow) || presencialBolsaRow.length !== 91) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: "presencialBolsaRow deve ter exatamente 91 posições.",
+            },
+            { status: 400 }
+          );
+        }
+
+        for (let i = 0; i < 91; i++) {
+          const statusCode = scheduleRowNormalized[i] || "";
+          const bolsaSlot = (presencialBolsaRow[i] || "").trim();
+
+          if (statusCode !== "P") {
+            if (bolsaSlot !== "") {
+              return NextResponse.json(
+                {
+                  success: false,
+                  message: `Slot ${i + 1}: quando status != P, a célula correspondente em PRESENCIAL_BOLSA deve estar vazia.`,
+                },
+                { status: 400 }
+              );
+            }
+            continue;
+          }
+
+          if (!bolsaSlot) {
+            return NextResponse.json(
+              {
+                success: false,
+                message: `Slot ${i + 1}: quando status == P, a bolsa é obrigatória.`,
+              },
+              { status: 400 }
+            );
+          }
+
+          const splitBolsas = bolsaSlot
+            .split(",")
+            .map((b) => b.trim())
+            .filter(Boolean);
+
+          if (splitBolsas.length !== 1) {
+            return NextResponse.json(
+              {
+                success: false,
+                message: `Slot ${i + 1}: apenas uma bolsa é permitida por slot presencial.`,
+              },
+              { status: 400 }
+            );
+          }
+
+          const bolsaKey = normalizeText(splitBolsas[0]);
+          if (!bolsaByKey.has(bolsaKey)) {
+            return NextResponse.json(
+              {
+                success: false,
+                message: `Slot ${i + 1}: bolsa "${splitBolsas[0]}" não pertence às bolsas cadastradas do usuário (${bolsasRaw.join(", ") || "nenhuma"}).`,
+              },
+              { status: 400 }
+            );
+          }
+
+          // Canonicaliza para o nome da bolsa cadastrado na coluna Bolsa
+          presencialBolsaRow[i] = bolsaByKey.get(bolsaKey) || splitBolsas[0];
+        }
         
         const editor = Number(getColumnValue(row, "Editor", columnMapping) || 0);
         const pending = Number(getColumnValue(row, "Pending-Access", columnMapping) || 0);
@@ -166,6 +275,12 @@ export async function POST(request: NextRequest) {
         
         const lockAfterSave = true;
         const result = await saveScheduleRow(body.email, body.scheduleRow);
+        if (result.success) {
+          const presencialResult = await savePresencialBolsaRow(body.email, presencialBolsaRow);
+          if (!presencialResult.success) {
+            return NextResponse.json(presencialResult, { status: 400 });
+          }
+        }
         
         // Envia email ao admin notificando sobre schedule editado
         if (result.success) {
@@ -179,7 +294,8 @@ export async function POST(request: NextRequest) {
         if (!body.email) return NextResponse.json({ message: "email é obrigatório" }, { status: 400 });
         const row = await loadScheduleRow(body.email);
         if (!row || row.length === 0) return NextResponse.json({ message: "not found" }, { status: 404 });
-        return NextResponse.json({ scheduleRow: row });
+        const presencialBolsaRow = await loadPresencialBolsaRow(body.email);
+        return NextResponse.json({ scheduleRow: row, presencialBolsaRow: presencialBolsaRow || new Array(91).fill("") });
       }
       case "save-suggested-schedule": {
         if (!body.adminEmail || !body.targetEmail || !body.scheduleRow) {
