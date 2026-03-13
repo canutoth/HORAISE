@@ -237,10 +237,34 @@ export default function EditContentPage() {
     handleCellClick(day, hour);
   };
 
+  const handleTouchStart = (day: number, hour: number, e: React.TouchEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    handleCellClick(day, hour);
+  };
+
   const handleMouseEnter = (day: number, hour: number) => {
     if (isDragging && activeTool) {
          applyPaint(day, hour);
     }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging || !activeTool) return;
+
+    const touch = e.touches[0];
+    if (!touch) return;
+
+    const element = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement | null;
+    const cell = element?.closest('[data-schedule-cell="true"]') as HTMLElement | null;
+    if (!cell) return;
+
+    const day = Number(cell.getAttribute("data-day"));
+    const hour = Number(cell.getAttribute("data-hour"));
+    if (Number.isNaN(day) || Number.isNaN(hour)) return;
+
+    e.preventDefault();
+    handleMouseEnter(day, hour);
   };
 
   const getStatusConfig = (status: string) => {
@@ -898,10 +922,16 @@ export default function EditContentPage() {
                   <Table.Td
                     key={`${dayIndex}-${hour}`}
                     p={0}
+                    data-schedule-cell="true"
+                    data-day={dayIndex}
+                    data-hour={hour}
                     style={{ cursor: isReadOnly ? "default" : "pointer", height: ROW_HEIGHT }}
                     onClick={() => !isReadOnly && handleCellClick(dayIndex, hour)}
                     onMouseDown={(e) => !isReadOnly && handleMouseDown(dayIndex, hour, e)}
                     onMouseEnter={() => !isReadOnly && handleMouseEnter(dayIndex, hour)}
+                    onTouchStart={(e) => !isReadOnly && handleTouchStart(dayIndex, hour, e)}
+                    onTouchMove={(e) => !isReadOnly && handleTouchMove(e)}
+                    onTouchEnd={() => !isReadOnly && setIsDragging(false)}
                   >
                     {config ? (
                       isMobile ? (
