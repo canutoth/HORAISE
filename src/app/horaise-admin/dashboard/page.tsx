@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { Suspense, useEffect, useState, useMemo } from "react";
 import {
   Box,
   Container,
@@ -75,7 +75,7 @@ type AdminMember = {
   rowNumber: number;
 };
 
-export default function AdminDashboard() {
+function AdminDashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
@@ -938,5 +938,19 @@ export default function AdminDashboard() {
         </Stack>
       </Modal>
     </>
+  );
+}
+
+export default function AdminDashboard() {
+  return (
+    <Suspense
+      fallback={
+        <Box h="100vh" bg="#F8F9FF">
+          <Center h="100%"><Loader size="xl" color="blue" /></Center>
+        </Box>
+      }
+    >
+      <AdminDashboardContent />
+    </Suspense>
   );
 }
