@@ -851,7 +851,7 @@ function AdminDashboardContent() {
                   {isMobile ? "Acessos" : "Acessos de Edição"}
                 </Tabs.Tab>
                 <Tabs.Tab value="sugerir" leftSection={!isMobile && <IconPencil size={16} />}>
-                  {isMobile ? "Horário" : "Definir Horário"}
+                  {isMobile ? "Editar" : "Editar Horários"}
                 </Tabs.Tab>
               </Tabs.List>
 
