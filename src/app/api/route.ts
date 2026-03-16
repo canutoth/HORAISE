@@ -216,12 +216,22 @@ export async function POST(request: NextRequest) {
           }
 
           const { sendSuggestionToUser } = await import("../../server/email");
-          
-          // Notifica o usuário que o admin definiu seu horário
+
+          // Aguarda o envio para não perder a task ao encerrar a rota.
           console.log(`📧 Enviando email de horário definido para ${body.targetEmail}...`);
-          sendSuggestionToUser(body.targetEmail, targetName)
-            .then(() => console.log(`✅ Email enviado com sucesso para ${body.targetEmail}`))
-            .catch((e: unknown) => console.error("❌ Falha ao enviar email:", e));
+          try {
+            await sendSuggestionToUser(body.targetEmail, targetName);
+            console.log(`✅ Email enviado com sucesso para ${body.targetEmail}`);
+          } catch (e: unknown) {
+            console.error("❌ Falha ao enviar email:", e);
+            return NextResponse.json(
+              {
+                success: false,
+                message: "Horário salvo, mas não foi possível enviar o email ao usuário.",
+              },
+              { status: 500 }
+            );
+          }
         }
         
         return NextResponse.json(result, { status: result.success ? 200 : 400 });
