@@ -10,7 +10,6 @@ import {
   approveSchedule,
   readBacklogOptions,
   readRulesFromSheet,
-  saveSuggestedSchedule,
   loadSuggestedSchedule,
   acceptSuggestedSchedule,
   getColumnValue,
@@ -188,7 +187,7 @@ export async function POST(request: NextRequest) {
         // Verifica se o adminEmail é realmente admin
         const adminEmailEnv = process.env.EMAIL_ADMIN || "";
         if (body.adminEmail.toLowerCase() !== adminEmailEnv.toLowerCase()) {
-          return NextResponse.json({ success: false, message: "Apenas administradores podem sugerir horários" }, { status: 403 });
+          return NextResponse.json({ success: false, message: "Apenas administradores podem definir horários" }, { status: 403 });
         }
         
         // Busca dados do membro alvo
@@ -198,27 +197,31 @@ export async function POST(request: NextRequest) {
         }
         
         const targetName = getColumnValue(targetMember.row, "Nome", targetMember.columnMapping) || "Usuário";
-        const hadEditorAccess = Number(getColumnValue(targetMember.row, "Editor", targetMember.columnMapping) || 0) === 1;
         
-        // Salva o schedule sugerido (também concede Editor=1 automaticamente)
-        const result = await saveSuggestedSchedule(body.targetEmail, body.scheduleRow);
+        // Salva o schedule diretamente na aba principal e remove pendência de horário.
+        const result = await saveScheduleRow(body.targetEmail, body.scheduleRow, false);
         
         if (result.success) {
-          const { sendSuggestionToUser, sendAccessGrantedToUser } = await import("../../server/email");
-          
-          // Se não tinha acesso de editor antes, notifica sobre o acesso liberado
-          if (!hadEditorAccess) {
-            console.log(`📧 Enviando email de acesso liberado para ${body.targetEmail}...`);
-            sendAccessGrantedToUser(body.targetEmail, targetName)
-              .then(() => console.log(`✅ Email de acesso liberado enviado com sucesso para ${body.targetEmail}`))
-              .catch((e: unknown) => console.error("❌ Falha ao enviar email de acesso:", e));
+          // Quando o admin define o horário, o usuário não deve permanecer com acesso de edição.
+          const accessUpdate = await updateMemberAccess(body.targetEmail, 0, 0);
+          if (!accessUpdate.success) {
+            console.error("Falha ao remover acesso de edição após definir horário:", accessUpdate.message);
+            return NextResponse.json(
+              {
+                success: false,
+                message: "Horário salvo, mas não foi possível remover o acesso de edição automaticamente.",
+              },
+              { status: 500 }
+            );
           }
+
+          const { sendSuggestionToUser } = await import("../../server/email");
           
-          // Notifica sobre a sugestão de horário
-          console.log(`📧 Enviando email de sugestão para ${body.targetEmail}...`);
+          // Notifica o usuário que o admin definiu seu horário
+          console.log(`📧 Enviando email de horário definido para ${body.targetEmail}...`);
           sendSuggestionToUser(body.targetEmail, targetName)
-            .then(() => console.log(`✅ Email de sugestão enviado com sucesso para ${body.targetEmail}`))
-            .catch((e: unknown) => console.error("❌ Falha ao enviar email de sugestão:", e));
+            .then(() => console.log(`✅ Email enviado com sucesso para ${body.targetEmail}`))
+            .catch((e: unknown) => console.error("❌ Falha ao enviar email:", e));
         }
         
         return NextResponse.json(result, { status: result.success ? 200 : 400 });

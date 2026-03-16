@@ -40,7 +40,7 @@ import {
   IconAlertCircle,
   IconAlertTriangle,
 } from "@tabler/icons-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import TopNavBar from "@/components/TopNavBar";
 import { AdminSuggestionPanel } from "@/components/AdminSuggestionPanel";
 import { notifications } from "@mantine/notifications";
@@ -77,12 +77,14 @@ type AdminMember = {
 
 export default function AdminDashboard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [members, setMembers] = useState<AdminMember[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const isMobile = useMediaQuery('(max-width: 768px)');
   const [frentesOptions, setFrentesOptions] = useState<{ value: string; label: string }[]>([]);
   const [bolsasOptions, setBolsasOptions] = useState<{ value: string; label: string; color: string }[]>([]);
+  const [activeTab, setActiveTab] = useState<string>("cadastros");
   
   // Estado para armazenar edições pendentes (não salvas na planilha ainda)
   const [pendingEdits, setPendingEdits] = useState<Record<string, {
@@ -342,6 +344,22 @@ export default function AdminDashboard() {
     fetchMembers();
   }, [router]);
 
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "cadastros" || tab === "horarios" || tab === "acessos" || tab === "sugerir") {
+      setActiveTab(tab);
+      return;
+    }
+    setActiveTab("cadastros");
+  }, [searchParams]);
+
+  const handleOpenDefineSchedule = (email: string) => {
+    const params = new URLSearchParams();
+    params.set("tab", "sugerir");
+    params.set("personid", email);
+    router.push(`/horaise-admin/dashboard?${params.toString()}`);
+  };
+
   const handleSimpleAction = async (email: string, actionType: string) => {
     try {
       const response = await fetch("/api/admin", {
@@ -515,7 +533,7 @@ export default function AdminDashboard() {
             {type === 'schedule' && (
               <>
                 <Table.Th style={{ textAlign: 'center' }}>Horário</Table.Th>
-                <Table.Th style={{ textAlign: 'center' }}>Aceitar</Table.Th>
+                <Table.Th style={{ textAlign: 'center' }}>Ação</Table.Th>
               </>
             )}
 
@@ -690,14 +708,24 @@ export default function AdminDashboard() {
                         </Group>
                       </Table.Td>
                       <Table.Td style={{ textAlign: 'center' }}>
-                        <ActionIcon 
-                          color="green" 
-                          variant="filled"
-                          size="lg" 
-                          onClick={() => handleSimpleAction(member.email, 'approve-schedule-remove-editor')}
-                        >
-                          <IconCheck size={20} />
-                        </ActionIcon>
+                        <Group gap={8} justify="center" wrap="nowrap">
+                          <ActionIcon 
+                            color="green" 
+                            variant="filled"
+                            size="lg" 
+                            onClick={() => handleSimpleAction(member.email, 'approve-schedule-remove-editor')}
+                          >
+                            <IconCheck size={20} />
+                          </ActionIcon>
+                          <ActionIcon
+                            color="blue"
+                            variant="light"
+                            size="lg"
+                            onClick={() => handleOpenDefineSchedule(member.email)}
+                          >
+                            <IconPencil size={20} />
+                          </ActionIcon>
+                        </Group>
                       </Table.Td>
                     </>
                   )}
@@ -811,7 +839,7 @@ export default function AdminDashboard() {
           </Group>
 
           <Paper shadow="sm" radius="md" p={isMobile ? "xs" : "md"} withBorder>
-            <Tabs defaultValue="cadastros" color="var(--primary)">
+            <Tabs value={activeTab} onChange={(value) => setActiveTab(value || "cadastros")} color="var(--primary)">
               <Tabs.List mb="md" grow={isMobile}>
                 <Tabs.Tab value="cadastros" leftSection={!isMobile && <IconUser size={16} />} rightSection={pendingRegistrations.length > 0 && <Badge size="xs" circle color="red">{pendingRegistrations.length}</Badge>}>
                   {isMobile ? "Cadastros" : "Cadastros Pendentes"}
@@ -823,7 +851,7 @@ export default function AdminDashboard() {
                   {isMobile ? "Acessos" : "Acessos de Edição"}
                 </Tabs.Tab>
                 <Tabs.Tab value="sugerir" leftSection={!isMobile && <IconPencil size={16} />}>
-                  Sugerir
+                  {isMobile ? "Horário" : "Definir Horário"}
                 </Tabs.Tab>
               </Tabs.List>
 
@@ -840,6 +868,8 @@ export default function AdminDashboard() {
                 <AdminSuggestionPanel 
                   frentesOptions={frentesOptions}
                   bolsasOptions={bolsasOptions}
+                  initialTargetEmail={searchParams.get("personid") || undefined}
+                  onSavedSchedule={fetchMembers}
                 />
               </Tabs.Panel>
             </Tabs>

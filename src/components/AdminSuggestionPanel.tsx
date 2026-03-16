@@ -54,11 +54,15 @@ type ScheduleData = {
 type AdminSuggestionPanelProps = {
   frentesOptions: { value: string; label: string }[];
   bolsasOptions: { value: string; label: string; color: string }[];
+  initialTargetEmail?: string;
+  onSavedSchedule?: () => void;
 };
 
 export function AdminSuggestionPanel({ 
   frentesOptions, 
-  bolsasOptions 
+  bolsasOptions,
+  initialTargetEmail,
+  onSavedSchedule,
 }: AdminSuggestionPanelProps) {
   const isMobile = useMediaQuery('(max-width: 768px)');
   
@@ -249,6 +253,18 @@ export function AdminSuggestionPanel({
     }
   }, [current]);
 
+  useEffect(() => {
+    if (!initialTargetEmail || members.length === 0) return;
+
+    const targetIndex = members.findIndex(
+      (member) => member.email?.toLowerCase() === initialTargetEmail.toLowerCase()
+    );
+
+    if (targetIndex >= 0 && targetIndex !== currentIndex) {
+      setCurrentIndex(targetIndex);
+    }
+  }, [initialTargetEmail, members, currentIndex]);
+
   const handleSaveDataEdits = async () => {
     if (!current) return;
 
@@ -371,12 +387,13 @@ export function AdminSuggestionPanel({
 
       if (result.success) {
         notifications.show({
-          title: "Sugestão Enviada!",
-          message: `Horário sugerido para ${current.name}. O membro será notificado por email.`,
-          color: "blue",
+          title: "Horário Definido!",
+          message: `Horário de ${current.name} foi salvo. O membro foi notificado por email.`,
+          color: "green",
           icon: <IconCheck />,
           autoClose: 5000,
         });
+        onSavedSchedule?.();
       } else {
         notifications.show({
           title: "Erro",
@@ -697,7 +714,7 @@ export function AdminSuggestionPanel({
         <Stack gap="md">
           {isAdminMode && (
             <Alert radius="md" variant="light" color="orange" title="👨‍💼 Modo Administrador" icon={<IconAlertCircle />}>
-              Você está sugerindo um horário de trabalho para <strong>{current.name}</strong>.
+              Você está definindo o horário de trabalho de <strong>{current.name}</strong>.
             </Alert>
           )}
 
@@ -779,12 +796,12 @@ export function AdminSuggestionPanel({
             </Button>
             <Button
               leftSection={<IconDeviceFloppy size={18} />}
-              color="orange"
+              color="green"
               onClick={handleSaveSuggestion}
               loading={saving}
               size={isMobile ? "xs" : "sm"}
             >
-              Sugerir Horário
+              Salvar Horário
             </Button>
           </Group>
 

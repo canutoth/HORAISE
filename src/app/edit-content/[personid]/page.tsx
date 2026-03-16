@@ -26,7 +26,6 @@ import {
   UnstyledButton,
   List,
   ScrollArea,
-  Tabs,
   TextInput,
   NumberInput, 
 } from "@mantine/core";
@@ -47,7 +46,6 @@ import {
   IconClock,
   IconBan,
   IconAlertTriangle,
-  IconInfoCircle,
   IconToolsKitchen2, 
 } from "@tabler/icons-react";
 import { useRouter, useParams } from "next/navigation";
@@ -58,8 +56,6 @@ import {
   saveMember,
   validateMemberData,
   getBacklogOptions,
-  loadSuggestedScheduleFromSheet,
-  acceptSuggestedSchedule,
   type TeamMemberData,
   type ScheduleData,
 } from "../../../services/googleSheets";
@@ -81,9 +77,6 @@ export default function EditContentPage() {
   const [memberData, setMemberData] = useState<TeamMemberData | null>(null);
   const [schedule, setSchedule] = useState<ScheduleData>({});
   const [savedSchedule, setSavedSchedule] = useState<ScheduleData>({});
-  const [suggestedSchedule, setSuggestedSchedule] = useState<ScheduleData | null>(null);
-  const [activeTab, setActiveTab] = useState<"original" | "suggested">("original");
-  const [isAcceptingSuggestion, setIsAcceptingSuggestion] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isNewMember, setIsNewMember] = useState(false);
@@ -335,18 +328,6 @@ export default function EditContentPage() {
           setSchedule(memberSchedule);
           setSavedSchedule(cloneSchedule(memberSchedule));
           setIsNewMember(false);
-          
-          if (member.pendingSuggestion === 1) {
-            try {
-              const suggested = await loadSuggestedScheduleFromSheet(personId);
-              if (suggested) {
-                setSuggestedSchedule(suggested);
-                setActiveTab("suggested"); 
-              }
-            } catch (suggError) {
-              console.warn("Erro ao carregar sugestão:", suggError);
-            }
-          }
         } else {
           const exampleData = await getExampleData();
           const newMember: TeamMemberData = { ...exampleData, email: personId };
@@ -630,28 +611,25 @@ export default function EditContentPage() {
 
     setIsSaving(true);
     try {
-      if (isAdminMode && adminEmail) {
-        // Admin editando outro membro: usa saveSuggestedSchedule
-        if (personId.toLowerCase() !== adminEmail.toLowerCase()) {
-          const { saveSuggestedSchedule } = await import("../../../services/googleSheets");
-          const result = await saveSuggestedSchedule(adminEmail, currentData.email, schedule);
-          
-          if (result.success) {
-            notifications.show({ 
-              title: "Sugestão Enviada!", 
-              message: `Horário sugerido para ${memberData?.name}. O membro será notificado por email.`, 
-              color: "blue", 
-              icon: <IconCheck />,
-              autoClose: 5000
-            });
-            setSavedSchedule(cloneSchedule(schedule));
-            return true;
-          } else {
-            notifications.show({ title: "Erro", message: result.message, color: "red" });
-            return false;
-          }
+      // Admin editando outro membro: salva diretamente como schedule definitivo
+      if (isAdminMode && adminEmail && personId.toLowerCase() !== adminEmail.toLowerCase()) {
+        const { saveSuggestedSchedule } = await import("../../../services/googleSheets");
+        const result = await saveSuggestedSchedule(adminEmail, currentData.email, schedule);
+        
+        if (result.success) {
+          notifications.show({ 
+            title: "Horário Definido!", 
+            message: `Horário salvo para ${memberData?.name}. O membro foi notificado por email.`, 
+            color: "green", 
+            icon: <IconCheck />,
+            autoClose: 5000
+          });
+          setSavedSchedule(cloneSchedule(schedule));
+          return true;
+        } else {
+          notifications.show({ title: "Erro", message: result.message, color: "red" });
+          return false;
         }
-        // Admin editando próprio horário: usa saveMember com isAdmin=true
       }
       
       const result = await saveMember(currentData, isNewMember, isAdminMode);
@@ -740,46 +718,6 @@ export default function EditContentPage() {
       });
     } finally {
       setIsRequestingException(false);
-    }
-  };
-
-  const handleAcceptSuggestion = async () => {
-    if (!memberData) return;
-    
-    setIsAcceptingSuggestion(true);
-    try {
-      const result = await acceptSuggestedSchedule(memberData.email);
-      
-      if (result.success) {
-        notifications.show({
-          title: "Sugestão Aceita!",
-          message: "O horário sugerido foi aplicado. A página será recarregada.",
-          color: "green",
-          icon: <IconCheck />,
-          autoClose: 2000
-        });
-        
-        // Recarrega a página após 2 segundos para atualizar o estado de acesso
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
-      } else {
-        notifications.show({
-          title: "Erro",
-          message: result.message || "Erro ao aceitar sugestão",
-          color: "red"
-        });
-        setIsAcceptingSuggestion(false);
-      }
-    } catch (error) {
-      console.error("Erro ao aceitar sugestão:", error);
-      notifications.show({
-        title: "Erro",
-        message: "Erro ao processar sugestão",
-        color: "red"
-      });
-    } finally {
-      setIsAcceptingSuggestion(false);
     }
   };
 
@@ -1102,58 +1040,13 @@ export default function EditContentPage() {
               <Stack gap="md">
                 {isAdminMode && personId.toLowerCase() !== adminEmail?.toLowerCase() && (
                   <Alert radius="md" variant="light" color="orange" title="👨‍💼 Modo Administrador" icon={<IconAlertCircle />}>
-                    Você está editando o horário de outro membro. Ao salvar, você estará sugerindo um horário de trabalho para <strong>{memberData?.name}</strong>.
+                    Você está editando o horário de <strong>{memberData?.name}</strong>. Ao salvar, o horário será definido imediatamente.
                   </Alert>
                 )}
                 
-                {suggestedSchedule && (
-                  <Alert variant="light" color="blue" title="📝 Nova Sugestão de Horário" icon={<IconInfoCircle />}>
-                    O administrador sugeriu um novo horário para você. Use as abas abaixo para comparar e decidir.
-                  </Alert>
-                )}
+                {renderScheduleTable(schedule, false)}
                 
-                {suggestedSchedule ? (
-                  <Tabs value={activeTab} onChange={(value) => setActiveTab(value as "original" | "suggested")}>
-                    <Tabs.List>
-                      <Tabs.Tab value="original">Meu Horário Atual</Tabs.Tab>
-                      <Tabs.Tab value="suggested">Sugestão do Admin</Tabs.Tab>
-                    </Tabs.List>
-                    
-                    <Tabs.Panel value="original" pt="md">
-                      {renderScheduleTable(schedule, false)}
-                    </Tabs.Panel>
-                    
-                    <Tabs.Panel value="suggested" pt="md">
-                      {renderScheduleTable(suggestedSchedule, true)}
-                      <Group justify="flex-end" mt="md">
-                        <Button 
-                          color="green" 
-                          leftSection={<IconCheck size={18} />}
-                          onClick={handleAcceptSuggestion}
-                          loading={isAcceptingSuggestion}
-                        >
-                          Aceitar Sugestão
-                        </Button>
-                        <Button 
-                          color="red" 
-                          variant="light"
-                          leftSection={<IconX size={18} />}
-                          onClick={() => {
-                            setSuggestedSchedule(null);
-                            setActiveTab("original");
-                          }}
-                        >
-                          Recusar
-                        </Button>
-                      </Group>
-                    </Tabs.Panel>
-                  </Tabs>
-                ) : (
-                  renderScheduleTable(schedule, false)
-                )}
-                
-                {(!suggestedSchedule || activeTab === "original") && (
-                  <Group justify={isMobile ? "space-between" : "flex-end"} mt="md">
+                <Group justify={isMobile ? "space-between" : "flex-end"} mt="md">
                     <Button leftSection={<IconX size={18} />} variant="light" color="red" onClick={() => setSchedule({})} size={isMobile ? "xs" : "sm"}>Limpar</Button>
                     <Button 
                       leftSection={<IconDeviceFloppy size={18} />} 
@@ -1163,10 +1056,9 @@ export default function EditContentPage() {
                       disabled={!hasUnsavedChanges && !isNewMember} 
                       size={isMobile ? "xs" : "sm"}
                     >
-                      {isAdminMode && personId.toLowerCase() !== adminEmail?.toLowerCase() ? "Sugerir Horário" : "Salvar"}
+                      {isAdminMode && personId.toLowerCase() !== adminEmail?.toLowerCase() ? "Salvar Horário" : "Salvar"}
                     </Button>
                   </Group>
-                )}
               </Stack>
             </Grid.Col>
           </Grid>

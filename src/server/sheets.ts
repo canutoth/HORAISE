@@ -202,7 +202,7 @@ export async function updateMemberRow(member: { name: string; email: string; fre
   });
   return { success: true, message: "Membro atualizado com sucesso" };
 }
-export async function saveScheduleRow(email: string, scheduleRow: string[]) {
+export async function saveScheduleRow(email: string, scheduleRow: string[], markAsPending: boolean = true) {
   const { sheets } = await getSheetsClient();
   const sheetRef = escapeSheetName(SHEET_NAME);
   const columnMapping = await getColumnMapping(sheets);
@@ -223,18 +223,34 @@ export async function saveScheduleRow(email: string, scheduleRow: string[]) {
     requestBody: { values: [scheduleRow] },
   });
   
-  // Marca Pending-TimeTable=1 após salvar
+  // Usuário comum salva como pendente; admin salva como definitivo.
   const pendingTimeTableIndex = getColumnIndex("Pending-TimeTable", columnMapping);
+  const pendingSuggestionIndex = getColumnIndex("Pending-Suggestion", columnMapping);
   const pendingTimeTableCol = columnIndexToLetter(pendingTimeTableIndex);
+  const pendingSuggestionCol = columnIndexToLetter(pendingSuggestionIndex);
   const rangePendingTimeTable = `${sheetRef}!${pendingTimeTableCol}${rowNumber}`;
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
     range: rangePendingTimeTable,
     valueInputOption: "RAW",
-    requestBody: { values: [[1]] }, // Define Pending-TimeTable=1
+    requestBody: { values: [[markAsPending ? 1 : 0]] },
   });
+
+  if (!markAsPending) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${sheetRef}!${pendingSuggestionCol}${rowNumber}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [[0]] },
+    });
+  }
   
-  return { success: true, message: "Schedule salvo e enviado para aprovação." };
+  return {
+    success: true,
+    message: markAsPending
+      ? "Schedule salvo e enviado para aprovação."
+      : "Schedule salvo com sucesso.",
+  };
 }
 
 export async function saveScheduleRowAsException(email: string, scheduleRow: string[]) {
