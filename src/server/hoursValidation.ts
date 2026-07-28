@@ -38,11 +38,11 @@ export function validateScheduleHours(
     requiredHO,
     requiredTotal,
   };
-  // Validação: total geral deve ser igual ao total requerido
-  if (totalGeral !== requiredTotal) {
+  // Validação: total geral precisa atingir pelo menos o total requerido
+  if (totalGeral < requiredTotal) {
     return {
       isValid: false,
-      message: `Total de horas inválido. Você precisa de ${requiredHP}h presencial + ${requiredHO}h online.`,
+      message: `Total de horas insuficiente. Você precisa de pelo menos ${requiredHP}h presencial + ${requiredHO}h online.`,
       details,
     };
   }
@@ -51,10 +51,10 @@ export function validateScheduleHours(
   // Mas não podemos ter mais horas específicas (P ou O) do que o requerido + reuniões disponíveis
   // Se não tem reunião nenhuma, deve ter exatamente HP presenciais e HO online
   if (totalReuniao === 0) {
-    if (totalPresencial !== requiredHP || totalOnline !== requiredHO) {
+    if (totalPresencial < requiredHP || totalOnline < requiredHO) {
       return {
         isValid: false,
-        message: `Você deve ter ${requiredHP}h presenciais e ${requiredHO}h online. Atual: ${totalPresencial}h presenciais e ${totalOnline}h online.`,
+        message: `Você deve ter pelo menos ${requiredHP}h presenciais e ${requiredHO}h online. Atual: ${totalPresencial}h presenciais e ${totalOnline}h online.`,
         details,
       };
     }
