@@ -62,6 +62,12 @@ const normalizeCoutinho = (name: string, email: string): string => {
   return name;
 };
 
+// Bolsa "Prof." permite cadastro com 0 horas de trabalho
+const isProfBolsa = (bolsa: string): boolean => {
+  if (!bolsa || bolsa === 'nan') return false;
+  return bolsa.split(',').some((b) => b.trim().toLowerCase().startsWith('prof'));
+};
+
 type AdminMember = {
   name: string;
   email: string;
@@ -396,26 +402,28 @@ function AdminDashboardContent() {
     
     // Se não há edições pendentes, valida os dados atuais do membro
     if (!editData) {
+      const isProf = isProfBolsa(member.bolsa);
       const hasBothHoursZero = member.ho === 0 && member.hp === 0;
       const hasMissingBolsa = !member.bolsa || member.bolsa === 'nan' || member.bolsa.trim() === '';
       
-      if (hasBothHoursZero || hasMissingBolsa) {
+      if (hasMissingBolsa || (hasBothHoursZero && !isProf)) {
         notifications.show({ 
           title: "Dados incompletos", 
-          message: hasBothHoursZero ? "Defina ao menos HO ou HP (não ambos zerados)" : "Preencha a bolsa antes de confirmar", 
+          message: hasMissingBolsa ? "Preencha a bolsa antes de confirmar" : "Defina ao menos HO ou HP (não ambos zerados)", 
           color: "orange" 
         });
         return;
       }
     } else {
       // Se há edições pendentes, valida os dados editados
+      const isProf = isProfBolsa(editData.bolsa);
       const hasBothHoursZero = editData.ho === 0 && editData.hp === 0;
       const hasMissingBolsa = !editData.bolsa || editData.bolsa === 'nan' || editData.bolsa.trim() === '';
       
-      if (hasBothHoursZero || hasMissingBolsa) {
+      if (hasMissingBolsa || (hasBothHoursZero && !isProf)) {
         notifications.show({ 
           title: "Dados incompletos", 
-          message: hasBothHoursZero ? "Defina ao menos HO ou HP (não ambos zerados)" : "Preencha a bolsa antes de confirmar", 
+          message: hasMissingBolsa ? "Preencha a bolsa antes de confirmar" : "Defina ao menos HO ou HP (não ambos zerados)", 
           color: "orange" 
         });
         return;
@@ -497,18 +505,19 @@ function AdminDashboardContent() {
     router.push("/horaise-admin");
   };
 
-  // Cadastro pendente = (HP E HO ambos zerados) OU sem bolsa definida
+  // Cadastro pendente = (sem bolsa) OU (HP e HO ambos zerados e não é Prof.)
   const pendingRegistrations = sortedMembers.filter(m => {
     const hasBothHoursZero = m.ho === 0 && m.hp === 0;
     const hasMissingBolsa = !m.bolsa || m.bolsa === 'nan' || m.bolsa.trim() === '';
-    return hasBothHoursZero || hasMissingBolsa;
+    return hasMissingBolsa || (hasBothHoursZero && !isProfBolsa(m.bolsa));
   });
   
   const pendingSchedules = sortedMembers.filter(m => m.pendingTimeTable === 1 || m.pendingTimeTable === 2);
   
-  // Acessos de Edição = Apenas pessoas COM todos os dados preenchidos (HP+HO > 0, Bolsa)
+  // Acessos de Edição = Pessoas COM bolsa preenchida (e horas > 0 ou Prof.)
   const activeEditors = sortedMembers.filter(m => {
-    const hasValidHours = (m.ho > 0 || m.hp > 0);
+    const isProf = isProfBolsa(m.bolsa);
+    const hasValidHours = isProf || (m.ho > 0 || m.hp > 0);
     const hasAllData = hasValidHours && m.bolsa && m.bolsa !== 'nan' && m.bolsa.trim() !== '';
     return hasAllData && (m.pendingAccess === 1 || m.editor === 1);
   });
@@ -556,7 +565,7 @@ function AdminDashboardContent() {
             </Table.Tr>
           ) : (
             data.map((member) => {
-              const hasMissingHours = member.ho === 0 && member.hp === 0;
+              const hasMissingHours = member.ho === 0 && member.hp === 0 && !isProfBolsa(member.bolsa);
               
               // Usa dados pendentes se existirem, senão usa os dados do membro
               const pendingData = pendingEdits[member.email];
@@ -659,12 +668,12 @@ function AdminDashboardContent() {
                   {type === 'registration' && (
                     <>
                       <Table.Td style={{ textAlign: 'center' }}>
-                        <Text fw={600} c={((pendingEdits[member.email]?.ho ?? member.ho) === 0 && (pendingEdits[member.email]?.hp ?? member.hp) === 0) ? "red" : "green"}>
+                        <Text fw={600} c={((pendingEdits[member.email]?.ho ?? member.ho) === 0 && (pendingEdits[member.email]?.hp ?? member.hp) === 0 && !isProfBolsa(currentBolsa)) ? "red" : "green"}>
                           {(pendingEdits[member.email]?.ho ?? member.ho) || 0}h
                         </Text>
                       </Table.Td>
                       <Table.Td style={{ textAlign: 'center' }}>
-                        <Text fw={600} c={((pendingEdits[member.email]?.ho ?? member.ho) === 0 && (pendingEdits[member.email]?.hp ?? member.hp) === 0) ? "red" : "green"}>
+                        <Text fw={600} c={((pendingEdits[member.email]?.ho ?? member.ho) === 0 && (pendingEdits[member.email]?.hp ?? member.hp) === 0 && !isProfBolsa(currentBolsa)) ? "red" : "green"}>
                           {(pendingEdits[member.email]?.hp ?? member.hp) || 0}h
                         </Text>
                       </Table.Td>
