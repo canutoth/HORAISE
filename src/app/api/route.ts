@@ -17,6 +17,7 @@ import {
 import { sendAdminNotification, sendUserApproval, sendAccessRequestToAdmin, sendScheduleEditedToAdmin, sendScheduleApprovedToUser } from "../../server/email";
 import { validateScheduleHours, parseHours } from "../../server/hoursValidation";
 import { validateDynamicRules } from "../../server/dynamicRulesValidation";
+import { isAdminEmail } from "../../server/admin";
 type Actions =
   | { action: "read-member"; email: string }
   | { action: "read-example" }
@@ -185,8 +186,7 @@ export async function POST(request: NextRequest) {
         }
         
         // Verifica se o adminEmail é realmente admin
-        const adminEmailEnv = process.env.EMAIL_ADMIN || "";
-        if (body.adminEmail.toLowerCase() !== adminEmailEnv.toLowerCase()) {
+        if (!isAdminEmail(body.adminEmail)) {
           return NextResponse.json({ success: false, message: "Apenas administradores podem definir horários" }, { status: 403 });
         }
         
@@ -274,17 +274,15 @@ export async function POST(request: NextRequest) {
       }
       case "admin-precheck": {
         if (!body.email) return NextResponse.json({ ok: false }, { status: 400 });
-        const adminEmail = process.env.EMAIL_ADMIN || "";
-        const isAdmin = body.email.toLowerCase() === adminEmail.toLowerCase();
+        const isAdmin = isAdminEmail(body.email);
         return NextResponse.json({ isAdmin });
       }
       case "admin-login": {
-        const adminEmail = process.env.EMAIL_ADMIN || "";
         const adminPass = process.env.SENHA_ADMIN || "";
         if (!body.email || !body.password) {
           return NextResponse.json({ success: false, message: "email e senha obrigatórios" }, { status: 400 });
         }
-        if (body.email.toLowerCase() !== adminEmail.toLowerCase()) {
+        if (!isAdminEmail(body.email)) {
           return NextResponse.json({ success: false, message: "Email não é administrador" }, { status: 403 });
         }
         if (body.password !== adminPass) {

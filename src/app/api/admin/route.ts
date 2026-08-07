@@ -13,6 +13,7 @@ import {
   sendScheduleApprovedToUser 
 } from "../../../server/email";
 import { validateScheduleHours, parseHours } from "../../../server/hoursValidation";
+import { isAdminEmail } from "../../../server/admin";
 
 type AdminActions =
   | { action: "login"; email: string; password: string }
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        if (body.email !== adminEmail || body.password !== adminPassword) {
+        if (!isAdminEmail(body.email) || body.password !== adminPassword) {
           return NextResponse.json(
             { error: "Email ou senha incorretos" },
             { status: 401 }
