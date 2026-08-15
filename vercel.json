@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/apply-edit-window",
+      "schedule": "*/30 * * * *"
+    }
+  ]
+}

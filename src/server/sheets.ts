@@ -4,6 +4,7 @@ const SHEET_NAME = process.env.SHEET_NAME || "INFO";
 const BACKLOG_SHEET_NAME = process.env.BACKLOG_SHEET_NAME || "BACKLOG";
 const RULES_SHEET_NAME = process.env.RULES_SHEET_NAME || "RULES";
 const SUGGESTED_SHEET_NAME = process.env.SUGGESTED_SHEET_NAME || "SUGGESTION";
+const EDIT_WINDOW_SHEET_NAME = process.env.EDIT_WINDOW_SHEET_NAME || "EDIT-WINDOW";
 
 // Cache para o mapeamento de colunas (para não precisar buscar toda vez)
 let columnMappingCache: Map<string, number> | null = null;
@@ -912,4 +913,202 @@ export async function deleteMemberRow(email: string) {
   return { success: true, message: "Membro excluído com sucesso" };
 }
 
-export const sheetsConstants = { SPREADSHEET_ID, SHEET_NAME, BACKLOG_SHEET_NAME, SUGGESTED_SHEET_NAME };
+export async function getSheetId(sheets: any, sheetName: string): Promise<number> {
+  const spreadsheet = await sheets.spreadsheets.get({
+    spreadsheetId: SPREADSHEET_ID,
+  });
+  const sheet = spreadsheet.data.sheets?.find(
+    (s: any) => s.properties?.title === sheetName
+  );
+  if (sheet?.properties?.sheetId === undefined) {
+    throw new Error(`Aba "${sheetName}" não encontrada`);
+  }
+  return sheet.properties.sheetId;
+}
+
+/**
+ * Garante que a aba de janela de edição exista (cria se necessário).
+ * Estrutura: A1="Abertura", B1="Encerramento", A2:B2 = datas.
+ */
+async function ensureEditWindowSheet(sheets: any): Promise<number> {
+  const spreadsheet = await sheets.spreadsheets.get({
+    spreadsheetId: SPREADSHEET_ID,
+  });
+  const existing = spreadsheet.data.sheets?.find(
+    (s: any) => s.properties?.title === EDIT_WINDOW_SHEET_NAME
+  );
+  if (existing?.properties?.sheetId !== undefined) {
+    return existing.properties.sheetId;
+  }
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SPREADSHEET_ID,
+    requestBody: {
+      requests: [{ addSheet: { properties: { title: EDIT_WINDOW_SHEET_NAME } } }],
+    },
+  });
+
+  const sheetRef = escapeSheetName(EDIT_WINDOW_SHEET_NAME);
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetRef}!A1:B1`,
+    valueInputOption: "RAW",
+    requestBody: { values: [["Abertura", "Encerramento"]] },
+  });
+  return getSheetId(sheets, EDIT_WINDOW_SHEET_NAME);
+}
+
+/**
+ * Lê o período de edição atual da aba EDIT-WINDOW.
+ * @returns { start, end } como Dates, ou null se não houver período configurado.
+ */
+export async function readEditWindow(): Promise<{ start: Date; end: Date } | null> {
+  const { sheets } = await getSheetsClient();
+  const sheetRef = escapeSheetName(EDIT_WINDOW_SHEET_NAME);
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${sheetRef}!A2:B2`,
+    });
+    const [start, end] = res.data.values?.[0] || [];
+    if (!start || !end) return null;
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return null;
+    return { start: startDate, end: endDate };
+  } catch {
+    return null; // aba ainda não existe
+  }
+}
+
+/**
+ * Salva (ou cria) o período de edição na aba EDIT-WINDOW.
+ * @param start Data de abertura (ISO, ex: "2026-08-20T00:00")
+ * @param end Data de encerramento (ISO, ex: "2026-08-27T23:59")
+ */
+export async function saveEditWindow(start: string, end: string) {
+  const { sheets } = await getSheetsClient();
+  await ensureEditWindowSheet(sheets);
+  const sheetRef = escapeSheetName(EDIT_WINDOW_SHEET_NAME);
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetRef}!A2:B2`,
+    valueInputOption: "RAW",
+    requestBody: { values: [[start, end]] },
+  });
+  return { success: true, message: "Período de edição salvo" };
+}
+
+/**
+ * Remove o período de edição configurado (limpa as datas).
+ */
+export async function clearEditWindow() {
+  const { sheets } = await getSheetsClient();
+  const sheetRef = escapeSheetName(EDIT_WINDOW_SHEET_NAME);
+  try {
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${sheetRef}!A2:B2`,
+    });
+  } catch {
+    // aba não existe — nada a limpar
+  }
+  return { success: true, message: "Período de edição removido" };
+}
+
+/**
+ * Aplica o estado do período de edição na coluna Editor de todos os membros:
+ * - Período aberto (agora entre início e fim): Editor = 1 para todos
+ *   (exceto cadastros ainda pendentes de aprovação, Pending-Access=1).
+ * - Período fechado ou inexistente: Editor = 0 para todos.
+ * @returns Quantos membros foram alterados e o estado resultante.
+ */
+export async function applyEditWindowState(): Promise<{
+  success: boolean;
+  message: string;
+  state: "open" | "closed" | "idle";
+  updated: number;
+}> {
+  const { sheets } = await getSheetsClient();
+
+  const window = await readEditWindow();
+  const now = new Date();
+
+  let state: "open" | "closed" | "idle" = "idle";
+  if (window) {
+    if (now >= window.start && now <= window.end) {
+      state = "open";
+    } else if (now > window.end) {
+      state = "closed";
+    }
+    // Antes do início → idle: janela ainda não iniciou, não altera nada.
+  }
+
+  const all = await readAllMembers();
+  if (all.length === 0 || state === "idle") {
+    return {
+      success: true,
+      message: "Nenhum período de edição ativo no momento",
+      state,
+      updated: 0,
+    };
+  }
+
+  const columnMapping = new Map<string, number>();
+  all[0].forEach((col: string, idx: number) => {
+    const normalized = col?.trim();
+    if (normalized) columnMapping.set(normalized, idx);
+  });
+
+  const emailIndex = columnMapping.get("Email");
+  const editorIndex = columnMapping.get("Editor");
+  const pendingIndex = columnMapping.get("Pending-Access");
+  if (emailIndex === undefined || editorIndex === undefined) {
+    return { success: false, message: "Colunas Email/Editor não encontradas", state, updated: 0 };
+  }
+
+  const sheetRef = escapeSheetName(SHEET_NAME);
+  const updates: { range: string; values: number[][] }[] = [];
+  let updated = 0;
+
+  all.slice(1).forEach((row, idx) => {
+    const rowNumber = idx + 2; // 1-based, pula o cabeçalho
+    if (!row[emailIndex] || !row[emailIndex].trim()) return;
+
+    let target: number;
+    if (state === "open") {
+      const pending = pendingIndex !== undefined ? Number(row[pendingIndex] || 0) : 0;
+      target = pending === 1 ? 0 : 1;
+    } else {
+      target = 0;
+    }
+
+    const current = Number(row[editorIndex] || 0);
+    if (current !== target) {
+      updates.push({
+        range: `${sheetRef}!${columnIndexToLetter(editorIndex)}${rowNumber}`,
+        values: [[target]],
+      });
+      updated++;
+    }
+  });
+
+  if (updates.length > 0) {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID,
+      requestBody: {
+        valueInputOption: "RAW",
+        data: updates,
+      },
+    });
+  }
+
+  const message =
+    state === "open"
+      ? `Período de edição aberto. ${updated} membro(s) liberado(s).`
+      : `Período de edição encerrado. ${updated} membro(s) bloqueado(s).`;
+
+  return { success: true, message, state, updated };
+}
+
+export const sheetsConstants = { SPREADSHEET_ID, SHEET_NAME, BACKLOG_SHEET_NAME, SUGGESTED_SHEET_NAME, EDIT_WINDOW_SHEET_NAME };

@@ -7,7 +7,12 @@ import {
   approveSchedule,
   deleteMemberRow,
   getColumnValue,
+  readEditWindow,
+  saveEditWindow,
+  clearEditWindow,
+  applyEditWindowState,
 } from "../../../server/sheets";
+import { getSessionEmail } from "../../../server/session";
 import { 
   sendUserApproval, 
   sendAccessGrantedToUser, 
@@ -36,6 +41,10 @@ type AdminActions =
     }
   | { action: "quick-approve-access"; email: string }
   | { action: "delete-member"; email: string }
+  | { action: "set-edit-window"; start: string; end: string }
+  | { action: "clear-edit-window" }
+  | { action: "apply-edit-window" }
+  | { action: "get-edit-window" }
   | {
       action: "update-member-data";
       email: string;
@@ -332,6 +341,77 @@ export async function POST(request: NextRequest) {
         const result = await deleteMemberRow(body.email);
         return NextResponse.json(result, {
           status: result.success ? 200 : 400,
+        });
+      }
+
+      case "set-edit-window":
+      case "clear-edit-window":
+      case "apply-edit-window":
+      case "get-edit-window": {
+        // Ações sensíveis exigem sessão de admin válida
+        const sessionEmail = getSessionEmail(request);
+        if (!sessionEmail) {
+          return NextResponse.json(
+            { error: "Faça login como administrador" },
+            { status: 401 }
+          );
+        }
+
+        if (body.action === "set-edit-window") {
+          if (!body.start || !body.end) {
+            return NextResponse.json(
+              { error: "start e end são obrigatórios" },
+              { status: 400 }
+            );
+          }
+          const startDate = new Date(body.start);
+          const endDate = new Date(body.end);
+          if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+            return NextResponse.json(
+              { error: "Datas inválidas" },
+              { status: 400 }
+            );
+          }
+          if (endDate <= startDate) {
+            return NextResponse.json(
+              { error: "A data de encerramento deve ser depois do início" },
+              { status: 400 }
+            );
+          }
+
+          const saveResult = await saveEditWindow(body.start, body.end);
+          if (!saveResult.success) {
+            return NextResponse.json(saveResult, { status: 400 });
+          }
+          const applyResult = await applyEditWindowState();
+          return NextResponse.json({
+            success: true,
+            message: "Período de edição salvo e aplicado",
+            apply: applyResult,
+          });
+        }
+
+        if (body.action === "clear-edit-window") {
+          await clearEditWindow();
+          return NextResponse.json({
+            success: true,
+            message: "Período de edição removido",
+          });
+        }
+
+        if (body.action === "apply-edit-window") {
+          const result = await applyEditWindowState();
+          return NextResponse.json(result, {
+            status: result.success ? 200 : 500,
+          });
+        }
+
+        // get-edit-window
+        const window = await readEditWindow();
+        return NextResponse.json({
+          success: true,
+          start: window ? window.start.toISOString() : null,
+          end: window ? window.end.toISOString() : null,
         });
       }
 
