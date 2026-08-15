@@ -5,6 +5,7 @@ import {
   readAllMembers,
   updateMemberAccess,
   approveSchedule,
+  deleteMemberRow,
   getColumnValue,
 } from "../../../server/sheets";
 import { 
@@ -36,6 +37,7 @@ type AdminActions =
       scheduleRow: string[];
     }
   | { action: "quick-approve-access"; email: string }
+  | { action: "delete-member"; email: string }
   | {
       action: "update-member-data";
       email: string;
@@ -332,6 +334,20 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        return NextResponse.json(result, {
+          status: result.success ? 200 : 400,
+        });
+      }
+
+      case "delete-member": {
+        if (!body.email) {
+          return NextResponse.json(
+            { error: "Email é obrigatório" },
+            { status: 400 }
+          );
+        }
+
+        const result = await deleteMemberRow(body.email);
         return NextResponse.json(result, {
           status: result.success ? 200 : 400,
         });
