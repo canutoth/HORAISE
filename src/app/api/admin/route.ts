@@ -14,10 +14,8 @@ import {
   sendScheduleApprovedToUser 
 } from "../../../server/email";
 import { validateScheduleHours, parseHours } from "../../../server/hoursValidation";
-import { isAdminEmail } from "../../../server/admin";
 
 type AdminActions =
-  | { action: "login"; email: string; password: string }
   | { action: "list-pending-members" }
   | { action: "read-all-members" } 
   | { action: "get-member"; email: string }
@@ -52,27 +50,6 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as AdminActions;
 
     switch (body.action) {
-      case "login": {
-        const adminEmail = process.env.EMAIL_ADMIN;
-        const adminPassword = process.env.SENHA_ADMIN;
-
-        if (!adminEmail || !adminPassword) {
-          return NextResponse.json(
-            { error: "Configuração de admin não encontrada" },
-            { status: 500 }
-          );
-        }
-
-        if (!isAdminEmail(body.email) || body.password !== adminPassword) {
-          return NextResponse.json(
-            { error: "Email ou senha incorretos" },
-            { status: 401 }
-          );
-        }
-
-        return NextResponse.json({ success: true, message: "Login realizado com sucesso" });
-      }
-
       case "read-all-members": {
         const members = await readAllMembers();
         return NextResponse.json({ members });
@@ -115,7 +92,7 @@ export async function POST(request: NextRequest) {
         
         const result = await updateMemberAccess(body.email, 1, 0);
         
-        if (result.success) {
+        if (result.success && !result.alreadyDone) {
           const member = await readMemberByEmail(body.email);
           const name = member ? getColumnValue(member.row, "Nome", member.columnMapping) : "Usuário";
           sendAccessGrantedToUser(body.email, name).catch(console.error);
@@ -128,7 +105,7 @@ export async function POST(request: NextRequest) {
         
         const result = await approveSchedule(body.email, false);
 
-        if (result.success) {
+        if (result.success && !result.alreadyDone) {
            const member = await readMemberByEmail(body.email);
            const name = member ? getColumnValue(member.row, "Nome", member.columnMapping) : "Usuário";
            sendScheduleApprovedToUser(body.email, name, false).catch(console.error);
@@ -204,7 +181,7 @@ export async function POST(request: NextRequest) {
           ho: body.ho,
         };
         const result = await updateMemberRow(memberData, false);
-        if (result.success) {
+        if (result.success && !result.alreadyDone) {
           sendUserApproval(body.email, memberData.name).catch((e) =>
             console.error("Falha ao enviar email:", e)
           );
@@ -272,15 +249,20 @@ export async function POST(request: NextRequest) {
           );
         }
         
-        try {
-          await sendAccessGrantedToUser(body.email, memberName);
-        } catch (emailError) {
-          console.error("Erro ao enviar email para usuário:", emailError);
+        if (!updateResult.alreadyDone) {
+          try {
+            await sendAccessGrantedToUser(body.email, memberName);
+          } catch (emailError) {
+            console.error("Erro ao enviar email para usuário:", emailError);
+          }
         }
         
         return NextResponse.json({
           success: true,
-          message: `Acesso liberado para ${memberName} (${body.email})`,
+          alreadyDone: updateResult.alreadyDone,
+          message: updateResult.alreadyDone
+            ? `Acesso para ${memberName} (${body.email}) já havia sido liberado`
+            : `Acesso liberado para ${memberName} (${body.email})`,
         });
       }
 
@@ -325,7 +307,7 @@ export async function POST(request: NextRequest) {
 
         const result = await updateMemberRow(memberData, false);
         
-        if (result.success) {
+        if (result.success && !result.alreadyDone) {
           // Envia email notificando que o cadastro foi aprovado
           try {
             await sendUserApproval(body.email, memberName);
@@ -475,10 +457,12 @@ export async function GET(request: NextRequest) {
         );
       }
       
-      try {
-        await sendAccessGrantedToUser(email, memberName);
-      } catch (emailError) {
-        console.error("Erro ao enviar email para usuário:", emailError);
+      if (!updateResult.alreadyDone) {
+        try {
+          await sendAccessGrantedToUser(email, memberName);
+        } catch (emailError) {
+          console.error("Erro ao enviar email para usuário:", emailError);
+        }
       }
       
       return new NextResponse(
@@ -487,7 +471,7 @@ export async function GET(request: NextRequest) {
         <html>
           <head>
             <meta charset="UTF-8">
-            <title>Sucesso - HORAISE</title>
+            <title>${updateResult.alreadyDone ? "Aviso - HORAISE" : "Sucesso - HORAISE"}</title>
             <style>
               body {
                 font-family: Arial, sans-serif;
@@ -515,8 +499,8 @@ export async function GET(request: NextRequest) {
           <body>
             <div class="message-box">
               <div class="icon success">✅</div>
-              <h1>Acesso Liberado!</h1>
-              <p><strong>${memberName}</strong> agora pode editar seus horários.</p>
+              <h1>${updateResult.alreadyDone ? "Acesso Já Liberado!" : "Acesso Liberado!"}</h1>
+              <p><strong>${memberName}</strong> ${updateResult.alreadyDone ? "já tinha acesso de edição — nada foi alterado." : "agora pode editar seus horários."}</p>
               <p style="margin-top: 20px; font-size: 14px; color: #999;">Você pode fechar esta aba.</p>
             </div>
           </body>

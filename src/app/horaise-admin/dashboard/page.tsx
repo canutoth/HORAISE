@@ -334,20 +334,33 @@ function AdminDashboardContent() {
   };
 
   useEffect(() => {
-    // Verificar se o admin está logado
-    const adminEmail = sessionStorage.getItem("adminEmail");
-    if (!adminEmail) {
-      notifications.show({
-        title: "Acesso Negado",
-        message: "Por favor, faça login como administrador",
-        color: "red",
-      });
-      router.push("/horaise-admin");
-      return;
-    }
+    const checkSession = async () => {
+      try {
+        const response = await fetch("/api/admin/session");
+        if (!response.ok) {
+          notifications.show({
+            title: "Acesso Negado",
+            message: "Por favor, faça login como administrador",
+            color: "red",
+          });
+          router.push("/horaise-admin");
+          return;
+        }
+        const { email } = await response.json();
+        sessionStorage.setItem("adminEmail", email);
+        fetchBacklogOptions();
+        fetchMembers();
+      } catch {
+        notifications.show({
+          title: "Acesso Negado",
+          message: "Por favor, faça login como administrador",
+          color: "red",
+        });
+        router.push("/horaise-admin");
+      }
+    };
 
-    fetchBacklogOptions();
-    fetchMembers();
+    checkSession();
   }, [router]);
 
   useEffect(() => {
@@ -373,12 +386,25 @@ function AdminDashboardContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: actionType, email }),
       });
-      
+      const data = await response.json().catch(() => ({}));
+
       if (response.ok) {
-        notifications.show({ title: "Sucesso", message: "Ação realizada!", color: "green" });
+        if (data.alreadyDone) {
+          notifications.show({
+            title: "Ação já realizada",
+            message: data.message || "Essa ação já havia sido feita por outro admin.",
+            color: "orange",
+          });
+        } else {
+          notifications.show({ title: "Sucesso", message: "Ação realizada!", color: "green" });
+        }
         fetchMembers(); 
       } else {
-        notifications.show({ title: "Erro", message: "Falha na operação", color: "red" });
+        notifications.show({
+          title: "Erro",
+          message: data.error || data.message || "Falha na operação",
+          color: "red",
+        });
       }
     } catch (e) {
       notifications.show({ title: "Erro", message: "Erro de conexão", color: "red" });
@@ -454,7 +480,15 @@ function AdminDashboardContent() {
       const resJson = await response.json();
       
       if (response.ok) {
-        notifications.show({ title: "Sucesso", message: "Cadastro aprovado e acesso liberado!", color: "green" });
+        if (resJson.alreadyDone) {
+          notifications.show({
+            title: "Já realizado",
+            message: resJson.message || "Esses dados já haviam sido salvos antes.",
+            color: "orange",
+          });
+        } else {
+          notifications.show({ title: "Sucesso", message: "Cadastro aprovado e acesso liberado!", color: "green" });
+        }
         // Remove do estado de edições pendentes
         setPendingEdits(prev => {
           const newState = { ...prev };
@@ -490,7 +524,15 @@ function AdminDashboardContent() {
       const resJson = await response.json();
       
       if (response.ok) {
-        notifications.show({ title: "Salvo", message: "Cadastro aprovado e acesso liberado!", color: "green" });
+        if (resJson.alreadyDone) {
+          notifications.show({
+            title: "Já realizado",
+            message: resJson.message || "Esses dados já estavam salvos.",
+            color: "orange",
+          });
+        } else {
+          notifications.show({ title: "Salvo", message: "Cadastro aprovado e acesso liberado!", color: "green" });
+        }
         fetchMembers();
       } else {
         notifications.show({ title: "Erro", message: resJson.error || "Falha ao salvar", color: "red" });
@@ -502,7 +544,7 @@ function AdminDashboardContent() {
   };
 
   const handleLogout = () => {
-    router.push("/horaise-admin");
+    window.location.href = "/api/admin/logout";
   };
 
   // Cadastro pendente = (sem bolsa) OU (HP e HO ambos zerados e não é Prof.)

@@ -32,7 +32,6 @@ type Actions =
   | { action: "read-backlog-options" }
   | { action: "read-rules" }
   | { action: "admin-precheck"; email: string }
-  | { action: "admin-login"; email: string; password: string }
   | { action: "validate-hours"; scheduleRow: string[]; hp: number; ho: number }
   | { action: "validate-dynamic-rules"; scheduleRow: string[] }
   | { action: "request-editor-access"; email: string }
@@ -186,7 +185,7 @@ export async function POST(request: NextRequest) {
         }
         
         // Verifica se o adminEmail é realmente admin
-        if (!isAdminEmail(body.adminEmail)) {
+        if (!(await isAdminEmail(body.adminEmail))) {
           return NextResponse.json({ success: false, message: "Apenas administradores podem definir horários" }, { status: 403 });
         }
         
@@ -274,21 +273,8 @@ export async function POST(request: NextRequest) {
       }
       case "admin-precheck": {
         if (!body.email) return NextResponse.json({ ok: false }, { status: 400 });
-        const isAdmin = isAdminEmail(body.email);
+        const isAdmin = await isAdminEmail(body.email);
         return NextResponse.json({ isAdmin });
-      }
-      case "admin-login": {
-        const adminPass = process.env.SENHA_ADMIN || "";
-        if (!body.email || !body.password) {
-          return NextResponse.json({ success: false, message: "email e senha obrigatórios" }, { status: 400 });
-        }
-        if (!isAdminEmail(body.email)) {
-          return NextResponse.json({ success: false, message: "Email não é administrador" }, { status: 403 });
-        }
-        if (body.password !== adminPass) {
-          return NextResponse.json({ success: false, message: "Senha incorreta" }, { status: 401 });
-        }
-        return NextResponse.json({ success: true });
       }
       case "validate-hours": {
         if (!body.scheduleRow || body.hp === undefined || body.ho === undefined) {
@@ -410,7 +396,7 @@ export async function POST(request: NextRequest) {
         const result = await approveSchedule(body.email, true);
         
         // Envia email ao usuário notificando aprovação (usa email de exceção aprovada)
-        if (result.success) {
+        if (result.success && !result.alreadyDone) {
           const { sendExceptionApprovedToUser } = await import("../../server/email");
           sendExceptionApprovedToUser(body.email, memberName).catch((e: unknown) => console.error("Falha email usuário:", e));
         }
@@ -434,7 +420,7 @@ export async function POST(request: NextRequest) {
         const result = await approveSchedule(body.email, false);
         
         // Envia email ao usuário notificando aprovação (usa email de exceção aprovada)
-        if (result.success) {
+        if (result.success && !result.alreadyDone) {
           const { sendExceptionApprovedToUser } = await import("../../server/email");
           sendExceptionApprovedToUser(body.email, memberName).catch((e: unknown) => console.error("Falha email usuário:", e));
         }

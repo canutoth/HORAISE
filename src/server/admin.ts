@@ -1,13 +1,13 @@
-export function getAdminEmails(): string[] {
-  const emails: string[] = [];
-  const primary = process.env.EMAIL_ADMIN;
-  const secondary = process.env.EMAIL_ADMIN_SECOND;
-  if (primary) emails.push(primary);
-  if (secondary) emails.push(secondary);
-  return emails;
-}
+import { getAdminEmailsFromSheet } from "./sheets";
 
-export function isAdminEmail(email: string): boolean {
+/**
+ * Verifica se o email pertence a um administrador.
+ * Admins são derivados do compartilhamento da planilha: todo usuário com
+ * acesso de edição (Share -> Editor, role writer/owner no Google Drive)
+ * é considerado admin.
+ */
+export async function isAdminEmail(email: string): Promise<boolean> {
   const target = email.toLowerCase().trim();
-  return getAdminEmails().some((e) => e.toLowerCase().trim() === target);
+  const admins = await getAdminEmailsFromSheet();
+  return admins.some((e) => e === target);
 }

@@ -80,7 +80,7 @@ export function escapeSheetName(name: string): string {
   if (!name) return name;
   return `'${name.replace(/'/g, "''")}'`;
 }
-export async function getSheetsClient() {
+export async function getGoogleAuthClient() {
   const GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL || "";
   const GOOGLE_PRIVATE_KEY = (process.env.GOOGLE_PRIVATE_KEY || "").replace(/\\n/g, "\n");
   if (!GOOGLE_CLIENT_EMAIL || !GOOGLE_PRIVATE_KEY) {
@@ -88,11 +88,22 @@ export async function getSheetsClient() {
   }
   const auth = new google.auth.GoogleAuth({
     credentials: { client_email: GOOGLE_CLIENT_EMAIL, private_key: GOOGLE_PRIVATE_KEY },
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    scopes: [
+      "https://www.googleapis.com/auth/spreadsheets",
+      "https://www.googleapis.com/auth/drive.readonly",
+    ],
   });
-  const client = await auth.getClient();
+  return auth.getClient();
+}
+export async function getSheetsClient() {
+  const client = await getGoogleAuthClient();
   const sheets = google.sheets({ version: "v4", auth: client as any });
   return { sheets };
+}
+export async function getDriveClient() {
+  const client = await getGoogleAuthClient();
+  const drive = google.drive({ version: "v3", auth: client as any });
+  return { drive };
 }
 export async function findRowByEmail(sheets: any, email: string): Promise<number | null> {
   const sheetRef = escapeSheetName(SHEET_NAME);
@@ -149,7 +160,7 @@ export async function readExample(): Promise<{ row: string[]; columnMapping: Map
   if (!row) return null;
   return { row, columnMapping };
 }
-export async function updateMemberRow(member: { name: string; email: string; frentes: string; bolsa?: string; editor?: number | string; pendingAccess?: number | string; pendingTimeTable?: number | string; pendingSuggestion?: number | string; hp?: string; ho?: string }, isNew: boolean) {
+export async function updateMemberRow(member: { name: string; email: string; frentes: string; bolsa?: string; editor?: number | string; pendingAccess?: number | string; pendingTimeTable?: number | string; pendingSuggestion?: number | string; hp?: string; ho?: string }, isNew: boolean): Promise<{ success: boolean; message: string; alreadyDone?: boolean }> {
   const { sheets } = await getSheetsClient();
   const sheetRef = escapeSheetName(SHEET_NAME);
   const columnMapping = await getColumnMapping(sheets);
@@ -194,6 +205,26 @@ export async function updateMemberRow(member: { name: string; email: string; fre
   }
   
   const lastColumn = columnIndexToLetter(hoIndex);
+
+  // Verifica se a linha já está no estado desejado (evita ações/emails duplicados)
+  const currentRes = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetRef}!A${rowNumber}:${lastColumn}${rowNumber}`,
+  });
+  const currentRow = currentRes.data.values?.[0] || [];
+
+  const normalize = (value: unknown) => String(value ?? "").trim();
+  let hasChanges = false;
+  for (let i = 0; i <= hoIndex; i++) {
+    if (normalize(rowArray[i]) !== normalize(currentRow[i])) {
+      hasChanges = true;
+      break;
+    }
+  }
+  if (!hasChanges) {
+    return { success: true, alreadyDone: true, message: "Os dados já estavam salvos — nada a fazer" };
+  }
+
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
     range: `${sheetRef}!A${rowNumber}:${lastColumn}${rowNumber}`,
@@ -318,21 +349,55 @@ export async function readAllMembers(): Promise<string[][]> {
 }
 
 /**
+ * Retorna os emails de todos os usuários com acesso de EDIÇÃO na planilha
+ * (compartilhamento do Google Sheets: Share -> Editor).
+ * Esses usuários são considerados administradores.
+ */
+export async function getAdminEmailsFromSheet(): Promise<string[]> {
+  const { drive } = await getDriveClient();
+
+  const res = await drive.permissions.list({
+    fileId: SPREADSHEET_ID,
+    fields: "permissions(id,emailAddress,role,type)",
+    supportsAllDrives: true,
+  });
+
+  return (res.data.permissions || [])
+    .filter(
+      (p) =>
+        p.type === "user" &&
+        p.emailAddress &&
+        (p.role === "owner" || p.role === "writer")
+    )
+    .map((p) => p.emailAddress!.toLowerCase().trim())
+    .filter(Boolean);
+}
+
+/**
  * Atualiza apenas Editor e Pending-Access de um membro (usado para solicitação de acesso)
  * @param email Email do membro
  * @param editor Novo valor de Editor (1 = pode editar, 0 = bloqueado)
  * @param pendingAccess Novo valor de Pending-Access (1 = pendente, 0 = aprovado)
  */
-export async function updateMemberAccess(email: string, editor: number, pendingAccess: number) {
+export async function updateMemberAccess(email: string, editor: number, pendingAccess: number): Promise<{ success: boolean; message: string; alreadyDone?: boolean }> {
   const { sheets } = await getSheetsClient();
   const sheetRef = escapeSheetName(SHEET_NAME);
   const columnMapping = await getColumnMapping(sheets);
-  const rowNumber = await findRowByEmail(sheets, email);
-  
-  if (!rowNumber) {
+
+  const currentMember = await readMemberByEmail(email);
+  if (!currentMember) {
     return { success: false, message: "Membro não encontrado" };
   }
-  
+  const { rowNumber, row, columnMapping: mapping } = currentMember;
+
+  // Evita reaplicar uma ação já realizada (e reenviar emails duplicados)
+  const currentEditor = Number(getColumnValue(row, "Editor", mapping) || 0);
+  const currentPendingAccess = Number(getColumnValue(row, "Pending-Access", mapping) || 0);
+
+  if (currentEditor === editor && currentPendingAccess === pendingAccess) {
+    return { success: true, alreadyDone: true, message: "Esta ação já foi realizada" };
+  }
+
   // Atualiza coluna Editor
   const editorIndex = getColumnIndex("Editor", columnMapping);
   const editorCol = columnIndexToLetter(editorIndex);
@@ -361,16 +426,27 @@ export async function updateMemberAccess(email: string, editor: number, pendingA
  * @param email Email do membro
  * @param keepEditor Se true, mantém Editor=1; se false, define Editor=0
  */
-export async function approveSchedule(email: string, keepEditor: boolean) {
+export async function approveSchedule(email: string, keepEditor: boolean): Promise<{ success: boolean; message: string; alreadyDone?: boolean }> {
   const { sheets } = await getSheetsClient();
   const sheetRef = escapeSheetName(SHEET_NAME);
   const columnMapping = await getColumnMapping(sheets);
-  const rowNumber = await findRowByEmail(sheets, email);
-  
-  if (!rowNumber) {
+
+  const currentMember = await readMemberByEmail(email);
+  if (!currentMember) {
     return { success: false, message: "Membro não encontrado" };
   }
-  
+  const { rowNumber, row, columnMapping: mapping } = currentMember;
+
+  const targetEditor = keepEditor ? 1 : 0;
+  const currentEditor = Number(getColumnValue(row, "Editor", mapping) || 0);
+  const currentPendingTimeTable = Number(getColumnValue(row, "Pending-TimeTable", mapping) || 0);
+  const currentPendingSuggestion = Number(getColumnValue(row, "Pending-Suggestion", mapping) || 0);
+
+  // Evita reaplicar uma aprovação já realizada (e reenviar emails duplicados)
+  if (currentEditor === targetEditor && currentPendingTimeTable === 0 && currentPendingSuggestion === 0) {
+    return { success: true, alreadyDone: true, message: "Esta aprovação já foi realizada" };
+  }
+
   const editorValue = keepEditor ? 1 : 0;
   
   // Zera tanto Pending-TimeTable quanto Pending-Suggestion ao aprovar
