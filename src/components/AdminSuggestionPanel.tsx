@@ -37,6 +37,7 @@ import {
   IconCheck,
   IconBan,
   IconX,
+  IconTrash
 } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
 
@@ -58,14 +59,14 @@ type AdminSuggestionPanelProps = {
   onSavedSchedule?: () => void;
 };
 
-export function AdminSuggestionPanel({ 
-  frentesOptions, 
+export function AdminSuggestionPanel({
+  frentesOptions,
   bolsasOptions,
   initialTargetEmail,
   onSavedSchedule,
 }: AdminSuggestionPanelProps) {
   const isMobile = useMediaQuery('(max-width: 768px)');
-  
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [members, setMembers] = useState<any[]>([]);
@@ -73,22 +74,61 @@ export function AdminSuggestionPanel({
   const [error, setError] = useState<string>("");
   const [frentesEmojis, setFrentesEmojis] = useState<Record<string, string>>({});
   const [bolsasColors, setBolsasColors] = useState<Record<string, string>>({});
-  
+
   // Estados de edição de dados
   const [isEditingData, setIsEditingData] = useState(false);
   const [editedFrentes, setEditedFrentes] = useState<string[]>([]);
   const [editedBolsas, setEditedBolsas] = useState<string[]>([]);
   const [editedHP, setEditedHP] = useState(0);
   const [editedHO, setEditedHO] = useState(0);
-  
+
   // Estados de edição de horário
   const [schedule, setSchedule] = useState<ScheduleData>({});
   const [activeTool, setActiveTool] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  
+
   const isAdminMode = true; // Este painel só é usado por admins
-  
+
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteMember = async () => {
+    if (!current) return;
+    if (!window.confirm(`Tem certeza que deseja excluir ${current.name}? Esta ação não pode ser desfeita.`)) return;
+
+    setDeleting(true);
+    try {
+      const response = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete-member", email: current.email }),
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        notifications.show({
+          title: "Membro excluído",
+          message: `${current.name} foi excluído com sucesso.`,
+          color: "green",
+          icon: <IconTrash />,
+        });
+        setMembers(prev => {
+          const newMembers = prev.filter(m => m.email !== current.email);
+          if (currentIndex >= newMembers.length) {
+            setCurrentIndex(Math.max(0, newMembers.length - 1));
+          }
+          return newMembers;
+        });
+      } else {
+        notifications.show({ title: "Erro", message: result.message || "Erro ao excluir", color: "red" });
+      }
+    } catch {
+      notifications.show({ title: "Erro", message: "Erro ao excluir membro", color: "red" });
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   useEffect(() => {
     const loadOptions = async () => {
@@ -124,15 +164,15 @@ export function AdminSuggestionPanel({
     const loadMembers = async () => {
       try {
         setLoading(true);
-        
+
         // Verificar se o admin está logado
         const adminEmailCheck = sessionStorage.getItem("adminEmail");
-        
+
         if (!adminEmailCheck) {
           setError("Admin não autenticado. Por favor, faça login novamente.");
           return;
         }
-        
+
         const response = await fetch("/api/admin", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -168,16 +208,16 @@ export function AdminSuggestionPanel({
               // Parsear schedule
               const schedule: any = {};
               const dayNames = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
-              
+
               for (let day = 0; day < 7; day++) {
                 schedule[day] = {};
                 const dayName = dayNames[day];
-                
+
                 for (let hour = 7; hour < 20; hour++) {
                   // Formato correto: "Seg7-8", "Ter8-9", etc.
                   const colName = `${dayName}${hour}-${hour + 1}`;
                   const value = getColumnValue(row, colName);
-                  
+
                   if (value === "P") schedule[day][hour] = "presencial";
                   else if (value === "O") schedule[day][hour] = "online";
                   else if (value === "R") schedule[day][hour] = "reuniao";
@@ -246,7 +286,7 @@ export function AdminSuggestionPanel({
       );
       setEditedHP(current.hp || 0);
       setEditedHO(current.ho || 0);
-      
+
       const copiedSchedule = JSON.parse(JSON.stringify(current.schedule || {}));
       setSchedule(copiedSchedule);
       setIsEditingData(false);
@@ -290,7 +330,7 @@ export function AdminSuggestionPanel({
           icon: <IconDeviceFloppy />,
         });
 
-        setMembers(prev => prev.map(m => 
+        setMembers(prev => prev.map(m =>
           m.email === current.email
             ? { ...m, frentes: editedFrentes.join(", "), bolsa: editedBolsas.join(", "), hp: editedHP, ho: editedHO }
             : m
@@ -326,7 +366,7 @@ export function AdminSuggestionPanel({
     }
 
     const currentAdminEmail = typeof window !== 'undefined' ? sessionStorage.getItem("adminEmail") : null;
-    
+
     if (!currentAdminEmail) {
       notifications.show({
         title: "Erro",
@@ -417,7 +457,7 @@ export function AdminSuggestionPanel({
     setSchedule((prev) => {
       const newSchedule = JSON.parse(JSON.stringify(prev));
       if (!newSchedule[day]) newSchedule[day] = {};
-      
+
       const currentStatus = newSchedule[day][hour];
       let nextStatus: string | null = null;
 
@@ -428,17 +468,17 @@ export function AdminSuggestionPanel({
           nextStatus = activeTool;
         }
       }
-      
+
       if (nextStatus) {
         newSchedule[day][hour] = nextStatus;
       } else {
         delete newSchedule[day][hour];
       }
-      
+
       return newSchedule;
     });
   };
-  
+
   const applyPaint = (day: number, hour: number) => {
     setSchedule((prev) => {
       const newSchedule = JSON.parse(JSON.stringify(prev));
@@ -477,11 +517,11 @@ export function AdminSuggestionPanel({
   const renderToolButton = (tool: string, label: string, icon: React.ReactNode, color: string) => {
     const isActive = activeTool === tool;
     const count = tool === 'aula' ? hourCounts.aula :
-                  tool === 'online' ? hourCounts.online :
-                  tool === 'presencial' ? hourCounts.presencial :
-                  tool === 'reuniao' ? hourCounts.reuniao :
-                  tool === 'almoco' ? hourCounts.almoco : 0;
-    
+      tool === 'online' ? hourCounts.online :
+        tool === 'presencial' ? hourCounts.presencial :
+          tool === 'reuniao' ? hourCounts.reuniao :
+            tool === 'almoco' ? hourCounts.almoco : 0;
+
     return (
       <UnstyledButton
         onClick={() => setActiveTool(isActive ? null : tool)}
@@ -570,24 +610,32 @@ export function AdminSuggestionPanel({
           />
 
           <Paper shadow="sm" p="sm" radius="md" withBorder>
-            <Group justify="space-between" align="center" mb="xs">
-              <Stack gap={0}>
+            <Group justify="space-between" align="flex-start" mb="xs" wrap="nowrap">
+
+              {/* Nome, Badges e Email */}
+              <Stack gap={0} style={{ flex: 1, overflow: 'hidden' }}>
                 <Group gap="sm" align="center" wrap="wrap" mb={2}>
                   <Text fw={700} size="md" c="#0E1862" truncate>{current.name}</Text>
                   {editedBolsas.map((bolsaItem: string, idx: number) => (
-                    <Badge
-                      key={idx}
-                      size="xs"
-                      variant="light"
-                      color={bolsasColors[bolsaItem] || "blue"}
-                      style={{ textTransform: "none", fontWeight: 700 }}
-                    >
+                    <Badge key={idx} size="xs" variant="light" color={bolsasColors[bolsaItem] || "blue"} style={{ textTransform: "none", fontWeight: 700 }}>
                       {bolsaItem}
                     </Badge>
                   ))}
                 </Group>
-                <Text size="xs" c="dimmed" truncate style={{ maxWidth: '200px' }}>{current.email}</Text>
+                <Text size="xs" c="dimmed" truncate>{current.email}</Text>
               </Stack>
+
+              {/* Botão de excluir */}
+              <ActionIcon
+                variant="subtle"
+                color="red"
+                onClick={handleDeleteMember}
+                loading={deleting}
+                title="Excluir membro"
+              >
+                <IconTrash size={18} />
+              </ActionIcon>
+
             </Group>
           </Paper>
 
@@ -687,7 +735,7 @@ export function AdminSuggestionPanel({
           {/* Ferramentas de pintura */}
           <Box mt={isMobile ? 0 : "xs"}>
             <Group justify="space-between" mb="xs">
-              <Text size="sm" fw={600} style={{color: '#4A5568' }}>
+              <Text size="sm" fw={600} style={{ color: '#4A5568' }}>
                 Distribuição de horas:
               </Text>
             </Group>
@@ -743,7 +791,7 @@ export function AdminSuggestionPanel({
               <Table.Tbody>
                 {HOURS_DISPLAY.map((hour) => (
                   <Table.Tr key={hour}>
-                    <Table.Td style={{ fontWeight: 500, color: "#888", height: ROW_HEIGHT, fontSize: '12px' }}>{hour}-{hour+1}h</Table.Td>
+                    <Table.Td style={{ fontWeight: 500, color: "#888", height: ROW_HEIGHT, fontSize: '12px' }}>{hour}-{hour + 1}h</Table.Td>
                     {WEEKDAY_UI_INDICES.map((dayIndex) => {
                       const status = schedule?.[dayIndex]?.[hour];
                       const config = status ? getStatusConfig(status) : null;
