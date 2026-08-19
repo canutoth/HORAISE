@@ -44,13 +44,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import TopNavBar from "@/components/TopNavBar";
 import { AdminSuggestionPanel } from "@/components/AdminSuggestionPanel";
 import { notifications } from "@mantine/notifications";
-import { useMediaQuery } from "@mantine/hooks"; 
+import { useMediaQuery } from "@mantine/hooks";
 import { getBacklogOptions } from "../../../services/googleSheets";
 // 🎯 Easter egg: Normaliza o nome do Coutinho
 const normalizeCoutinho = (name: string, email: string): string => {
   const nameLower = name.toLowerCase().trim();
   const emailLower = email.toLowerCase().trim();
-  
+
   if (
     nameLower === "daniel coutinho" ||
     emailLower === "dcoutinho@inf.puc-rio.br" ||
@@ -58,7 +58,7 @@ const normalizeCoutinho = (name: string, email: string): string => {
   ) {
     return "Coutinho";
   }
-  
+
   return name;
 };
 
@@ -91,7 +91,7 @@ function AdminDashboardContent() {
   const [frentesOptions, setFrentesOptions] = useState<{ value: string; label: string }[]>([]);
   const [bolsasOptions, setBolsasOptions] = useState<{ value: string; label: string; color: string }[]>([]);
   const [activeTab, setActiveTab] = useState<string>("cadastros");
-  
+
   // Estado para armazenar edições pendentes (não salvas na planilha ainda)
   const [pendingEdits, setPendingEdits] = useState<Record<string, {
     frentes: string;
@@ -108,7 +108,7 @@ function AdminDashboardContent() {
 
       if (aIsPending && !bIsPending) return -1;
       if (!aIsPending && bIsPending) return 1;
-      
+
       return a.name.localeCompare(b.name);
     });
   }, [members]);
@@ -120,26 +120,26 @@ function AdminDashboardContent() {
   }>({ type: null, email: '', name: '' });
 
   // Componente interno para ter acesso aos estados
-  const EditMemberPopover = ({ 
+  const EditMemberPopover = ({
     member
-  }: { 
+  }: {
     member: AdminMember;
   }) => {
     const [opened, setOpened] = useState(false);
-    
+
     // Inicializa com os dados pendentes se existirem, senão usa os do membro
     const pendingData = pendingEdits[member.email];
     const [frentesSelecionadas, setFrentesSelecionadas] = useState<string[]>(
-      pendingData?.frentes 
+      pendingData?.frentes
         ? pendingData.frentes.split(",").map((s) => s.trim()).filter(Boolean)
         : member.frentes ? member.frentes.split(",").map((s) => s.trim()).filter(Boolean) : []
     );
-    
+
     const [bolsasSelecionadas, setBolsasSelecionadas] = useState<string[]>(
       pendingData?.bolsa && pendingData.bolsa !== "nan" && pendingData.bolsa.trim() !== ''
         ? pendingData.bolsa.split(",").map((s) => s.trim()).filter(Boolean)
-        : member.bolsa && member.bolsa !== "nan" && member.bolsa.trim() !== '' 
-          ? member.bolsa.split(",").map((s) => s.trim()).filter(Boolean) 
+        : member.bolsa && member.bolsa !== "nan" && member.bolsa.trim() !== ''
+          ? member.bolsa.split(",").map((s) => s.trim()).filter(Boolean)
           : []
     );
 
@@ -160,28 +160,28 @@ function AdminDashboardContent() {
         }
       }));
       setOpened(false);
-      notifications.show({ 
-        title: "Salvo localmente", 
-        message: "Clique no ✓ para confirmar o cadastro", 
-        color: "blue" 
+      notifications.show({
+        title: "Salvo localmente",
+        message: "Clique no ✓ para confirmar o cadastro",
+        color: "blue"
       });
     };
 
     return (
-      <Popover 
-        opened={opened} 
-        onChange={setOpened} 
-        width={300} 
-        position="bottom-end" 
-        withArrow 
+      <Popover
+        opened={opened}
+        onChange={setOpened}
+        width={300}
+        position="bottom-end"
+        withArrow
         shadow="md"
         closeOnClickOutside={false}
         closeOnEscape={true}
       >
         <Popover.Target>
-          <ActionIcon 
-            variant="light" 
-            color="blue" 
+          <ActionIcon
+            variant="light"
+            color="blue"
             size="lg"
             onClick={() => setOpened((o) => !o)}
           >
@@ -193,16 +193,16 @@ function AdminDashboardContent() {
           <Stack gap="sm">
             <Group justify="space-between" align="center">
               <Text size="sm" fw={700} c="dimmed">Editar Dados</Text>
-              <ActionIcon 
-                variant="subtle" 
-                color="gray" 
+              <ActionIcon
+                variant="subtle"
+                color="gray"
                 size="sm"
                 onClick={() => setOpened(false)}
               >
                 <IconX size={16} />
               </ActionIcon>
             </Group>
-            
+
             <MultiSelect
               label="Frente(s)"
               size="xs"
@@ -212,7 +212,7 @@ function AdminDashboardContent() {
               onChange={setFrentesSelecionadas}
               hidePickedOptions
             />
-            
+
             <MultiSelect
               label="Bolsa(s)"
               size="xs"
@@ -241,11 +241,11 @@ function AdminDashboardContent() {
               />
             </Group>
 
-            <Button 
-              fullWidth 
-              size="xs" 
-              color="blue" 
-              mt="xs" 
+            <Button
+              fullWidth
+              size="xs"
+              color="blue"
+              mt="xs"
               leftSection={<IconDeviceFloppy size={14} />}
               onClick={handleSave}
             >
@@ -287,7 +287,7 @@ function AdminDashboardContent() {
         body: JSON.stringify({ action: "read-all-members" }),
       });
       const data = await response.json();
-      
+
       if (response.ok && data.members && data.members.length > 0) {
         // Primeira linha é o cabeçalho, usa para criar o mapeamento
         const headerRow = data.members[0];
@@ -298,13 +298,13 @@ function AdminDashboardContent() {
             columnMapping.set(normalizedHeader, index);
           }
         });
-        
+
         // Helper para obter valor de coluna pelo nome
         const getColumnValue = (row: any[], columnName: string): any => {
           const index = columnMapping.get(columnName);
           return index !== undefined ? row[index] : "";
         };
-        
+
         // Mapeia os dados (pula a primeira linha que é o cabeçalho)
         const mappedMembers = data.members
           .slice(1)
@@ -398,7 +398,7 @@ function AdminDashboardContent() {
         } else {
           notifications.show({ title: "Sucesso", message: "Ação realizada!", color: "green" });
         }
-        fetchMembers(); 
+        fetchMembers();
       } else {
         notifications.show({
           title: "Erro",
@@ -414,8 +414,8 @@ function AdminDashboardContent() {
   const handleConfirmModal = async () => {
     if (!confirmationModal.type || !confirmationModal.email) return;
 
-    const action = confirmationModal.type === 'approve' 
-      ? 'approve-registration' 
+    const action = confirmationModal.type === 'approve'
+      ? 'approve-registration'
       : 'revoke-editor';
 
     await handleSimpleAction(confirmationModal.email, action);
@@ -425,18 +425,18 @@ function AdminDashboardContent() {
   // Confirmar cadastro pendente (envia para planilha)
   const handleConfirmRegistration = async (member: AdminMember) => {
     const editData = pendingEdits[member.email];
-    
+
     // Se não há edições pendentes, valida os dados atuais do membro
     if (!editData) {
       const isProf = isProfBolsa(member.bolsa);
       const hasBothHoursZero = member.ho === 0 && member.hp === 0;
       const hasMissingBolsa = !member.bolsa || member.bolsa === 'nan' || member.bolsa.trim() === '';
-      
+
       if (hasMissingBolsa || (hasBothHoursZero && !isProf)) {
-        notifications.show({ 
-          title: "Dados incompletos", 
-          message: hasMissingBolsa ? "Preencha a bolsa antes de confirmar" : "Defina ao menos HO ou HP (não ambos zerados)", 
-          color: "orange" 
+        notifications.show({
+          title: "Dados incompletos",
+          message: hasMissingBolsa ? "Preencha a bolsa antes de confirmar" : "Defina ao menos HO ou HP (não ambos zerados)",
+          color: "orange"
         });
         return;
       }
@@ -445,29 +445,29 @@ function AdminDashboardContent() {
       const isProf = isProfBolsa(editData.bolsa);
       const hasBothHoursZero = editData.ho === 0 && editData.hp === 0;
       const hasMissingBolsa = !editData.bolsa || editData.bolsa === 'nan' || editData.bolsa.trim() === '';
-      
+
       if (hasMissingBolsa || (hasBothHoursZero && !isProf)) {
-        notifications.show({ 
-          title: "Dados incompletos", 
-          message: hasMissingBolsa ? "Preencha a bolsa antes de confirmar" : "Defina ao menos HO ou HP (não ambos zerados)", 
-          color: "orange" 
+        notifications.show({
+          title: "Dados incompletos",
+          message: hasMissingBolsa ? "Preencha a bolsa antes de confirmar" : "Defina ao menos HO ou HP (não ambos zerados)",
+          color: "orange"
         });
         return;
       }
     }
-    
+
     const dataToSend = editData || {
       frentes: member.frentes,
       bolsa: member.bolsa,
       hp: member.hp,
       ho: member.ho,
     };
-    
+
     try {
       const response = await fetch("/api/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           action: "update-member-data",
           email: member.email,
           frentes: dataToSend.frentes,
@@ -478,7 +478,7 @@ function AdminDashboardContent() {
       });
 
       const resJson = await response.json();
-      
+
       if (response.ok) {
         if (resJson.alreadyDone) {
           notifications.show({
@@ -511,7 +511,7 @@ function AdminDashboardContent() {
       const response = await fetch("/api/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           action: "update-member-data",
           email: data.email,
           frentes: data.frentes,
@@ -522,7 +522,7 @@ function AdminDashboardContent() {
       });
 
       const resJson = await response.json();
-      
+
       if (response.ok) {
         if (resJson.alreadyDone) {
           notifications.show({
@@ -553,9 +553,9 @@ function AdminDashboardContent() {
     const hasMissingBolsa = !m.bolsa || m.bolsa === 'nan' || m.bolsa.trim() === '';
     return hasMissingBolsa || (hasBothHoursZero && !isProfBolsa(m.bolsa));
   });
-  
+
   const pendingSchedules = sortedMembers.filter(m => m.pendingTimeTable === 1 || m.pendingTimeTable === 2);
-  
+
   // Acessos de Edição = Pessoas COM bolsa preenchida (e horas > 0 ou Prof.)
   const activeEditors = sortedMembers.filter(m => {
     const isProf = isProfBolsa(m.bolsa);
@@ -608,14 +608,14 @@ function AdminDashboardContent() {
           ) : (
             data.map((member) => {
               const hasMissingHours = member.ho === 0 && member.hp === 0 && !isProfBolsa(member.bolsa);
-              
+
               // Usa dados pendentes se existirem, senão usa os dados do membro
               const pendingData = pendingEdits[member.email];
               const currentFrentes = pendingData?.frentes ?? member.frentes;
               const currentBolsa = pendingData?.bolsa ?? member.bolsa;
-              
+
               const frentesList = currentFrentes ? currentFrentes.split(',').map(s => s.trim()).filter(Boolean) : [];
-              const maxVisibleFrentes = 1; 
+              const maxVisibleFrentes = 1;
               const visibleFrentes = frentesList.slice(0, maxVisibleFrentes);
               const hiddenCount = frentesList.length - maxVisibleFrentes;
               const hiddenFrentesList = frentesList.slice(maxVisibleFrentes).join(', ');
@@ -634,8 +634,8 @@ function AdminDashboardContent() {
                       </Stack>
                     </Group>
                   </Table.Td>
-                  
-                 {/* frentes */}
+
+                  {/* frentes */}
                   <Table.Td visibleFrom="md">
                     {frentesList.length === 0 ? (
                       <Text size="sm" c="dimmed">-</Text>
@@ -658,19 +658,19 @@ function AdminDashboardContent() {
                   {/* bolsa */}
                   <Table.Td visibleFrom="md" style={{ textAlign: 'center' }}>
                     {(() => {
-                      const bolsasList = currentBolsa && currentBolsa !== 'nan' && currentBolsa.trim() !== '' 
-                        ? currentBolsa.split(',').map(s => s.trim()).filter(Boolean) 
+                      const bolsasList = currentBolsa && currentBolsa !== 'nan' && currentBolsa.trim() !== ''
+                        ? currentBolsa.split(',').map(s => s.trim()).filter(Boolean)
                         : [];
-                      
+
                       if (bolsasList.length === 0) {
                         return <Text size="sm" c="dimmed">-</Text>;
                       }
-                      
+
                       const getBolsaColor = (bolsaName: string) => {
                         const bolsaOption = bolsasOptions.find(b => b.value === bolsaName);
                         return bolsaOption?.color || '#888888';
                       };
-                      
+
                       if (bolsasList.length === 1) {
                         const color = getBolsaColor(bolsasList[0]);
                         return (
@@ -682,12 +682,12 @@ function AdminDashboardContent() {
                           </Group>
                         );
                       }
-                      
+
                       const visibleBolsas = bolsasList.slice(0, 1);
                       const hiddenCount = bolsasList.length - 1;
                       const hiddenBolsasList = bolsasList.slice(1).join(', ');
                       const color = getBolsaColor(visibleBolsas[0]);
-                      
+
                       return (
                         <Group gap={6} justify="center" wrap="nowrap">
                           <Group gap={4} wrap="nowrap">
@@ -740,10 +740,10 @@ function AdminDashboardContent() {
                     <>
                       <Table.Td style={{ textAlign: 'center' }}>
                         <Group gap={6} justify="center" wrap="nowrap">
-                          <ActionIcon 
-                            variant="outline" 
-                            color="blue" 
-                            size="lg" 
+                          <ActionIcon
+                            variant="outline"
+                            color="blue"
+                            size="lg"
                             onClick={() => window.open(`/horaise-viewer?personid=${encodeURIComponent(member.email)}`, '_blank')}
                           >
                             <IconEye size={20} />
@@ -760,10 +760,10 @@ function AdminDashboardContent() {
                       </Table.Td>
                       <Table.Td style={{ textAlign: 'center' }}>
                         <Group gap={8} justify="center" wrap="nowrap">
-                          <ActionIcon 
-                            color="green" 
+                          <ActionIcon
+                            color="green"
                             variant="filled"
-                            size="lg" 
+                            size="lg"
                             onClick={() => handleSimpleAction(member.email, 'approve-schedule-remove-editor')}
                           >
                             <IconCheck size={20} />
@@ -799,8 +799,8 @@ function AdminDashboardContent() {
                       </Table.Td>
                       <Table.Td style={{ textAlign: 'center' }}>
                         {member.editor === 1 ? (
-                          <ActionIcon 
-                            color="red" 
+                          <ActionIcon
+                            color="red"
                             variant="subtle"
                             size="lg"
                             onClick={() => setConfirmationModal({ type: 'revoke', email: member.email, name: member.name })}
@@ -809,20 +809,20 @@ function AdminDashboardContent() {
                           </ActionIcon>
                         ) : (
                           <Group gap={8} justify="center" wrap="nowrap">
-                             <ActionIcon 
-                              color={hasMissingHours ? "gray" : "green"} 
+                            <ActionIcon
+                              color={hasMissingHours ? "gray" : "green"}
                               variant={hasMissingHours ? "light" : "filled"}
-                              size="lg" 
+                              size="lg"
                               disabled={hasMissingHours}
                               onClick={() => !hasMissingHours && setConfirmationModal({ type: 'approve', email: member.email, name: member.name })}
                             >
                               <IconCheck size={20} />
                             </ActionIcon>
 
-                            <ActionIcon 
-                              color="red" 
-                              variant="light" 
-                              size="lg" 
+                            <ActionIcon
+                              color="red"
+                              variant="light"
+                              size="lg"
                               onClick={() => setConfirmationModal({ type: 'revoke', email: member.email, name: member.name })}
                             >
                               <IconX size={20} />
@@ -852,12 +852,12 @@ function AdminDashboardContent() {
   return (
     <>
       <TopNavBar />
-      
+
       <Box
         style={{
           minHeight: "100vh",
           background: "#F8F9FF",
-          paddingTop: isMobile ? "100px": "140px",
+          paddingTop: isMobile ? "100px" : "140px",
           paddingBottom: "40px",
         }}
       >
@@ -870,22 +870,22 @@ function AdminDashboardContent() {
               <Text c="dimmed" size="sm">Visão geral das pendências e acessos</Text>
             </Box>
             <Group gap="xs">
-              <Button 
-                variant="subtle" 
+              <Button
+                variant="subtle"
                 onClick={fetchMembers}
                 loading={refreshing}
                 px={isMobile ? "xs" : "md"}
               >
                 {isMobile ? <IconRefresh size={20} /> : "Atualizar"}
               </Button>
-              <Button 
+              {/* <Button 
                 variant="light" 
                 color="red" 
                 onClick={handleLogout}
                 px={isMobile ? "xs" : "md"}
               >
                 {isMobile ? <IconLogout size={20} /> : "Sair"}
-              </Button>
+              </Button> */}
             </Group>
           </Group>
 
@@ -916,7 +916,7 @@ function AdminDashboardContent() {
                 <Stack gap="xs"><MemberTable data={activeEditors} type="access" /></Stack>
               </Tabs.Panel>
               <Tabs.Panel value="sugerir">
-                <AdminSuggestionPanel 
+                <AdminSuggestionPanel
                   frentesOptions={frentesOptions}
                   bolsasOptions={bolsasOptions}
                   initialTargetEmail={searchParams.get("personid") || undefined}
@@ -925,12 +925,22 @@ function AdminDashboardContent() {
               </Tabs.Panel>
             </Tabs>
           </Paper>
+          <Group justify="flex-end" mt="xl">
+            <Button
+              variant="light"
+              color="red"
+              onClick={handleLogout}
+              px={isMobile ? "xs" : "md"}
+            >
+              {isMobile ? <IconLogout size={20} /> : "Sair"}
+            </Button>
+          </Group>
         </Container>
       </Box>
 
       {/* pop up confirmacao */}
-      <Modal 
-        opened={confirmationModal.type !== null} 
+      <Modal
+        opened={confirmationModal.type !== null}
         onClose={() => setConfirmationModal({ type: null, email: '', name: '' })}
         centered
         withCloseButton
@@ -943,13 +953,13 @@ function AdminDashboardContent() {
               <ThemeIcon radius="xl" size={60} color="green.6" variant="filled">
                 <IconCheck size={32} />
               </ThemeIcon>
-              
+
               <Title order={3} ta="center" style={{ color: "#0E1862" }}>
                 Conceder acesso de edição?
               </Title>
-              
+
               <Text c="dimmed" size="sm" ta="center">
-                <strong>{confirmationModal.name}</strong> terá permissão para editar o conteúdo. 
+                <strong>{confirmationModal.name}</strong> terá permissão para editar o conteúdo.
                 Você pode revogar o acesso a qualquer momento.
               </Text>
 
@@ -967,11 +977,11 @@ function AdminDashboardContent() {
               <ThemeIcon radius="xl" size={60} color="red.6" variant="filled">
                 <IconX size={32} />
               </ThemeIcon>
-              
+
               <Title order={3} ta="center" style={{ color: "#0E1862" }}>
                 Remover acesso de edição?
               </Title>
-              
+
               <Text c="dimmed" size="sm" ta="center">
                 <strong>{confirmationModal.name}</strong> perderá imediatamente a permissão de edição.
               </Text>
