@@ -157,6 +157,7 @@ export async function POST(request: NextRequest) {
         const { row, columnMapping } = found;
         const member = {
           name: getColumnValue(row, "Nome", columnMapping),
+          nickname: getColumnValue(row, "Apelido", columnMapping),
           email: getColumnValue(row, "Email", columnMapping),
           frentes: getColumnValue(row, "Frentes", columnMapping),
           bolsa: getColumnValue(row, "Bolsa", columnMapping),
@@ -193,6 +194,7 @@ export async function POST(request: NextRequest) {
         }
         const memberData = {
           name: getColumnValue(row, "Nome", columnMapping) || "",
+          nickname: getColumnValue(row, "Apelido", columnMapping) || "",
           email: body.email,
           frentes: body.frentes || getColumnValue(row, "Frentes", columnMapping) || "",
           bolsa: getColumnValue(row, "Bolsa", columnMapping) || "",
@@ -311,6 +313,7 @@ export async function POST(request: NextRequest) {
         // Atualiza os dados do membro
         const memberData = {
           name: memberName,
+          nickname: getColumnValue(currentData.row, "Apelido", currentData.columnMapping) || "",
           email: body.email,
           frentes: body.frentes,
           bolsa: body.bolsa,
