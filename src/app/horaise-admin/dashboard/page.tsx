@@ -17,12 +17,14 @@ import {
   ActionIcon,
   Stack,
   Tooltip,
+  TextInput,
   Popover,
   NumberInput,
   MultiSelect,
   Select,
   Modal,
   ThemeIcon,
+  Alert,
   rem,
 } from "@mantine/core";
 import {
@@ -118,6 +120,61 @@ function AdminDashboardContent() {
     email: string;
     name: string;
   }>({ type: null, email: '', name: '' });
+
+  const [editWindowModalOpen, setEditWindowModalOpen] = useState(false);
+  const [editWindowStart, setEditWindowStart] = useState("");
+  const [editWindowEnd, setEditWindowEnd] = useState("");
+  const [savingEditWindow, setSavingEditWindow] = useState(false);
+
+  const handleSetEditWindow = async () => {
+    if (!editWindowStart || !editWindowEnd) {
+      notifications.show({
+        title: "Campos obrigatórios",
+        message: "Preencha a data de início e de encerramento.",
+        color: "red",
+      });
+      return;
+    }
+
+    setSavingEditWindow(true);
+    try {
+      const response = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "set-edit-window",
+          start: `${editWindowStart}T00:00:00`,
+          end: `${editWindowEnd}T23:59:59`,
+        }),
+      });
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        notifications.show({
+          title: "Acessos Liberados!",
+          message: result.message || "O período de edição foi configurado com sucesso.",
+          color: "green",
+          icon: <IconCheck />,
+        });
+        setEditWindowModalOpen(false);
+        fetchMembers();
+      } else {
+        notifications.show({
+          title: "Erro",
+          message: result.error || "Erro ao configurar período de edição.",
+          color: "red",
+        });
+      }
+    } catch (error) {
+      notifications.show({
+        title: "Erro",
+        message: "Erro na comunicação com o servidor.",
+        color: "red",
+      });
+    } finally {
+      setSavingEditWindow(false);
+    }
+  };
 
   // Componente interno para ter acesso aos estados
   const EditMemberPopover = ({
@@ -871,6 +928,16 @@ function AdminDashboardContent() {
             </Box>
             <Group gap="xs">
               <Button
+                variant="light"
+                color="blue"
+                onClick={() => setEditWindowModalOpen(true)}
+                px={isMobile ? "xs" : "md"}
+                leftSection={<IconLockOpen size={20} />}
+              >
+                {isMobile ? "" : "Liberar Acessos"}
+              </Button>
+
+              <Button
                 variant="subtle"
                 onClick={fetchMembers}
                 loading={refreshing}
@@ -878,14 +945,6 @@ function AdminDashboardContent() {
               >
                 {isMobile ? <IconRefresh size={20} /> : "Atualizar"}
               </Button>
-              {/* <Button 
-                variant="light" 
-                color="red" 
-                onClick={handleLogout}
-                px={isMobile ? "xs" : "md"}
-              >
-                {isMobile ? <IconLogout size={20} /> : "Sair"}
-              </Button> */}
             </Group>
           </Group>
 
@@ -996,6 +1055,50 @@ function AdminDashboardContent() {
               </Group>
             </>
           )}
+        </Stack>
+      </Modal>
+
+      {/* Modal de Configuração de Janela de Edição */}
+      <Modal
+        opened={editWindowModalOpen}
+        onClose={() => setEditWindowModalOpen(false)}
+        title={
+          <Text fw={700} size="lg" style={{ color: "#0E1862" }}>
+            Liberar Acessos Temporários
+          </Text>
+        }
+        centered
+        radius="md"
+      >
+        <Stack gap="md">
+          <Alert variant="light" color="blue" icon={<IconAlertCircle size={16} />}>
+            Defina um período para liberar automaticamente a edição de horários para todos os membros ativos.
+          </Alert>
+
+          <TextInput
+            label="Data de início"
+            type="date"
+            value={editWindowStart}
+            onChange={(e) => setEditWindowStart(e.target.value)}
+            required
+          />
+
+          <TextInput
+            label="Data de encerramento"
+            type="date"
+            value={editWindowEnd}
+            onChange={(e) => setEditWindowEnd(e.target.value)}
+            required
+          />
+
+          <Group grow mt="md">
+            <Button variant="default" onClick={() => setEditWindowModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button color="blue" onClick={handleSetEditWindow} loading={savingEditWindow}>
+              Salvar Período
+            </Button>
+          </Group>
         </Stack>
       </Modal>
     </>
