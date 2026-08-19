@@ -39,7 +39,7 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
-import { formatAdminDisplayName } from "@/services/memberNameDisplay";
+import { formatAdminDisplayName, getViewerDisplayName } from "@/services/memberNameDisplay";
 
 const WEEKDAY_UI_INDICES = [0, 1, 2, 3, 4, 5, 6];
 const DAY_LABELS_SHORT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
@@ -805,7 +805,7 @@ export function AdminSuggestionPanel({
                     px="md"
                     style={{ whiteSpace: "nowrap", transition: "all 0.2s", flexShrink: 0 }}
                   >
-                    {formatAdminDisplayName({ name: m.name, nickname: m.nickname })}
+                    {getViewerDisplayName({ name: m.name, nickname: m.nickname })}
                   </Button>
                 );
               })}
