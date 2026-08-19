@@ -133,6 +133,8 @@ export async function sendSuggestionToUser(userEmail: string, userName: string) 
   console.log(`[sendSuggestionToUser] Iniciando envio para ${userEmail}`);
   console.log(`[SMTP Config] Host: ${process.env.SMTP_HOST}, Port: ${process.env.SMTP_PORT}, User: ${process.env.SMTP_USER}`);
   
+  const viewerUrl = `${BASE_URL}/horaise-viewer?personid=${encodeURIComponent(userEmail)}`;
+  
   const mailOptions = {
     from: `"HORAISE" <${process.env.SMTP_USER}>`,
     to: userEmail,
@@ -141,11 +143,9 @@ export async function sendSuggestionToUser(userEmail: string, userName: string) 
       <div style="font-family: Arial, sans-serif; color: #333;">
         <h2>Olá, ${userName}!</h2>
         <p>O administrador sugeriu um novo horário para você.</p>
-        <p>Acesse o editor para visualizar a sugestão e decidir se deseja aceitá-la.</p>
+        <p>Clique no botão abaixo para visualizar sua agenda.</p>
         <br/>
-        <p><strong>⚠️ Importante:</strong> Você pode comparar sua agenda atual com a sugestão e aceitar ou recusar conforme preferir.</p>
-        <br/>
-        <a href="${BASE_URL}/horaise-editor" style="background: #52afe1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Ver Sugestão</a>
+        <a href="${viewerUrl}" style="background: #52afe1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Ver Meu Horário</a>
       </div>
     `,
   };

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { Suspense, useEffect, useState, useMemo } from "react";
 import {
   Box,
   Container,
@@ -40,7 +40,7 @@ import {
   IconAlertCircle,
   IconAlertTriangle,
 } from "@tabler/icons-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import TopNavBar from "@/components/TopNavBar";
 import { AdminSuggestionPanel } from "@/components/AdminSuggestionPanel";
 import { notifications } from "@mantine/notifications";
@@ -63,6 +63,12 @@ const normalizeCoutinho = (name: string, email: string): string => {
   return name;
 };
 
+// Bolsa "Prof." permite cadastro com 0 horas de trabalho
+const isProfBolsa = (bolsa: string): boolean => {
+  if (!bolsa || bolsa === 'nan') return false;
+  return bolsa.split(',').some((b) => b.trim().toLowerCase().startsWith('prof'));
+};
+
 type AdminMember = {
   name: string;
   nickname?: string;
@@ -77,14 +83,16 @@ type AdminMember = {
   rowNumber: number;
 };
 
-export default function AdminDashboard() {
+function AdminDashboardContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [members, setMembers] = useState<AdminMember[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const isMobile = useMediaQuery('(max-width: 768px)');
   const [frentesOptions, setFrentesOptions] = useState<{ value: string; label: string }[]>([]);
   const [bolsasOptions, setBolsasOptions] = useState<{ value: string; label: string; color: string }[]>([]);
+  const [activeTab, setActiveTab] = useState<string>("cadastros");
   
   // Estado para armazenar edições pendentes (não salvas na planilha ainda)
   const [pendingEdits, setPendingEdits] = useState<Record<string, {
@@ -345,6 +353,22 @@ export default function AdminDashboard() {
     fetchMembers();
   }, [router]);
 
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "cadastros" || tab === "horarios" || tab === "acessos" || tab === "sugerir") {
+      setActiveTab(tab);
+      return;
+    }
+    setActiveTab("cadastros");
+  }, [searchParams]);
+
+  const handleOpenDefineSchedule = (email: string) => {
+    const params = new URLSearchParams();
+    params.set("tab", "sugerir");
+    params.set("personid", email);
+    router.push(`/horaise-admin/dashboard?${params.toString()}`);
+  };
+
   const handleSimpleAction = async (email: string, actionType: string) => {
     try {
       const response = await fetch("/api/admin", {
@@ -381,26 +405,28 @@ export default function AdminDashboard() {
     
     // Se não há edições pendentes, valida os dados atuais do membro
     if (!editData) {
+      const isProf = isProfBolsa(member.bolsa);
       const hasBothHoursZero = member.ho === 0 && member.hp === 0;
       const hasMissingBolsa = !member.bolsa || member.bolsa === 'nan' || member.bolsa.trim() === '';
       
-      if (hasBothHoursZero || hasMissingBolsa) {
+      if (hasMissingBolsa || (hasBothHoursZero && !isProf)) {
         notifications.show({ 
           title: "Dados incompletos", 
-          message: hasBothHoursZero ? "Defina ao menos HO ou HP (não ambos zerados)" : "Preencha a bolsa antes de confirmar", 
+          message: hasMissingBolsa ? "Preencha a bolsa antes de confirmar" : "Defina ao menos HO ou HP (não ambos zerados)", 
           color: "orange" 
         });
         return;
       }
     } else {
       // Se há edições pendentes, valida os dados editados
+      const isProf = isProfBolsa(editData.bolsa);
       const hasBothHoursZero = editData.ho === 0 && editData.hp === 0;
       const hasMissingBolsa = !editData.bolsa || editData.bolsa === 'nan' || editData.bolsa.trim() === '';
       
-      if (hasBothHoursZero || hasMissingBolsa) {
+      if (hasMissingBolsa || (hasBothHoursZero && !isProf)) {
         notifications.show({ 
           title: "Dados incompletos", 
-          message: hasBothHoursZero ? "Defina ao menos HO ou HP (não ambos zerados)" : "Preencha a bolsa antes de confirmar", 
+          message: hasMissingBolsa ? "Preencha a bolsa antes de confirmar" : "Defina ao menos HO ou HP (não ambos zerados)", 
           color: "orange" 
         });
         return;
@@ -482,18 +508,19 @@ export default function AdminDashboard() {
     router.push("/horaise-admin");
   };
 
-  // Cadastro pendente = (HP E HO ambos zerados) OU sem bolsa definida
+  // Cadastro pendente = (sem bolsa) OU (HP e HO ambos zerados e não é Prof.)
   const pendingRegistrations = sortedMembers.filter(m => {
     const hasBothHoursZero = m.ho === 0 && m.hp === 0;
     const hasMissingBolsa = !m.bolsa || m.bolsa === 'nan' || m.bolsa.trim() === '';
-    return hasBothHoursZero || hasMissingBolsa;
+    return hasMissingBolsa || (hasBothHoursZero && !isProfBolsa(m.bolsa));
   });
   
   const pendingSchedules = sortedMembers.filter(m => m.pendingTimeTable === 1 || m.pendingTimeTable === 2);
   
-  // Acessos de Edição = Apenas pessoas COM todos os dados preenchidos (HP+HO > 0, Bolsa)
+  // Acessos de Edição = Pessoas COM bolsa preenchida (e horas > 0 ou Prof.)
   const activeEditors = sortedMembers.filter(m => {
-    const hasValidHours = (m.ho > 0 || m.hp > 0);
+    const isProf = isProfBolsa(m.bolsa);
+    const hasValidHours = isProf || (m.ho > 0 || m.hp > 0);
     const hasAllData = hasValidHours && m.bolsa && m.bolsa !== 'nan' && m.bolsa.trim() !== '';
     return hasAllData && (m.pendingAccess === 1 || m.editor === 1);
   });
@@ -518,7 +545,7 @@ export default function AdminDashboard() {
             {type === 'schedule' && (
               <>
                 <Table.Th style={{ textAlign: 'center' }}>Horário</Table.Th>
-                <Table.Th style={{ textAlign: 'center' }}>Aceitar</Table.Th>
+                <Table.Th style={{ textAlign: 'center' }}>Ação</Table.Th>
               </>
             )}
 
@@ -541,7 +568,7 @@ export default function AdminDashboard() {
             </Table.Tr>
           ) : (
             data.map((member) => {
-              const hasMissingHours = member.ho === 0 && member.hp === 0;
+              const hasMissingHours = member.ho === 0 && member.hp === 0 && !isProfBolsa(member.bolsa);
               
               // Usa dados pendentes se existirem, senão usa os dados do membro
               const pendingData = pendingEdits[member.email];
@@ -644,12 +671,12 @@ export default function AdminDashboard() {
                   {type === 'registration' && (
                     <>
                       <Table.Td style={{ textAlign: 'center' }}>
-                        <Text fw={600} c={((pendingEdits[member.email]?.ho ?? member.ho) === 0 && (pendingEdits[member.email]?.hp ?? member.hp) === 0) ? "red" : "green"}>
+                        <Text fw={600} c={((pendingEdits[member.email]?.ho ?? member.ho) === 0 && (pendingEdits[member.email]?.hp ?? member.hp) === 0 && !isProfBolsa(currentBolsa)) ? "red" : "green"}>
                           {(pendingEdits[member.email]?.ho ?? member.ho) || 0}h
                         </Text>
                       </Table.Td>
                       <Table.Td style={{ textAlign: 'center' }}>
-                        <Text fw={600} c={((pendingEdits[member.email]?.ho ?? member.ho) === 0 && (pendingEdits[member.email]?.hp ?? member.hp) === 0) ? "red" : "green"}>
+                        <Text fw={600} c={((pendingEdits[member.email]?.ho ?? member.ho) === 0 && (pendingEdits[member.email]?.hp ?? member.hp) === 0 && !isProfBolsa(currentBolsa)) ? "red" : "green"}>
                           {(pendingEdits[member.email]?.hp ?? member.hp) || 0}h
                         </Text>
                       </Table.Td>
@@ -693,14 +720,24 @@ export default function AdminDashboard() {
                         </Group>
                       </Table.Td>
                       <Table.Td style={{ textAlign: 'center' }}>
-                        <ActionIcon 
-                          color="green" 
-                          variant="filled"
-                          size="lg" 
-                          onClick={() => handleSimpleAction(member.email, 'approve-schedule-remove-editor')}
-                        >
-                          <IconCheck size={20} />
-                        </ActionIcon>
+                        <Group gap={8} justify="center" wrap="nowrap">
+                          <ActionIcon 
+                            color="green" 
+                            variant="filled"
+                            size="lg" 
+                            onClick={() => handleSimpleAction(member.email, 'approve-schedule-remove-editor')}
+                          >
+                            <IconCheck size={20} />
+                          </ActionIcon>
+                          <ActionIcon
+                            color="blue"
+                            variant="light"
+                            size="lg"
+                            onClick={() => handleOpenDefineSchedule(member.email)}
+                          >
+                            <IconPencil size={20} />
+                          </ActionIcon>
+                        </Group>
                       </Table.Td>
                     </>
                   )}
@@ -814,7 +851,7 @@ export default function AdminDashboard() {
           </Group>
 
           <Paper shadow="sm" radius="md" p={isMobile ? "xs" : "md"} withBorder>
-            <Tabs defaultValue="cadastros" color="var(--primary)">
+            <Tabs value={activeTab} onChange={(value) => setActiveTab(value || "cadastros")} color="var(--primary)">
               <Tabs.List mb="md" grow={isMobile}>
                 <Tabs.Tab value="cadastros" leftSection={!isMobile && <IconUser size={16} />} rightSection={pendingRegistrations.length > 0 && <Badge size="xs" circle color="red">{pendingRegistrations.length}</Badge>}>
                   {isMobile ? "Cadastros" : "Cadastros Pendentes"}
@@ -826,7 +863,7 @@ export default function AdminDashboard() {
                   {isMobile ? "Acessos" : "Acessos de Edição"}
                 </Tabs.Tab>
                 <Tabs.Tab value="sugerir" leftSection={!isMobile && <IconPencil size={16} />}>
-                  Sugerir
+                  {isMobile ? "Editar" : "Editar Horários"}
                 </Tabs.Tab>
               </Tabs.List>
 
@@ -843,6 +880,8 @@ export default function AdminDashboard() {
                 <AdminSuggestionPanel 
                   frentesOptions={frentesOptions}
                   bolsasOptions={bolsasOptions}
+                  initialTargetEmail={searchParams.get("personid") || undefined}
+                  onSavedSchedule={fetchMembers}
                 />
               </Tabs.Panel>
             </Tabs>
@@ -911,5 +950,19 @@ export default function AdminDashboard() {
         </Stack>
       </Modal>
     </>
+  );
+}
+
+export default function AdminDashboard() {
+  return (
+    <Suspense
+      fallback={
+        <Box h="100vh" bg="#F8F9FF">
+          <Center h="100%"><Loader size="xl" color="blue" /></Center>
+        </Box>
+      }
+    >
+      <AdminDashboardContent />
+    </Suspense>
   );
 }
