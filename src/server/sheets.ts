@@ -4,6 +4,7 @@ const SHEET_NAME = process.env.SHEET_NAME || "INFO";
 const BACKLOG_SHEET_NAME = process.env.BACKLOG_SHEET_NAME || "BACKLOG";
 const RULES_SHEET_NAME = process.env.RULES_SHEET_NAME || "RULES";
 const SUGGESTED_SHEET_NAME = process.env.SUGGESTED_SHEET_NAME || "SUGGESTION";
+const PRESENCIAL_BOLSA_SHEET_NAME = process.env.PRESENCIAL_BOLSA_SHEET_NAME || "PRESENCIAL_BOLSA";
 
 // Cache para o mapeamento de colunas (para não precisar buscar toda vez)
 let columnMappingCache: Map<string, number> | null = null;
@@ -132,9 +133,11 @@ export async function readMemberByEmail(email: string): Promise<{ row: string[];
   if (!rowNumber) return null;
   const sheetRef = escapeSheetName(SHEET_NAME);
   
-  // Lê até a coluna HO
+  // Lê até a maior coluna entre HO e Apelido
   const hoIndex = getColumnIndex("HO", columnMapping);
-  const lastColumn = columnIndexToLetter(hoIndex);
+  const nicknameIndex = columnMapping.get("Apelido") ?? -1;
+  const lastBaseIndex = Math.max(hoIndex, nicknameIndex);
+  const lastColumn = columnIndexToLetter(lastBaseIndex);
   
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
@@ -148,9 +151,11 @@ export async function readExample(): Promise<{ row: string[]; columnMapping: Map
   const sheetRef = escapeSheetName(SHEET_NAME);
   const columnMapping = await getColumnMapping(sheets);
   
-  // Lê até a coluna HO
+  // Lê até a maior coluna entre HO e Apelido
   const hoIndex = getColumnIndex("HO", columnMapping);
-  const lastColumn = columnIndexToLetter(hoIndex);
+  const nicknameIndex = columnMapping.get("Apelido") ?? -1;
+  const lastBaseIndex = Math.max(hoIndex, nicknameIndex);
+  const lastColumn = columnIndexToLetter(lastBaseIndex);
   
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
@@ -160,7 +165,7 @@ export async function readExample(): Promise<{ row: string[]; columnMapping: Map
   if (!row) return null;
   return { row, columnMapping };
 }
-export async function updateMemberRow(member: { name: string; email: string; frentes: string; bolsa?: string; editor?: number | string; pendingAccess?: number | string; pendingTimeTable?: number | string; pendingSuggestion?: number | string; hp?: string; ho?: string }, isNew: boolean): Promise<{ success: boolean; message: string; alreadyDone?: boolean }> {
+export async function updateMemberRow(member: { name: string; nickname?: string; email: string; frentes: string; bolsa?: string; editor?: number | string; pendingAccess?: number | string; pendingTimeTable?: number | string; pendingSuggestion?: number | string; hp?: string; ho?: string }, isNew: boolean): Promise<{ success: boolean; message: string; alreadyDone?: boolean }> {
   const { sheets } = await getSheetsClient();
   const sheetRef = escapeSheetName(SHEET_NAME);
   const columnMapping = await getColumnMapping(sheets);
@@ -173,10 +178,15 @@ export async function updateMemberRow(member: { name: string; email: string; fre
   
   // Cria um array com o tamanho correto baseado no mapeamento de colunas
   const hoIndex = getColumnIndex("HO", columnMapping);
-  const rowArray = new Array(hoIndex + 1).fill("");
+  const nicknameIndex = columnMapping.get("Apelido") ?? -1;
+  const lastBaseIndex = Math.max(hoIndex, nicknameIndex);
+  const rowArray = new Array(lastBaseIndex + 1).fill("");
   
   // Preenche os valores usando os nomes das colunas
   rowArray[getColumnIndex("Nome", columnMapping)] = member.name;
+  if (nicknameIndex >= 0) {
+    rowArray[nicknameIndex] = member.nickname ?? "";
+  }
   rowArray[getColumnIndex("Email", columnMapping)] = member.email;
   rowArray[getColumnIndex("Frentes", columnMapping)] = member.frentes;
   rowArray[getColumnIndex("Bolsa", columnMapping)] = bolsa;
@@ -190,7 +200,7 @@ export async function updateMemberRow(member: { name: string; email: string; fre
   const values = [rowArray];
   
   if (isNew) {
-    const lastColumn = columnIndexToLetter(hoIndex);
+    const lastColumn = columnIndexToLetter(lastBaseIndex);
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
       range: `${sheetRef}!A:${lastColumn}`,
@@ -204,7 +214,7 @@ export async function updateMemberRow(member: { name: string; email: string; fre
     return { success: false, message: "Membro não encontrado para atualização" };
   }
   
-  const lastColumn = columnIndexToLetter(hoIndex);
+  const lastColumn = columnIndexToLetter(lastBaseIndex);
 
   // Verifica se a linha já está no estado desejado (evita ações/emails duplicados)
   const currentRes = await sheets.spreadsheets.values.get({
@@ -215,7 +225,7 @@ export async function updateMemberRow(member: { name: string; email: string; fre
 
   const normalize = (value: unknown) => String(value ?? "").trim();
   let hasChanges = false;
-  for (let i = 0; i <= hoIndex; i++) {
+  for (let i = 0; i <= lastBaseIndex; i++) {
     if (normalize(rowArray[i]) !== normalize(currentRow[i])) {
       hasChanges = true;
       break;
@@ -339,11 +349,14 @@ export async function loadScheduleRow(email: string): Promise<string[] | null> {
 export async function readAllMembers(): Promise<string[][]> {
   const { sheets } = await getSheetsClient();
   const sheetRef = escapeSheetName(SHEET_NAME);
-  // Lê todos os dados incluindo o cabeçalho (A1-EB = Nome, Email, Frentes, Bolsa, Editor, Pending-Access, Pending-TimeTable, Pending-Suggestion, HP, HO + Schedule)
+  const columnMapping = await getColumnMapping(sheets);
+  const hoIndex = getColumnIndex("HO", columnMapping);
+  const endColumn = columnIndexToLetter(hoIndex + 91);
+
+  // Lê todos os dados incluindo o cabeçalho e as 91 colunas de schedule
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    // Inclui toda a faixa até EB, começando do cabeçalho
-    range: `${sheetRef}!A1:EB`,
+    range: `${sheetRef}!A1:${endColumn}`,
   });
   return res.data.values || [];
 }
@@ -753,6 +766,72 @@ export async function loadSuggestedSchedule(email: string): Promise<string[] | n
 }
 
 /**
+ * Salva o detalhamento por bolsa dos slots presenciais na aba PRESENCIAL_BOLSA
+ * Formato: Email (A) + 91 colunas de schedule (B..CN)
+ */
+export async function savePresencialBolsaRow(email: string, presencialBolsaRow: string[]) {
+  const { sheets } = await getSheetsClient();
+  const presencialBolsaSheetName = escapeSheetName(PRESENCIAL_BOLSA_SHEET_NAME);
+
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${presencialBolsaSheetName}!A:A`,
+  });
+
+  const rows = res.data.values || [];
+  let rowNumber: number | null = null;
+
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0]?.toLowerCase() === email.toLowerCase()) {
+      rowNumber = i + 1;
+      break;
+    }
+  }
+
+  const fullRow = [email, ...presencialBolsaRow];
+
+  if (rowNumber) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${presencialBolsaSheetName}!A${rowNumber}:CN${rowNumber}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [fullRow] },
+    });
+  } else {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${presencialBolsaSheetName}!A:CN`,
+      valueInputOption: "RAW",
+      requestBody: { values: [fullRow] },
+    });
+  }
+
+  return { success: true, message: "Detalhamento presencial por bolsa salvo com sucesso." };
+}
+
+/**
+ * Carrega o detalhamento por bolsa dos slots presenciais da aba PRESENCIAL_BOLSA
+ */
+export async function loadPresencialBolsaRow(email: string): Promise<string[] | null> {
+  const { sheets } = await getSheetsClient();
+  const presencialBolsaSheetName = escapeSheetName(PRESENCIAL_BOLSA_SHEET_NAME);
+
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${presencialBolsaSheetName}!A:CN`,
+  });
+
+  const rows = res.data.values || [];
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0]?.toLowerCase() === email.toLowerCase()) {
+      return rows[i].slice(1, 92);
+    }
+  }
+
+  return null;
+}
+
+/**
  * Aceita o schedule sugerido: move da aba SUGGESTED para a aba principal e limpa flags
  * @param email Email do membro
  */
@@ -904,12 +983,22 @@ export async function deleteMemberRow(email: string) {
   await deleteRowFromSheet(sheets, SHEET_NAME, rowNumber);
 
   // Remove também a linha da aba SUGGESTION, se existir
-  const suggestedRowNumber = await findRowByEmailInColumnA(sheets, SUGGESTED_SHEET_NAME, email);
-  if (suggestedRowNumber) {
-    await deleteRowFromSheet(sheets, SUGGESTED_SHEET_NAME, suggestedRowNumber);
+  try {
+    const suggestedRowNumber = await findRowByEmailInColumnA(sheets, SUGGESTED_SHEET_NAME, email);
+    if (suggestedRowNumber) {
+      await deleteRowFromSheet(sheets, SUGGESTED_SHEET_NAME, suggestedRowNumber);
+    }
+  } catch {
+    // Aba SUGGESTION não existe nesta planilha
   }
 
   return { success: true, message: "Membro excluído com sucesso" };
 }
 
-export const sheetsConstants = { SPREADSHEET_ID, SHEET_NAME, BACKLOG_SHEET_NAME, SUGGESTED_SHEET_NAME };
+export const sheetsConstants = {
+  SPREADSHEET_ID,
+  SHEET_NAME,
+  BACKLOG_SHEET_NAME,
+  SUGGESTED_SHEET_NAME,
+  PRESENCIAL_BOLSA_SHEET_NAME,
+};

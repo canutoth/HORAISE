@@ -30,6 +30,9 @@ export const metadata: Metadata = {
     default: "HORAISE"
   },
   description: "Editor de horários do AISELab - PUC-Rio",
+  icons: {
+    icon: "/H_logo.png",
+  },
 };
 export default function RootLayout({
   children,
