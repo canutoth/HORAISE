@@ -1,81 +1,77 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Box,
   Paper,
   Title,
   Text,
-  PasswordInput,
-  TextInput,
   Button,
   Stack,
+  Loader,
+  Center,
 } from "@mantine/core";
-import { IconSettings, IconEye, IconEyeOff } from "@tabler/icons-react";
+import { IconSettings } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
 import TopNavBar from "@/components/TopNavBar";
-import { notifications } from "@mantine/notifications";
+
+function GoogleLogo() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true">
+      <path
+        fill="#EA4335"
+        d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+      />
+      <path
+        fill="#4285F4"
+        d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+      />
+      <path
+        fill="#34A853"
+        d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+      />
+    </svg>
+  );
+}
 
 export default function HoraiseAdminPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
 
-  const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      notifications.show({
-        title: "Erro",
-        message: "Por favor, preencha todos os campos",
-        color: "red",
-        autoClose: 3000,
-      });
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const response = await fetch("/api/admin", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ action: "login", email, password }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        // Salvar email do admin no sessionStorage
-        sessionStorage.setItem("adminEmail", email);
-        
-        notifications.show({
-          title: "Sucesso!",
-          message: "Acesso autorizado",
-          color: "green",
-          autoClose: 2000,
-        });
-        router.push("/horaise-admin/dashboard");
-      } else {
-        notifications.show({
-          title: "Erro",
-          message: data.error || "Credenciais incorretas",
-          color: "red",
-          autoClose: 3000,
-        });
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const response = await fetch("/api/admin/session");
+        if (response.ok) {
+          router.replace("/horaise-admin/dashboard");
+          return;
+        }
+      } catch {
+        // ignora, segue para a tela de login
+      } finally {
+        setChecking(false);
       }
-    } catch (error) {
-      notifications.show({
-        title: "Erro",
-        message: "Erro ao tentar fazer login",
-        color: "red",
-        autoClose: 3000,
-      });
-    } finally {
-      setLoading(false);
-    }
+    };
+    checkSession();
+  }, [router]);
+
+  const handleGoogleLogin = () => {
+    window.location.href = "/api/admin/auth/google";
   };
+
+  if (checking) {
+    return (
+      <Box h="100vh" bg="#F8F9FF">
+        <Center h="100%">
+          <Loader size="xl" color="blue" />
+        </Center>
+      </Box>
+    );
+  }
 
   return (
     <>
@@ -129,68 +125,29 @@ export default function HoraiseAdminPage() {
                 Administrador
               </Title>
               <Text size="sm" c="dimmed" ta="center">
-                Insira suas credenciais para acessar
+                Faça login com sua conta Google para acessar
               </Text>
-            </Stack>
-
-            <Stack gap="md" style={{ width: "100%" }}>
-              <TextInput
-                placeholder="Digite seu e-mail..."
-                size="md"
-                value={email}
-                onChange={(e) => setEmail(e.currentTarget.value)}
-                onKeyPress={(e) => {
-                  if (e.key === "Enter") {
-                    handleLogin();
-                  }
-                }}
-                styles={{
-                  input: {
-                    border: "2px solid #E9ECEF",
-                    "&:focus": {
-                      borderColor: "var(--primary)",
-                    },
-                  },
-                }}
-              />
-
-              <PasswordInput
-                placeholder="Digite sua senha..."
-                size="md"
-                value={password}
-                onChange={(e) => setPassword(e.currentTarget.value)}
-                onKeyPress={(e) => {
-                  if (e.key === "Enter") {
-                    handleLogin();
-                  }
-                }}
-                visibilityToggleIcon={({ reveal }) =>
-                  reveal ? <IconEye size={20} /> : <IconEyeOff size={20} />
-                }
-                styles={{
-                  input: {
-                    border: "2px solid #E9ECEF",
-                    "&:focus": {
-                      borderColor: "var(--primary)",
-                    },
-                  },
-                }}
-              />
             </Stack>
 
             <Button
               fullWidth
               size="md"
-              onClick={handleLogin}
-              loading={loading}
+              radius="md"
+              onClick={handleGoogleLogin}
+              leftSection={<GoogleLogo />}
+              variant="default"
               style={{
-                backgroundColor: "#0E1862",
+                border: "1px solid #DADCE0",
+                color: "#3C4043",
+                fontWeight: 500,
+                height: "48px",
+                background: "#FFFFFF",
                 "&:hover": {
-                  backgroundColor: "#0A1145",
+                  backgroundColor: "#F8F9FA",
                 },
               }}
             >
-              Login
+              Log in com Google
             </Button>
           </Stack>
         </Paper>
