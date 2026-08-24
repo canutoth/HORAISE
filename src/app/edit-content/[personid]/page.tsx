@@ -59,6 +59,7 @@ import {
   type TeamMemberData,
   type ScheduleData,
 } from "../../../services/googleSheets";
+import { formatAdminDisplayName } from "../../../services/memberNameDisplay";
 import { validateSchedule, type RuleViolation } from "@/rules/scheduleRules";
 import TopNavBar from "@/components/TopNavBar";
 
@@ -110,6 +111,10 @@ export default function EditContentPage() {
 
   const hp = memberData?.hp ? parseFloat(memberData.hp) : 0;
   const ho = memberData?.ho ? parseFloat(memberData.ho) : 0;
+  const memberDisplayName = formatAdminDisplayName({
+    name: memberData?.name,
+    nickname: memberData?.nickname,
+  }) || personId;
 
   useEffect(() => {
     document.title = `HORAISE | Editor`;
@@ -923,7 +928,7 @@ export default function EditContentPage() {
                     <Group justify="space-between" align="center">
                         <Stack gap={0}>
                           <Group gap="sm" align="center" wrap="wrap" mb={2}>
-                            <Text fw={700} size="md" c="#0E1862" truncate>{memberData?.name || personId}</Text>
+                            <Text fw={700} size="md" c="#0E1862" truncate>{memberDisplayName}</Text>
                             
                             {memberData?.bolsa && memberData.bolsa.split(',').map((bolsaItem: string, idx: number) => {
                               const bolsaName = bolsaItem.trim();
@@ -1070,7 +1075,7 @@ export default function EditContentPage() {
         <Modal opened={isEditingHP} onClose={handleCancelEditHP} title="Editar Horas Presenciais" centered>
           <Stack gap="md">
             <Text size="sm" c="dimmed">
-              Edite a quantidade de horas presenciais semanais para <strong>{memberData?.name}</strong>
+              Edite a quantidade de horas presenciais semanais para <strong>{memberDisplayName}</strong>
             </Text>
             <TextInput
               label="HP (Horas Presenciais)"
@@ -1091,7 +1096,7 @@ export default function EditContentPage() {
         <Modal opened={isEditingHO} onClose={handleCancelEditHO} title="Editar Horas Online" centered>
           <Stack gap="md">
             <Text size="sm" c="dimmed">
-              Edite a quantidade de horas online semanais para <strong>{memberData?.name}</strong>
+              Edite a quantidade de horas online semanais para <strong>{memberDisplayName}</strong>
             </Text>
             <TextInput
               label="HO (Horas Online)"

@@ -21,16 +21,20 @@ import {
   saveMember,
   validateEmail,
   getMemberByEmail,
+  getAllMembers,
   getBacklogOptions,
   type TeamMemberData,
 } from "../../services/googleSheets";
+import { getViewerDisplayName, toDisplayNameKey } from "../../services/memberNameDisplay";
 export default function CadastroPage() {
   const router = useRouter();
   const [nome, setNome] = useState("");
+  const [apelido, setApelido] = useState("");
   const [email, setEmail] = useState("");
   const [frentes, setFrente] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorNome, setErrorNome] = useState("");
+  const [errorApelido, setErrorApelido] = useState("");
   const [errorEmail, setErrorEmail] = useState("");
   const [errorFrente, setErrorFrente] = useState("");
   const [frentesOptions, setFrentesOptions] = useState<string[]>([]);
@@ -55,6 +59,7 @@ export default function CadastroPage() {
   const handleCadastro = async () => {
     // Limpa erros anteriores
     setErrorNome("");
+    setErrorApelido("");
     setErrorEmail("");
     setErrorFrente("");
     // Validações
@@ -82,9 +87,37 @@ export default function CadastroPage() {
         setLoading(false);
         return;
       }
+
+      const normalizedName = nome.trim();
+      const normalizedNickname = apelido.trim();
+      const candidateViewerName = getViewerDisplayName({
+        name: normalizedName,
+        nickname: normalizedNickname,
+      });
+
+      const existingMembers = await getAllMembers();
+      const hasCollision = existingMembers.some((member) => {
+        const existingViewerName = getViewerDisplayName({
+          name: member.name,
+          nickname: member.nickname,
+        });
+        return toDisplayNameKey(existingViewerName) === toDisplayNameKey(candidateViewerName);
+      });
+
+      if (hasCollision) {
+        setErrorApelido(
+          normalizedNickname
+            ? "Esse apelido já está em uso. Escolha outro para manter os nomes únicos no Viewer/Scheduler."
+            : "Esse nome resumido já existe no Viewer/Scheduler. Preencha um apelido único para continuar."
+        );
+        setLoading(false);
+        return;
+      }
+
       // Cria o novo membro
       const newMember: TeamMemberData = {
-        name: nome.trim(),
+        name: normalizedName,
+        nickname: normalizedNickname || undefined,
         email: emailLower,
         frentes: frentes.join(", "), // Junta as frentes com vírgula
         schedule: {}, // Schedule vazio
@@ -102,6 +135,7 @@ export default function CadastroPage() {
         });
         // Limpa o formulário
         setNome("");
+        setApelido("");
         setEmail("");
         setFrente([]);
       } else {
@@ -207,6 +241,25 @@ export default function CadastroPage() {
                 onKeyPress={handleKeyPress}
                 disabled={loading}
                 error={errorNome}
+                rightSection={<IconUser size={20} color="#ADB5BD" />}
+                styles={{
+                  input: {
+                    border: "2px solid #E9ECEF",
+                    "&:focus": {
+                      borderColor: "var(--primary)",
+                    },
+                  },
+                }}
+              />
+
+              <TextInput
+                placeholder="Apelido (exibido no Viewer)"
+                size="md"
+                value={apelido}
+                onChange={(e) => setApelido(e.currentTarget.value)}
+                onKeyPress={handleKeyPress}
+                disabled={loading}
+                error={errorApelido}
                 rightSection={<IconUser size={20} color="#ADB5BD" />}
                 styles={{
                   input: {
