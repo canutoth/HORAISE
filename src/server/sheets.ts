@@ -907,9 +907,13 @@ export async function deleteMemberRow(email: string) {
   await deleteRowFromSheet(sheets, SHEET_NAME, rowNumber);
 
   // Remove também a linha da aba SUGGESTION, se existir
-  const suggestedRowNumber = await findRowByEmailInColumnA(sheets, SUGGESTED_SHEET_NAME, email);
-  if (suggestedRowNumber) {
-    await deleteRowFromSheet(sheets, SUGGESTED_SHEET_NAME, suggestedRowNumber);
+  try {
+    const suggestedRowNumber = await findRowByEmailInColumnA(sheets, SUGGESTED_SHEET_NAME, email);
+    if (suggestedRowNumber) {
+      await deleteRowFromSheet(sheets, SUGGESTED_SHEET_NAME, suggestedRowNumber);
+    }
+  } catch {
+    // Aba SUGGESTION não existe nesta planilha
   }
 
   return { success: true, message: "Membro excluído com sucesso" };
