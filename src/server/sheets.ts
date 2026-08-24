@@ -840,6 +840,85 @@ export async function acceptSuggestedSchedule(email: string) {
   return { success: true, message: "Sugestão aceita com sucesso!" };
 }
 
+/**
+ * Encontra o número da linha (1-based) de um email na coluna A de uma aba
+ */
+async function findRowByEmailInColumnA(sheets: any, sheetName: string, email: string): Promise<number | null> {
+  const sheetRef = escapeSheetName(sheetName);
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetRef}!A:A`,
+  });
+  const rows = res.data.values || [];
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] && rows[i][0].toLowerCase() === email.toLowerCase()) {
+      return i + 1;
+    }
+  }
+  return null;
+}
+
+/**
+ * Deleta a linha (1-based) de uma aba da planilha
+ */
+async function deleteRowFromSheet(sheets: any, sheetName: string, rowNumber: number) {
+  const spreadsheet = await sheets.spreadsheets.get({
+    spreadsheetId: SPREADSHEET_ID,
+  });
+  const sheet = spreadsheet.data.sheets?.find(
+    (s: any) => s.properties?.title === sheetName
+  );
+  const sheetId = sheet?.properties?.sheetId;
+  if (sheetId === undefined) {
+    throw new Error(`Aba "${sheetName}" não encontrada`);
+  }
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SPREADSHEET_ID,
+    requestBody: {
+      requests: [
+        {
+          deleteDimension: {
+            range: {
+              sheetId,
+              dimension: "ROWS",
+              startIndex: rowNumber - 1,
+              endIndex: rowNumber,
+            },
+          },
+        },
+      ],
+    },
+  });
+}
+
+/**
+ * Deleta um membro de todas as abas onde ele aparece (INFO e SUGGESTION)
+ * @param email Email do membro
+ */
+export async function deleteMemberRow(email: string) {
+  const { sheets } = await getSheetsClient();
+
+  const rowNumber = await findRowByEmail(sheets, email);
+  if (!rowNumber) {
+    return { success: false, message: "Membro não encontrado" };
+  }
+
+  await deleteRowFromSheet(sheets, SHEET_NAME, rowNumber);
+
+  // Remove também a linha da aba SUGGESTION, se existir
+  try {
+    const suggestedRowNumber = await findRowByEmailInColumnA(sheets, SUGGESTED_SHEET_NAME, email);
+    if (suggestedRowNumber) {
+      await deleteRowFromSheet(sheets, SUGGESTED_SHEET_NAME, suggestedRowNumber);
+    }
+  } catch {
+    // Aba SUGGESTION não existe nesta planilha
+  }
+
+  return { success: true, message: "Membro excluído com sucesso" };
+}
+
 export const sheetsConstants = {
   SPREADSHEET_ID,
   SHEET_NAME,
