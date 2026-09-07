@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionEmail } from "../../../../server/session";
+import { getAuthSession } from "../../../../server/session";
 
 export async function GET(request: NextRequest) {
-  const email = getSessionEmail(request);
-  if (!email) {
+  const session = getAuthSession(request);
+  if (!session) {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }
-  return NextResponse.json({ email });
+  return NextResponse.json(session);
 }

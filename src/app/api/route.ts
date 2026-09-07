@@ -12,20 +12,20 @@ import {
   readRulesFromSheet,
   loadSuggestedSchedule,
   acceptSuggestedSchedule,
-  savePresencialBolsaRow,
-  loadPresencialBolsaRow,
   getColumnValue,
 } from "../../server/sheets";
-import { sendAdminNotification, sendUserApproval, sendAccessRequestToAdmin, sendScheduleEditedToAdmin, sendScheduleApprovedToUser } from "../../server/email";
+import { sendAdminNotification, sendAccessRequestToAdmin, sendScheduleEditedToAdmin } from "../../server/email";
 import { validateScheduleHours, parseHours } from "../../server/hoursValidation";
+import type { ScheduleData } from "../../services/googleSheets";
 import { validateDynamicRules } from "../../server/dynamicRulesValidation";
 import { isAdminEmail } from "../../server/admin";
+import { getAuthSession } from "../../server/session";
 type Actions =
   | { action: "read-member"; email: string }
   | { action: "read-example" }
   | { action: "update-member"; member: { name: string; nickname?: string; email: string; frentes: string; bolsa?: string; editor?: number | string; pending?: number | string; hp?: string; ho?: string }; isNew?: boolean }
   | { action: "update-member-metadata"; email: string; hp?: string; ho?: string }
-  | { action: "save-schedule"; email: string; scheduleRow: string[]; presencialBolsaRow?: string[]; isAdmin?: boolean }
+  | { action: "save-schedule"; email: string; scheduleRow: string[]; isAdmin?: boolean }
   | { action: "load-schedule"; email: string }
   | { action: "save-suggested-schedule"; adminEmail: string; targetEmail: string; scheduleRow: string[] }
   | { action: "load-suggested-schedule"; email: string }
@@ -37,7 +37,7 @@ type Actions =
   | { action: "validate-hours"; scheduleRow: string[]; hp: number; ho: number }
   | { action: "validate-dynamic-rules"; scheduleRow: string[] }
   | { action: "request-editor-access"; email: string }
-  | { action: "request-schedule-exception"; email: string; schedule: any; violations: string[] }
+  | { action: "request-schedule-exception"; email: string; schedule: ScheduleData; violations: string[] }
   | { action: "approve-schedule-keep-editor"; email: string }
   | { action: "approve-schedule-remove-editor"; email: string }
   | { action: "notify-profile-change"; userEmail: string; userName: string; field: string; oldValue: string; newValue: string };
@@ -63,7 +63,25 @@ export async function POST(request: NextRequest) {
       case "update-member": {
         if (!body.member) return NextResponse.json({ success: false, message: "member é obrigatório" }, { status: 400 });
         const isNewRegistration = Boolean(body.isNew);
-        const result = await updateMemberRow(body.member, Boolean(body.isNew));
+
+        // Membros (sessão não-admin) não podem alterar HP/HO: preserva os valores atuais da planilha.
+        const session = getAuthSession(request);
+        const isAdminSession = session?.role === "admin";
+        const memberToSave = { ...body.member };
+        if (!isAdminSession) {
+          if (isNewRegistration) {
+            memberToSave.hp = "";
+            memberToSave.ho = "";
+          } else {
+            const existing = await readMemberByEmail(memberToSave.email);
+            if (existing) {
+              memberToSave.hp = getColumnValue(existing.row, "HP", existing.columnMapping);
+              memberToSave.ho = getColumnValue(existing.row, "HO", existing.columnMapping);
+            }
+          }
+        }
+
+        const result = await updateMemberRow(memberToSave, isNewRegistration);
         if (result.success && isNewRegistration) {
           // Envia email apenas para NOVO cadastro (notifica admin)
           sendAdminNotification(body.member.name, body.member.email).catch(e => console.error("Falha email admin:", e));
@@ -71,6 +89,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(result, { status: result.success ? 200 : 400 });
       }
       case "update-member-metadata": {
+        const session = getAuthSession(request);
+        if (!session || session.role !== "admin") {
+          return NextResponse.json({ success: false, message: "Apenas administradores podem alterar horas" }, { status: 403 });
+        }
+
         if (!body.email) {
           return NextResponse.json({ success: false, message: "Email é obrigatório" }, { status: 400 });
         }
@@ -112,113 +135,6 @@ export async function POST(request: NextRequest) {
         
         const { row, columnMapping } = member;
 
-        const normalizeText = (value: string): string =>
-          value
-            .trim()
-            .toLocaleLowerCase("pt-BR")
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "");
-
-        const bolsasRaw = (getColumnValue(row, "Bolsa", columnMapping) || "")
-          .split(",")
-          .map((b) => b.trim())
-          .filter(Boolean);
-
-        const bolsaByKey = new Map<string, string>();
-        bolsasRaw.forEach((bolsa) => bolsaByKey.set(normalizeText(bolsa), bolsa));
-
-        const scheduleRowNormalized = body.scheduleRow.map((c) => (c || "").toString().trim().toUpperCase());
-
-        let presencialBolsaRow: string[] | undefined = body.presencialBolsaRow?.map((c) => (c || "").toString().trim());
-
-        // Fallback compatível com clientes antigos:
-        // - se houver uma única bolsa cadastrada, preenche automaticamente todos os slots P.
-        // - se houver múltiplas bolsas, exige explícito presencialBolsaRow.
-        if (!presencialBolsaRow || presencialBolsaRow.length === 0) {
-          const hasPresencialSlot = scheduleRowNormalized.some((status) => status === "P");
-          if (!hasPresencialSlot) {
-            presencialBolsaRow = new Array(91).fill("");
-          } else if (bolsasRaw.length === 1) {
-            presencialBolsaRow = scheduleRowNormalized.map((status) => (status === "P" ? bolsasRaw[0] : ""));
-          } else {
-            return NextResponse.json(
-              {
-                success: false,
-                message:
-                  "presencialBolsaRow é obrigatório quando há slots presenciais e o usuário possui mais de uma bolsa.",
-              },
-              { status: 400 }
-            );
-          }
-        }
-
-        if (!Array.isArray(presencialBolsaRow) || presencialBolsaRow.length !== 91) {
-          return NextResponse.json(
-            {
-              success: false,
-              message: "presencialBolsaRow deve ter exatamente 91 posições.",
-            },
-            { status: 400 }
-          );
-        }
-
-        for (let i = 0; i < 91; i++) {
-          const statusCode = scheduleRowNormalized[i] || "";
-          const bolsaSlot = (presencialBolsaRow[i] || "").trim();
-
-          if (statusCode !== "P") {
-            if (bolsaSlot !== "") {
-              return NextResponse.json(
-                {
-                  success: false,
-                  message: `Slot ${i + 1}: quando status != P, a célula correspondente em PRESENCIAL_BOLSA deve estar vazia.`,
-                },
-                { status: 400 }
-              );
-            }
-            continue;
-          }
-
-          if (!bolsaSlot) {
-            return NextResponse.json(
-              {
-                success: false,
-                message: `Slot ${i + 1}: quando status == P, a bolsa é obrigatória.`,
-              },
-              { status: 400 }
-            );
-          }
-
-          const splitBolsas = bolsaSlot
-            .split(",")
-            .map((b) => b.trim())
-            .filter(Boolean);
-
-          if (splitBolsas.length !== 1) {
-            return NextResponse.json(
-              {
-                success: false,
-                message: `Slot ${i + 1}: apenas uma bolsa é permitida por slot presencial.`,
-              },
-              { status: 400 }
-            );
-          }
-
-          const bolsaKey = normalizeText(splitBolsas[0]);
-          if (!bolsaByKey.has(bolsaKey)) {
-            return NextResponse.json(
-              {
-                success: false,
-                message: `Slot ${i + 1}: bolsa "${splitBolsas[0]}" não pertence às bolsas cadastradas do usuário (${bolsasRaw.join(", ") || "nenhuma"}).`,
-              },
-              { status: 400 }
-            );
-          }
-
-          // Canonicaliza para o nome da bolsa cadastrado na coluna Bolsa
-          presencialBolsaRow[i] = bolsaByKey.get(bolsaKey) || splitBolsas[0];
-        }
-        
         const editor = Number(getColumnValue(row, "Editor", columnMapping) || 0);
         const pending = Number(getColumnValue(row, "Pending-Access", columnMapping) || 0);
         const hp = parseHours(getColumnValue(row, "HP", columnMapping) || "0");
@@ -272,14 +188,7 @@ export async function POST(request: NextRequest) {
           }
         }
         
-        const lockAfterSave = true;
         const result = await saveScheduleRow(body.email, body.scheduleRow);
-        if (result.success) {
-          const presencialResult = await savePresencialBolsaRow(body.email, presencialBolsaRow);
-          if (!presencialResult.success) {
-            return NextResponse.json(presencialResult, { status: 400 });
-          }
-        }
         
         // Envia email ao admin notificando sobre schedule editado
         if (result.success) {
@@ -293,19 +202,19 @@ export async function POST(request: NextRequest) {
         if (!body.email) return NextResponse.json({ message: "email é obrigatório" }, { status: 400 });
         const row = await loadScheduleRow(body.email);
         if (!row || row.length === 0) return NextResponse.json({ message: "not found" }, { status: 404 });
-        const presencialBolsaRow = await loadPresencialBolsaRow(body.email);
-        return NextResponse.json({ scheduleRow: row, presencialBolsaRow: presencialBolsaRow || new Array(91).fill("") });
+        return NextResponse.json({ scheduleRow: row });
       }
       case "save-suggested-schedule": {
-        if (!body.adminEmail || !body.targetEmail || !body.scheduleRow) {
-          return NextResponse.json({ success: false, message: "adminEmail, targetEmail e scheduleRow são obrigatórios" }, { status: 400 });
-        }
-        
-        // Verifica se o adminEmail é realmente admin
-        if (!(await isAdminEmail(body.adminEmail))) {
+        // A sessão do usuário é quem define se é um admin real (não confiar no body).
+        const session = getAuthSession(request);
+        if (!session || session.role !== "admin") {
           return NextResponse.json({ success: false, message: "Apenas administradores podem definir horários" }, { status: 403 });
         }
-        
+
+        if (!body.targetEmail || !body.scheduleRow) {
+          return NextResponse.json({ success: false, message: "targetEmail e scheduleRow são obrigatórios" }, { status: 400 });
+        }
+
         // Busca dados do membro alvo
         const targetMember = await readMemberByEmail(body.targetEmail);
         if (!targetMember) {
@@ -422,12 +331,16 @@ export async function POST(request: NextRequest) {
         }
       }
       case "request-editor-access": {
-        if (!body.email) {
-          return NextResponse.json({ success: false, message: "email é obrigatório" }, { status: 400 });
+        // Só o próprio usuário logado pode solicitar o próprio acesso.
+        const session = getAuthSession(request);
+        if (!session) {
+          return NextResponse.json({ success: false, message: "Faça login para solicitar acesso de edição" }, { status: 401 });
         }
-        
+
+        const email = session.email;
+
         // Busca dados do membro
-        const member = await readMemberByEmail(body.email);
+        const member = await readMemberByEmail(email);
         if (!member) {
           return NextResponse.json({ success: false, message: "Membro não encontrado" }, { status: 404 });
         }
@@ -435,14 +348,14 @@ export async function POST(request: NextRequest) {
         const memberName = getColumnValue(member.row, "Nome", member.columnMapping) || "Usuário";
         
         // Atualiza para Pending=1 (solicita acesso)
-        const updateResult = await updateMemberAccess(body.email, 0, 1);
+        const updateResult = await updateMemberAccess(email, 0, 1);
         if (!updateResult.success) {
           return NextResponse.json({ success: false, message: updateResult.message }, { status: 500 });
         }
         
         // Envia email para o admin
         try {
-          await sendAccessRequestToAdmin(memberName, body.email);
+          await sendAccessRequestToAdmin(memberName, email);
         } catch (emailError) {
           console.error("Erro ao enviar email para admin:", emailError);
           // Não falha a requisição se o email não enviar

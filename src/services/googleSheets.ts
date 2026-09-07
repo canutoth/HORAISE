@@ -1,9 +1,5 @@
 // Serviço para integração com Google Sheets
 // Utiliza a Google Sheets API v4
-// Modo offline/desenvolvimento: quando true, não faz chamadas reais à API
-// Importante: esta flag roda no cliente; use apenas variável pública para evitar
-// mismatch de hidratação entre server/client.
-const OFFLINE_MODE = process.env.NEXT_PUBLIC_OFFLINE_MODE === "true";
 export interface ScheduleData {
   [day: number]: {
     [hour: number]: "presencial" | "ocupado" | "online" | "reuniao" | "aula" | "almoco" | null;
@@ -25,49 +21,6 @@ export interface TeamMemberData {
   hp?: string; // nova coluna HP
   ho?: string; // nova coluna HO
 }
-// Storage local para modo offline (simula um "banco de dados" em memória)
-const offlineStorage: Map<string, TeamMemberData> = new Map();
-// Dados mínimos para teste offline
-offlineStorage.set("test@test.com", {
-  name: "Usuário Teste",
-  email: "test@test.com",
-  frentes: "Frente Teste",
-  schedule: {},
-});
-const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ID || "";
-// NOTE: client-side will no longer call Google directly with an API key.
-// Reads are proxied through internal API routes which use the service account.
-const SHEET_NAME = process.env.SHEET_NAME || "Team";
-// Converte array para string separada por vírgula
-const arrayToString = (arr: string[]): string => {
-  if (!arr || arr.length === 0) return "";
-  return arr.join(", ");
-};
-// Converte string separada por vírgula para array
-const stringToArray = (str: string): string[] => {
-  if (!str || str.trim() === "") return [];
-  return str
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-};
-
-// 🎯 Easter egg: Normaliza o nome do Coutinho
-const normalizeCoutinho = (name: string, email: string): string => {
-  const nameLower = name.toLowerCase().trim();
-  const emailLower = email.toLowerCase().trim();
-  
-  // Se o nome é "daniel coutinho" OU é um dos emails dele, vira "Coutinho"
-  if (
-    nameLower === "daniel coutinho" ||
-    emailLower === "dcoutinho@inf.puc-rio.br" ||
-    emailLower === "danieljosebc@gmail.com"
-  ) {
-    return "Coutinho";
-  }
-  
-  return name;
-};
 
 // Helper para obter o valor de uma coluna pelo nome ao invés do índice
 function getColumnValue(row: string[], columnName: string, columnMapping: Map<string, number>): string {
@@ -98,13 +51,13 @@ const rowToTeamMember = (row: string[], columnMapping?: Map<string, number>): Te
       ho: "",
     };
   }
-  
+
   // Usa columnMapping para acessar por nome de coluna
   const rawName = getColumnValue(row, "Nome", columnMapping);
   const email = getColumnValue(row, "Email", columnMapping);
-  
+
   return {
-    name: normalizeCoutinho(rawName, email),
+    name: rawName,
     nickname: columnMapping.has("Apelido") ? getColumnValue(row, "Apelido", columnMapping) : "",
     email: email,
     frentes: getColumnValue(row, "Frentes", columnMapping),
@@ -117,31 +70,9 @@ const rowToTeamMember = (row: string[], columnMapping?: Map<string, number>): Te
     ho: getColumnValue(row, "HO", columnMapping),
   };
 };
-// Converte objeto TeamMemberData para linha do Google Sheets (HORAISE)
-// Formato atual: [Nome, Email, Frentes, Bolsa, Editor, Pending-Access, Pending-TimeTable, Pending-Suggestion, HP, HO] (schedule é salvo separadamente)
-const teamMemberToRow = (member: TeamMemberData): string[] => {
-  return [
-    member.name,
-    member.nickname ?? "",
-    member.email,
-    member.frentes,
-    member.bolsa ?? "",
-    String(member.editor ?? 0),
-    String(member.pendingAccess ?? 0),
-    String(member.pendingTimeTable ?? 0),
-    String(member.pendingSuggestion ?? 0),
-    member.hp ?? "",
-    member.ho ?? "",
-  ];
-};
 export async function getMemberByEmail(
   email: string
 ): Promise<TeamMemberData | null> {
-  // Modo offline: retorna dados do storage local
-  if (OFFLINE_MODE) {
-    console.log("🔌 MODO OFFLINE: Buscando membro no storage local");
-    return offlineStorage.get(email) || null;
-  }
   try {
     // Proxy the read through our server-side API to use the service account.
     const res = await fetch(`/api`, {
@@ -183,11 +114,6 @@ export async function getExampleData(): Promise<TeamMemberData> {
     frentes: "Frente Exemplo",
     schedule: {},
   };
-  // Modo offline: retorna dados de exemplo fixos
-  if (OFFLINE_MODE) {
-    console.log("🔌 MODO OFFLINE: Retornando dados de exemplo");
-    return fallback;
-  }
   try {
     const res = await fetch(`/api`, {
       method: "POST",
@@ -211,17 +137,6 @@ export async function saveMember(
   isNew: boolean = false,
   isAdmin: boolean = false
 ): Promise<{ success: boolean; message: string; errors?: string[] }> {
-  // Modo offline: salva no storage local
-  if (OFFLINE_MODE) {
-    console.log("🔌 MODO OFFLINE: Salvando membro no storage local");
-    offlineStorage.set(member.email, member);
-    return {
-      success: true,
-      message: isNew
-        ? "✅ Novo membro criado com sucesso (modo offline - dados não sincronizados)"
-        : "✅ Dados atualizados com sucesso (modo offline - dados não sincronizados)",
-    };
-  }
   try {
     // Salva os dados básicos do membro na aba Team
     const response = await fetch("/api", {
@@ -256,42 +171,10 @@ export async function saveMember(
     };
   }
 }
-export async function findMemberRow(email: string): Promise<number | null> {
-  // Modo offline: simula número de linha baseado na existência no storage
-  if (OFFLINE_MODE) {
-    console.log("🔌 MODO OFFLINE: Simulando busca de linha");
-    return offlineStorage.has(email) ? 2 : null; // Simula linha 2 se existir
-  }
-  try {
-    const res = await fetch(`/api`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "read-member", email }),
-    });
-    if (!res.ok) {
-      if (res.status === 404) return null;
-      throw new Error("Erro ao buscar dados do Google Sheets");
-    }
-    const payload = await res.json();
-    return payload.rowNumber || null;
-  } catch (error) {
-    console.error("Erro ao encontrar linha do membro:", error);
-    throw error;
-  }
-}
 // Utilidades para validação
 export function validateEmail(email: string): boolean {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email);
-}
-export function validateUrl(url: string): boolean {
-  if (!url || url.trim() === "") return true; // URLs opcionais
-  try {
-    const urlObj = new URL(url);
-    return urlObj.protocol === "http:" || urlObj.protocol === "https:";
-  } catch {
-    return false;
-  }
 }
 export function validateMemberData(member: TeamMemberData): {
   valid: boolean;
@@ -348,7 +231,7 @@ export function scheduleToInfoRow(schedule: ScheduleData): string[] {
   for (let dayUI = 0; dayUI <= 6; dayUI++) {
     // Para cada horário real (7..19)
     for (let hour = 7; hour <= 19; hour++) {
-      const status = (schedule as any)[dayUI]?.[hour] as keyof typeof STATUS_TO_CODE | null | undefined;
+      const status = schedule[dayUI]?.[hour];
       const code = status ? STATUS_TO_CODE[status] || "" : "";
       row[colIndex] = code;
       colIndex++;
@@ -365,11 +248,11 @@ export function infoRowToSchedule(infoRow: string[]): ScheduleData {
     // Para cada horário real (7..19)
     for (let hour = 7; hour <= 19; hour++) {
       const code = infoRow[colIndex]?.trim().toUpperCase();
-      if (code && (CODE_TO_STATUS as any)[code]) {
-        if (!(schedule as any)[dayUI]) {
-          (schedule as any)[dayUI] = {} as any;
+      if (code && CODE_TO_STATUS[code]) {
+        if (!schedule[dayUI]) {
+          schedule[dayUI] = {};
         }
-        (schedule as any)[dayUI][hour] = (CODE_TO_STATUS as any)[code];
+        schedule[dayUI][hour] = CODE_TO_STATUS[code];
       }
       colIndex++;
     }
@@ -379,17 +262,8 @@ export function infoRowToSchedule(infoRow: string[]): ScheduleData {
 export async function saveScheduleToSheet(
   email: string,
   schedule: ScheduleData,
-  isAdmin: boolean = false,
-  presencialBolsaRow?: string[]
+  isAdmin: boolean = false
 ): Promise<{ success: boolean; message: string; errors?: string[] }> {
-  // Modo offline: salva no storage local (já está sendo feito no saveMember)
-  if (OFFLINE_MODE) {
-    console.log("🔌 MODO OFFLINE: Schedule salvo localmente junto com memberData");
-    return {
-      success: true,
-      message: "✅ Schedule salvo (modo offline - dados não sincronizados)",
-    };
-  }
   try {
     let infoRow = scheduleToInfoRow(schedule);
     // Garantia extra: ajusta comprimento para exatamente 91 colunas (7 dias x 13 horas)
@@ -401,7 +275,7 @@ export async function saveScheduleToSheet(
     const response = await fetch("/api", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "save-schedule", email, scheduleRow: infoRow, presencialBolsaRow, isAdmin }),
+      body: JSON.stringify({ action: "save-schedule", email, scheduleRow: infoRow, isAdmin }),
     });
     if (!response.ok) {
       const error = await response.json();
@@ -422,14 +296,7 @@ export async function saveScheduleToSheet(
     };
   }
 }
-export async function loadScheduleFromSheet(
-  email: string
-): Promise<(ScheduleData & { presencialBolsaRow?: string[] }) | null> {
-  // Modo offline: retorna schedule do storage local
-  if (OFFLINE_MODE) {
-    console.log("🔌 MODO OFFLINE: Schedule carregado do storage local");
-    return null; // O schedule já vem junto com o memberData
-  }
+export async function loadScheduleFromSheet(email: string): Promise<ScheduleData | null> {
   try {
     const response = await fetch(`/api`, {
       method: "POST",
@@ -442,22 +309,13 @@ export async function loadScheduleFromSheet(
     }
     const payload = await response.json();
     if (!payload || !payload.scheduleRow) return null;
-    const schedule = infoRowToSchedule(payload.scheduleRow);
-    if (payload.presencialBolsaRow && Array.isArray(payload.presencialBolsaRow)) {
-      (schedule as ScheduleData & { presencialBolsaRow?: string[] }).presencialBolsaRow = payload.presencialBolsaRow;
-    }
-    return schedule;
+    return infoRowToSchedule(payload.scheduleRow);
   } catch (error) {
     console.error("Erro ao carregar schedule:", error);
     return null;
   }
 }
 export async function getAllMembers(): Promise<TeamMemberData[]> {
-  // Modo offline: retorna dados do storage local
-  if (OFFLINE_MODE) {
-    console.log("🔌 MODO OFFLINE: Retornando membros do storage local");
-    return Array.from(offlineStorage.values());
-  }
   try {
     const res = await fetch(`/api`, {
       method: "POST",
@@ -471,19 +329,19 @@ export async function getAllMembers(): Promise<TeamMemberData[]> {
     if (!payload || !payload.members) return [];
     // Primeira linha é o cabeçalho
     if (payload.members.length === 0) return [];
-    
+
     const headerRow = payload.members[0];
     const columnMapping = new Map<string, number>();
     headerRow.forEach((col: string, idx: number) => {
       columnMapping.set(col, idx);
     });
-    
+
     // Converte cada linha para TeamMemberData (pula o cabeçalho)
     const members: TeamMemberData[] = [];
     for (let i = 1; i < payload.members.length; i++) {
       const row = payload.members[i];
       const memberData = rowToTeamMember(row, columnMapping);
-          
+
           // Extrai o schedule a partir da coluna após HO
           const hoIndex = columnMapping.get("HO");
           if (hoIndex === undefined) continue;
@@ -503,43 +361,27 @@ export async function getAllMembers(): Promise<TeamMemberData[]> {
   }
 }
 
-export async function getBacklogOptions(): Promise<{ 
-  frentes: Array<{ name: string; emoji: string }>; 
-  bolsas: Array<{ name: string; color: string }> 
+export async function getBacklogOptions(): Promise<{
+  frentes: Array<{ name: string; emoji: string }>;
+  bolsas: Array<{ name: string; color: string }>
 }> {
-  // Modo offline: retorna opções fixas
-  if (OFFLINE_MODE) {
-    console.log("🔌 MODO OFFLINE: Retornando opções do backlog fixas");
-    return {
-      frentes: [
-        { name: "Frente Teste 1", emoji: "🧪" },
-        { name: "Frente Teste 2", emoji: "🔬" },
-      ],
-      bolsas: [
-        { name: "PIBIC", color: "#4A90E2" },
-        { name: "STONE", color: "#50C878" },
-        { name: "Voluntário", color: "#FFA500" },
-      ],
-    };
-  }
-  
   try {
     const res = await fetch(`/api`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "read-backlog-options" }),
     });
-    
+
     if (!res.ok) {
       throw new Error("Erro ao buscar opções do backlog");
     }
-    
+
     const payload = await res.json();
-    
+
     if (!payload || !payload.frentes || !payload.bolsas) {
       return { frentes: [], bolsas: [] };
     }
-    
+
     return {
       frentes: payload.frentes,
       bolsas: payload.bolsas,
@@ -547,39 +389,6 @@ export async function getBacklogOptions(): Promise<{
   } catch (error) {
     console.error("Erro ao buscar opções do backlog:", error);
     return { frentes: [], bolsas: [] };
-  }
-}
-/**
- * Carrega o schedule sugerido pelo admin da aba SUGGESTED
- */
-export async function loadSuggestedScheduleFromSheet(
-  email: string
-): Promise<ScheduleData | null> {
-  // Modo offline: retorna null
-  if (OFFLINE_MODE) {
-    console.log("🔌 MODO OFFLINE: Sugestões não disponíveis no modo offline");
-    return null;
-  }
-  
-  try {
-    const response = await fetch(`/api`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "load-suggested-schedule", email }),
-    });
-    
-    if (!response.ok) {
-      if (response.status === 404) return null;
-      throw new Error("Erro ao carregar sugestão de schedule");
-    }
-    
-    const payload = await response.json();
-    if (!payload || !payload.scheduleRow) return null;
-    
-    return infoRowToSchedule(payload.scheduleRow);
-  } catch (error) {
-    console.error("Erro ao carregar sugestão de schedule:", error);
-    return null;
   }
 }
 
@@ -591,35 +400,27 @@ export async function saveSuggestedSchedule(
   targetEmail: string,
   schedule: ScheduleData
 ): Promise<{ success: boolean; message: string }> {
-  // Modo offline: não permitido
-  if (OFFLINE_MODE) {
-    return {
-      success: false,
-      message: "Sugestões não disponíveis no modo offline"
-    };
-  }
-  
   try {
     let infoRow = scheduleToInfoRow(schedule);
-    
+
     // Garantia: ajusta comprimento para exatamente 91 colunas
     if (infoRow.length < 91) {
       infoRow = [...infoRow, ...new Array(91 - infoRow.length).fill("")];
     } else if (infoRow.length > 91) {
       infoRow = infoRow.slice(0, 91);
     }
-    
+
     const response = await fetch("/api", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        action: "save-suggested-schedule", 
-        adminEmail, 
-        targetEmail, 
-        scheduleRow: infoRow 
+      body: JSON.stringify({
+        action: "save-suggested-schedule",
+        adminEmail,
+        targetEmail,
+        scheduleRow: infoRow
       }),
     });
-    
+
     if (!response.ok) {
       const error = await response.json();
       return {
@@ -627,7 +428,7 @@ export async function saveSuggestedSchedule(
         message: error.message || "Erro ao salvar sugestão"
       };
     }
-    
+
     const result = await response.json();
     return result;
   } catch (error) {
@@ -645,21 +446,13 @@ export async function saveSuggestedSchedule(
 export async function acceptSuggestedSchedule(
   email: string
 ): Promise<{ success: boolean; message: string }> {
-  // Modo offline: não permitido
-  if (OFFLINE_MODE) {
-    return {
-      success: false,
-      message: "Sugestões não disponíveis no modo offline"
-    };
-  }
-  
   try {
     const response = await fetch("/api", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "accept-suggested-schedule", email }),
     });
-    
+
     if (!response.ok) {
       const error = await response.json();
       return {
@@ -667,7 +460,7 @@ export async function acceptSuggestedSchedule(
         message: error.message || "Erro ao aceitar sugestão"
       };
     }
-    
+
     const result = await response.json();
     return result;
   } catch (error) {

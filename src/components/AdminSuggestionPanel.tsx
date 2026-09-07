@@ -53,7 +53,19 @@ type ScheduleData = {
   };
 };
 
+type SuggestionMember = {
+  name: string;
+  nickname: string;
+  email: string;
+  frentes: string;
+  bolsa: string;
+  hp: number;
+  ho: number;
+  schedule: ScheduleData;
+};
+
 type AdminSuggestionPanelProps = {
+  adminEmail: string;
   frentesOptions: { value: string; label: string }[];
   bolsasOptions: { value: string; label: string; color: string }[];
   initialTargetEmail?: string;
@@ -61,6 +73,7 @@ type AdminSuggestionPanelProps = {
 };
 
 export function AdminSuggestionPanel({
+  adminEmail,
   frentesOptions,
   bolsasOptions,
   initialTargetEmail,
@@ -70,7 +83,7 @@ export function AdminSuggestionPanel({
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [members, setMembers] = useState<any[]>([]);
+  const [members, setMembers] = useState<SuggestionMember[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [error, setError] = useState<string>("");
   const [frentesEmojis, setFrentesEmojis] = useState<Record<string, string>>({});
@@ -139,17 +152,20 @@ export function AdminSuggestionPanel({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "read-backlog-options" }),
         });
-        const data = await response.json();
+        const data = (await response.json()) as {
+          frentes?: Array<{ name: string; emoji: string }>;
+          bolsas?: Array<{ name: string; color: string }>;
+        };
 
         if (response.ok) {
           const emojiMap: Record<string, string> = {};
-          (data.frentes || []).forEach((f: any) => {
+          (data.frentes || []).forEach((f) => {
             emojiMap[f.name] = f.emoji;
           });
           setFrentesEmojis(emojiMap);
 
           const colorMap: Record<string, string> = {};
-          (data.bolsas || []).forEach((b: any) => {
+          (data.bolsas || []).forEach((b) => {
             colorMap[b.name] = b.color;
           });
           setBolsasColors(colorMap);
@@ -166,20 +182,12 @@ export function AdminSuggestionPanel({
       try {
         setLoading(true);
 
-        // Verificar se o admin está logado
-        const adminEmailCheck = sessionStorage.getItem("adminEmail");
-
-        if (!adminEmailCheck) {
-          setError("Admin não autenticado. Por favor, faça login novamente.");
-          return;
-        }
-
         const response = await fetch("/api/admin", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "read-all-members" }),
         });
-        const data = await response.json();
+        const data = (await response.json()) as { members?: string[][] };
 
         if (response.ok && data.members && data.members.length > 0) {
           const headerRow = data.members[0];
@@ -191,14 +199,14 @@ export function AdminSuggestionPanel({
             }
           });
 
-          const getColumnValue = (row: any[], columnName: string): any => {
+          const getColumnValue = (row: string[], columnName: string): string => {
             const index = columnMapping.get(columnName);
             return index !== undefined ? row[index] : "";
           };
 
           const mappedMembers = data.members
             .slice(1)
-            .map((row: any) => {
+            .map((row: string[]): SuggestionMember => {
               const name = getColumnValue(row, "Nome");
               const nickname = getColumnValue(row, "Apelido");
               const email = getColumnValue(row, "Email");
@@ -208,7 +216,7 @@ export function AdminSuggestionPanel({
               const ho = parseInt(getColumnValue(row, "HO")) || 0;
 
               // Parsear schedule
-              const schedule: any = {};
+              const schedule: ScheduleData = {};
               const dayNames = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
               for (let day = 0; day < 7; day++) {
@@ -231,9 +239,9 @@ export function AdminSuggestionPanel({
 
               return { name, nickname, email, frentes, bolsa, hp, ho, schedule };
             })
-            .filter((m: any) => m.email && m.name);
+            .filter((m: SuggestionMember) => m.email && m.name);
 
-          const sorted = mappedMembers.sort((a: any, b: any) => a.name.localeCompare(b.name));
+          const sorted = mappedMembers.sort((a, b) => a.name.localeCompare(b.name));
           setMembers(sorted);
         }
       } catch (e) {
@@ -367,7 +375,7 @@ export function AdminSuggestionPanel({
       return;
     }
 
-    const currentAdminEmail = typeof window !== 'undefined' ? sessionStorage.getItem("adminEmail") : null;
+    const currentAdminEmail = adminEmail;
 
     if (!currentAdminEmail) {
       notifications.show({
@@ -570,16 +578,17 @@ export function AdminSuggestionPanel({
 
   const hourCounts = useMemo(() => {
     const counts = { aula: 0, online: 0, presencial: 0, reuniao: 0, almoco: 0 };
-    if (schedule) {
-      Object.values(schedule).forEach((daySlots: any) => {
-        Object.values(daySlots).forEach((status: any) => {
-          if (status === 'aula') counts.aula++;
-          else if (status === 'online') counts.online++;
-          else if (status === 'presencial') counts.presencial++;
-          else if (status === 'reuniao') counts.reuniao++;
-          else if (status === 'almoco') counts.almoco++;
-        });
-      });
+    for (let day = 0; day < 7; day++) {
+      const daySlots = schedule[day];
+      if (!daySlots) continue;
+      for (let hour = 7; hour <= 19; hour++) {
+        const status = daySlots[hour];
+        if (status === 'aula') counts.aula++;
+        else if (status === 'online') counts.online++;
+        else if (status === 'presencial') counts.presencial++;
+        else if (status === 'reuniao') counts.reuniao++;
+        else if (status === 'almoco') counts.almoco++;
+      }
     }
     return counts;
   }, [schedule]);

@@ -30,7 +30,7 @@ export async function sendAdminNotification(newMemberName: string, newMemberEmai
           <li>Liberar acesso ao editor</li>
         </ul>
         <br/>
-        <a href="${BASE_URL}/horaise-admin" style="background: #52afe1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Ver Painel Admin</a>
+        <a href="${BASE_URL}/login" style="background: #52afe1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Entrar no Painel Admin</a>
       </div>
     `,
   };
@@ -53,14 +53,14 @@ export async function sendScheduleEditedToAdmin(userName: string, userEmail: str
         <br/>
         <p>Acesse o painel de administração para revisar e aprovar as alterações.</p>
         <br/>
-        <a href="${BASE_URL}/horaise-admin" style="background: #52afe1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Ver Painel Admin</a>
+        <a href="${BASE_URL}/login" style="background: #52afe1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Entrar no Painel Admin</a>
       </div>
     `,
   };
   await transporter.sendMail(mailOptions);
 }
 
-export async function sendScheduleApprovedToUser(userEmail: string, userName: string, keepEditor: boolean) {
+export async function sendScheduleApprovedToUser(userEmail: string, userName: string) {
   const mailOptions = {
     from: `"HORAISE" <${process.env.SMTP_USER}>`,
     to: userEmail,
@@ -70,7 +70,7 @@ export async function sendScheduleApprovedToUser(userEmail: string, userName: st
         <h3>Olá, ${userName}!</h3>
         <p>Seu schedule foi aprovado pelo administrador.</p>
         <br/>
-        <a href="${BASE_URL}/horaise-viewer" style="background: #52afe1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Ver Meu Schedule</a>
+        <a href="${BASE_URL}/edit-content/${encodeURIComponent(userEmail)}" style="background: #52afe1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Ver Meu Schedule</a>
       </div>
     `,
   };
@@ -93,7 +93,7 @@ export async function sendAccessRequestToAdmin(userName: string, userEmail: stri
         <p>Este usuário está solicitando permissão para editar sua agenda.</p>
         <br/>
         <a href="${approveUrl}" style="background: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; margin-right: 10px;">Liberar Acesso</a>
-        <a href="${BASE_URL}/horaise-admin" style="background: #52afe1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Ver Painel Admin</a>
+        <a href="${BASE_URL}/login" style="background: #52afe1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Entrar no Painel Admin</a>
       </div>
     `,
   };
@@ -116,7 +116,7 @@ export async function sendAccessGrantedToUser(userEmail: string, userName: strin
           <strong>⚠️ Lembre-se:</strong> Após clicar em "Salvar Alterações" na sua agenda, seu acesso de edição será bloqueado automaticamente. Para editar novamente no futuro, solicite nova liberação ao administrador.
         </div>
         <br/>
-        <a href="${BASE_URL}/horaise-editor" style="background: #52afe1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Acessar Editor</a>
+        <a href="${BASE_URL}/edit-content/${encodeURIComponent(userEmail)}" style="background: #52afe1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Acessar Editor</a>
       </div>
     `,
   };
@@ -133,7 +133,7 @@ export async function sendSuggestionToUser(userEmail: string, userName: string) 
   console.log(`[sendSuggestionToUser] Iniciando envio para ${userEmail}`);
   console.log(`[SMTP Config] Host: ${process.env.SMTP_HOST}, Port: ${process.env.SMTP_PORT}, User: ${process.env.SMTP_USER}`);
   
-  const viewerUrl = `${BASE_URL}/horaise-viewer?personid=${encodeURIComponent(userEmail)}`;
+  const viewerUrl = `${BASE_URL}/edit-content/${encodeURIComponent(userEmail)}`;
   
   const mailOptions = {
     from: `"HORAISE" <${process.env.SMTP_USER}>`,
@@ -186,7 +186,7 @@ export async function sendExceptionRequestToAdmin(userName: string, userEmail: s
           <li>❌ Rejeitar e solicitar ajustes ao usuário</li>
         </ul>
         <br/>
-        <a href="${BASE_URL}/horaise-admin/dashboard" style="background: #ffc107; color: #333; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Ver Solicitação no Painel</a>
+        <a href="${BASE_URL}/admin" style="background: #ffc107; color: #333; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Ver Solicitação no Painel</a>
       </div>
     `,
   };
@@ -203,26 +203,7 @@ export async function sendExceptionApprovedToUser(userEmail: string, userName: s
         <h3>Olá, ${userName}!</h3>
         <p>O administrador analisou sua solicitação de exceção de horário e <strong>aprovou</strong> seu schedule.</p>
         <br/>
-        <a href="${BASE_URL}/horaise-viewer" style="background: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Ver Meu Schedule</a>
-      </div>
-    `,
-  };
-  await transporter.sendMail(mailOptions);
-}
-
-export async function sendExceptionRejectedToUser(userEmail: string, userName: string, reason?: string) {
-  const mailOptions = {
-    from: `"HORAISE" <${process.env.SMTP_USER}>`,
-    to: userEmail,
-    subject: `❌ Sua exceção de horário não foi aprovada`,
-    html: `
-      <div style="font-family: Arial, sans-serif; color: #333;">
-        <h3>Olá, ${userName}!</h3>
-        <p>O administrador analisou sua solicitação de exceção de horário e <strong>não aprovou</strong> as alterações.</p>
-        ${reason ? `<p><strong>Motivo:</strong> ${reason}</p>` : ""}
-        <p>Por favor, ajuste seu horário para cumprir as regras estabelecidas ou entre em contato com o administrador.</p>
-        <br/>
-        <a href="${BASE_URL}/horaise-editor" style="background: #52afe1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Editar Horário</a>
+        <a href="${BASE_URL}/edit-content/${encodeURIComponent(userEmail)}" style="background: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Ver Meu Schedule</a>
       </div>
     `,
   };
@@ -239,7 +220,7 @@ export async function sendUserApproval(userEmail: string, userName: string) {
         <p>Seu perfil foi validado pelo administrador.</p>
         <p>Você já pode acessar o HORAISE para preencher seus horários.</p>
         <br/>
-        <a href="${BASE_URL}/horaise-editor" style="background: #52afe1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Preencher Horários</a>
+        <a href="${BASE_URL}/edit-content/${encodeURIComponent(userEmail)}" style="background: #52afe1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Preencher Horários</a>
       </div>
     `,
   };
@@ -262,7 +243,7 @@ export async function sendProfileChangeToUser(userEmail: string, userName: strin
         </div>
         <p>Se você tiver alguma dúvida sobre essa alteração, entre em contato com o administrador.</p>
         <br/>
-        <a href="${BASE_URL}/horaise-editor" style="background: #52afe1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Ver Meu Perfil</a>
+        <a href="${BASE_URL}/edit-content/${encodeURIComponent(userEmail)}" style="background: #52afe1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Ver Meu Perfil</a>
       </div>
     `,
   };
