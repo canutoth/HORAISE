@@ -294,35 +294,6 @@ export function validateWorkingHoursRange(
     });
     
     if (violatingHours.length > 0) {
-      // Agrupa horários consecutivos para mostrar ranges
-      const ranges: string[] = [];
-      let rangeStart = violatingHours[0];
-      let rangeEnd = violatingHours[0];
-      
-      for (let i = 1; i < violatingHours.length; i++) {
-        if (violatingHours[i] === rangeEnd + 1) {
-          // Horário consecutivo, expande o range
-          rangeEnd = violatingHours[i];
-        } else {
-          // Quebra na sequência, finaliza o range atual
-          if (rangeStart === rangeEnd) {
-            ranges.push(`${rangeStart}h`);
-          } else {
-            ranges.push(`${rangeStart}-${rangeEnd + 1}h`);
-          }
-          rangeStart = violatingHours[i];
-          rangeEnd = violatingHours[i];
-        }
-      }
-      
-      // Adiciona o último range
-      if (rangeStart === rangeEnd) {
-        ranges.push(`${rangeStart}h`);
-      } else {
-        ranges.push(`${rangeStart}-${rangeEnd + 1}h`);
-      }
-      
-      const rangesStr = ranges.join(", ");
       errors.push(
         `${dayNames[day]}: Você preencheu horários de trabalho fora do range permitido (${inicio}-${fim}h).`
       );

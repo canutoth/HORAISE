@@ -1,10 +1,9 @@
-import { google } from "googleapis";
+import { google, type sheets_v4 } from "googleapis";
 const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ID || "";
 const SHEET_NAME = process.env.SHEET_NAME || "INFO";
 const BACKLOG_SHEET_NAME = process.env.BACKLOG_SHEET_NAME || "BACKLOG";
 const RULES_SHEET_NAME = process.env.RULES_SHEET_NAME || "RULES";
-const SUGGESTED_SHEET_NAME = process.env.SUGGESTED_SHEET_NAME || "SUGGESTION";
-const PRESENCIAL_BOLSA_SHEET_NAME = process.env.PRESENCIAL_BOLSA_SHEET_NAME || "PRESENCIAL_BOLSA";
+const SUGGESTED_SHEET_NAME = process.env.SUGGESTED_SHEET_NAME || "SUGGESTED";
 
 // Cache para o mapeamento de colunas (para não precisar buscar toda vez)
 let columnMappingCache: Map<string, number> | null = null;
@@ -13,7 +12,7 @@ let columnMappingCache: Map<string, number> | null = null;
  * Lê o cabeçalho da planilha e retorna um Map de nome da coluna -> índice
  * Usa cache para evitar múltiplas leituras
  */
-export async function getColumnMapping(sheets: any, forceRefresh = false): Promise<Map<string, number>> {
+export async function getColumnMapping(sheets: sheets_v4.Sheets, forceRefresh = false): Promise<Map<string, number>> {
   if (columnMappingCache && !forceRefresh) {
     return columnMappingCache;
   }
@@ -81,7 +80,7 @@ export function escapeSheetName(name: string): string {
   if (!name) return name;
   return `'${name.replace(/'/g, "''")}'`;
 }
-export async function getGoogleAuthClient() {
+export async function getGoogleAuthClient(): Promise<InstanceType<typeof google.auth.OAuth2>> {
   const GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL || "";
   const GOOGLE_PRIVATE_KEY = (process.env.GOOGLE_PRIVATE_KEY || "").replace(/\\n/g, "\n");
   if (!GOOGLE_CLIENT_EMAIL || !GOOGLE_PRIVATE_KEY) {
@@ -94,19 +93,19 @@ export async function getGoogleAuthClient() {
       "https://www.googleapis.com/auth/drive.readonly",
     ],
   });
-  return auth.getClient();
+  return (await auth.getClient()) as InstanceType<typeof google.auth.OAuth2>;
 }
 export async function getSheetsClient() {
   const client = await getGoogleAuthClient();
-  const sheets = google.sheets({ version: "v4", auth: client as any });
+  const sheets = google.sheets({ version: "v4", auth: client });
   return { sheets };
 }
 export async function getDriveClient() {
   const client = await getGoogleAuthClient();
-  const drive = google.drive({ version: "v3", auth: client as any });
+  const drive = google.drive({ version: "v3", auth: client });
   return { drive };
 }
-export async function findRowByEmail(sheets: any, email: string): Promise<number | null> {
+export async function findRowByEmail(sheets: sheets_v4.Sheets, email: string): Promise<number | null> {
   const sheetRef = escapeSheetName(SHEET_NAME);
   const columnMapping = await getColumnMapping(sheets);
   const emailIndex = getColumnIndex("Email", columnMapping);
@@ -375,7 +374,11 @@ export async function getAdminEmailsFromSheet(): Promise<string[]> {
     supportsAllDrives: true,
   });
 
-  return (res.data.permissions || [])
+  const permissionData = res.data as {
+    permissions?: Array<{ type?: string; emailAddress?: string | null; role?: string }>;
+  };
+
+  return (permissionData.permissions || [])
     .filter(
       (p) =>
         p.type === "user" &&
@@ -642,102 +645,6 @@ export async function readRulesFromSheet(): Promise<{
 }
 
 /**
- * Salva um schedule sugerido pelo admin na aba SUGGESTED
- * A aba SUGGESTED tem colunas: Email (A) + 91 colunas de schedule (B..CL)
- * @param targetEmail Email do membro que receberá a sugestão
- * @param scheduleRow Array com 91 valores do schedule sugerido
- */
-export async function saveSuggestedSchedule(targetEmail: string, scheduleRow: string[]) {
-  const { sheets } = await getSheetsClient();
-  const suggestedSheetName = escapeSheetName(SUGGESTED_SHEET_NAME);
-  
-  // Busca se já existe uma sugestão para este email
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${suggestedSheetName}!A:A`,
-  });
-  
-  const rows = res.data.values || [];
-  let rowNumber: number | null = null;
-  
-  // Procura pelo email (pula cabeçalho na linha 1)
-  for (let i = 1; i < rows.length; i++) {
-    if (rows[i][0]?.toLowerCase() === targetEmail.toLowerCase()) {
-      rowNumber = i + 1;
-      break;
-    }
-  }
-  
-  // Prepara a linha completa: [Email, ...scheduleRow]
-  const fullRow = [targetEmail, ...scheduleRow];
-  
-  console.log(`saveSuggestedSchedule: scheduleRow length=${scheduleRow.length}, fullRow length=${fullRow.length}`);
-  
-  if (fullRow.length !== 92) {
-    console.error(`ERRO: fullRow deveria ter 92 elementos (1 email + 91 schedule) mas tem ${fullRow.length}`);
-  }
-  
-  if (rowNumber) {
-    // Atualiza a linha existente
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${suggestedSheetName}!A${rowNumber}:CN${rowNumber}`,
-      valueInputOption: "RAW",
-      requestBody: { values: [fullRow] },
-    });
-  } else {
-    // Adiciona nova linha
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${suggestedSheetName}!A:CN`,
-      valueInputOption: "RAW",
-      requestBody: { values: [fullRow] },
-    });
-  }
-  
-  // Marca Pending-Suggestion=1 E concede acesso de edição (Editor=1) na aba principal
-  const mainRowNumber = await findRowByEmail(sheets, targetEmail);
-  if (mainRowNumber) {
-    const mainSheetRef = escapeSheetName(SHEET_NAME);
-    const mainColumnMapping = await getColumnMapping(sheets);
-    
-    const pendingSuggestionIndex = getColumnIndex("Pending-Suggestion", mainColumnMapping);
-    const pendingSuggestionCol = columnIndexToLetter(pendingSuggestionIndex);
-    
-    const editorIndex = getColumnIndex("Editor", mainColumnMapping);
-    const editorCol = columnIndexToLetter(editorIndex);
-    
-    const pendingAccessIndex = getColumnIndex("Pending-Access", mainColumnMapping);
-    const pendingAccessCol = columnIndexToLetter(pendingAccessIndex);
-    
-    // Atualiza Pending-Suggestion=1
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${mainSheetRef}!${pendingSuggestionCol}${mainRowNumber}`,
-      valueInputOption: "RAW",
-      requestBody: { values: [[1]] },
-    });
-    
-    // Concede acesso de edição (Editor=1, Pending-Access=0)
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${mainSheetRef}!${editorCol}${mainRowNumber}`,
-      valueInputOption: "RAW",
-      requestBody: { values: [[1]] },
-    });
-    
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${mainSheetRef}!${pendingAccessCol}${mainRowNumber}`,
-      valueInputOption: "RAW",
-      requestBody: { values: [[0]] },
-    });
-  }
-  
-  return { success: true, message: "Sugestão de horário salva com sucesso." };
-}
-
-/**
  * Carrega o schedule sugerido da aba SUGGESTED
  * @param email Email do membro
  * @returns Array com 91 valores do schedule sugerido ou null se não existir
@@ -762,72 +669,6 @@ export async function loadSuggestedSchedule(email: string): Promise<string[] | n
     }
   }
   
-  return null;
-}
-
-/**
- * Salva o detalhamento por bolsa dos slots presenciais na aba PRESENCIAL_BOLSA
- * Formato: Email (A) + 91 colunas de schedule (B..CN)
- */
-export async function savePresencialBolsaRow(email: string, presencialBolsaRow: string[]) {
-  const { sheets } = await getSheetsClient();
-  const presencialBolsaSheetName = escapeSheetName(PRESENCIAL_BOLSA_SHEET_NAME);
-
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${presencialBolsaSheetName}!A:A`,
-  });
-
-  const rows = res.data.values || [];
-  let rowNumber: number | null = null;
-
-  for (let i = 1; i < rows.length; i++) {
-    if (rows[i][0]?.toLowerCase() === email.toLowerCase()) {
-      rowNumber = i + 1;
-      break;
-    }
-  }
-
-  const fullRow = [email, ...presencialBolsaRow];
-
-  if (rowNumber) {
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${presencialBolsaSheetName}!A${rowNumber}:CN${rowNumber}`,
-      valueInputOption: "RAW",
-      requestBody: { values: [fullRow] },
-    });
-  } else {
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${presencialBolsaSheetName}!A:CN`,
-      valueInputOption: "RAW",
-      requestBody: { values: [fullRow] },
-    });
-  }
-
-  return { success: true, message: "Detalhamento presencial por bolsa salvo com sucesso." };
-}
-
-/**
- * Carrega o detalhamento por bolsa dos slots presenciais da aba PRESENCIAL_BOLSA
- */
-export async function loadPresencialBolsaRow(email: string): Promise<string[] | null> {
-  const { sheets } = await getSheetsClient();
-  const presencialBolsaSheetName = escapeSheetName(PRESENCIAL_BOLSA_SHEET_NAME);
-
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${presencialBolsaSheetName}!A:CN`,
-  });
-
-  const rows = res.data.values || [];
-  for (let i = 1; i < rows.length; i++) {
-    if (rows[i][0]?.toLowerCase() === email.toLowerCase()) {
-      return rows[i].slice(1, 92);
-    }
-  }
-
   return null;
 }
 
@@ -919,7 +760,7 @@ export async function acceptSuggestedSchedule(email: string) {
 /**
  * Encontra o número da linha (1-based) de um email na coluna A de uma aba
  */
-async function findRowByEmailInColumnA(sheets: any, sheetName: string, email: string): Promise<number | null> {
+async function findRowByEmailInColumnA(sheets: sheets_v4.Sheets, sheetName: string, email: string): Promise<number | null> {
   const sheetRef = escapeSheetName(sheetName);
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
@@ -937,12 +778,12 @@ async function findRowByEmailInColumnA(sheets: any, sheetName: string, email: st
 /**
  * Deleta a linha (1-based) de uma aba da planilha
  */
-async function deleteRowFromSheet(sheets: any, sheetName: string, rowNumber: number) {
+async function deleteRowFromSheet(sheets: sheets_v4.Sheets, sheetName: string, rowNumber: number) {
   const spreadsheet = await sheets.spreadsheets.get({
     spreadsheetId: SPREADSHEET_ID,
   });
   const sheet = spreadsheet.data.sheets?.find(
-    (s: any) => s.properties?.title === sheetName
+    (s) => s.properties?.title === sheetName
   );
   const sheetId = sheet?.properties?.sheetId;
   if (sheetId === undefined) {
@@ -969,7 +810,7 @@ async function deleteRowFromSheet(sheets: any, sheetName: string, rowNumber: num
 }
 
 /**
- * Deleta um membro de todas as abas onde ele aparece (INFO e SUGGESTION)
+ * Deleta um membro de todas as abas onde ele aparece (INFO e SUGGESTED)
  * @param email Email do membro
  */
 export async function deleteMemberRow(email: string) {
@@ -982,23 +823,15 @@ export async function deleteMemberRow(email: string) {
 
   await deleteRowFromSheet(sheets, SHEET_NAME, rowNumber);
 
-  // Remove também a linha da aba SUGGESTION, se existir
+  // Remove também a linha da aba SUGGESTED, se existir
   try {
     const suggestedRowNumber = await findRowByEmailInColumnA(sheets, SUGGESTED_SHEET_NAME, email);
     if (suggestedRowNumber) {
       await deleteRowFromSheet(sheets, SUGGESTED_SHEET_NAME, suggestedRowNumber);
     }
   } catch {
-    // Aba SUGGESTION não existe nesta planilha
+    // Aba SUGGESTED não existe nesta planilha
   }
 
   return { success: true, message: "Membro excluído com sucesso" };
 }
-
-export const sheetsConstants = {
-  SPREADSHEET_ID,
-  SHEET_NAME,
-  BACKLOG_SHEET_NAME,
-  SUGGESTED_SHEET_NAME,
-  PRESENCIAL_BOLSA_SHEET_NAME,
-};
