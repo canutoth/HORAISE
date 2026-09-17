@@ -481,8 +481,13 @@ export async function POST(request: NextRequest) {
           }
           
           // Envia email ao admin notificando sobre a exceção solicitada
-          const { sendExceptionRequestToAdmin } = await import("../../server/email");
-          await sendExceptionRequestToAdmin(memberName, body.email, body.violations);
+          // Falha no email não deve impedir a solicitação, que já foi salva
+          try {
+            const { sendExceptionRequestToAdmin } = await import("../../server/email");
+            await sendExceptionRequestToAdmin(memberName, body.email, body.violations);
+          } catch (emailError) {
+            console.error("Erro ao enviar email de exceção para admin:", emailError);
+          }
           
           return NextResponse.json({ 
             success: true, 

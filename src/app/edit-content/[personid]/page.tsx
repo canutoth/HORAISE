@@ -705,7 +705,7 @@ export default function EditContentPage() {
         });
         setSavedSchedule(cloneSchedule(schedule));
         if (memberData) {
-          setMemberData({ ...memberData, pendingTimeTable: 1 });
+          setMemberData({ ...memberData, pendingTimeTable: 2 });
         }
       } else {
         notifications.show({ 
