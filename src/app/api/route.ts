@@ -129,94 +129,93 @@ export async function POST(request: NextRequest) {
 
         const scheduleRowNormalized = body.scheduleRow.map((c) => (c || "").toString().trim().toUpperCase());
 
-        let presencialBolsaRow: string[] | undefined = body.presencialBolsaRow?.map((c) => (c || "").toString().trim());
+        // O detalhamento de bolsa por slot presencial (aba PRESENCIAL_BOLSA) é complementar
+        // ao schedule. Como o editor ainda não possui UI para preencher isso, ele só é
+        // validado/salvo quando o cliente envia explicitamente. Caso contrário, nunca
+        // deve bloquear (nem falhar) o salvamento do schedule.
+        const hasExplicitPresencialBolsa = Array.isArray(body.presencialBolsaRow) && body.presencialBolsaRow.length > 0;
 
-        // Fallback compatível com clientes antigos:
-        // - se houver uma única bolsa cadastrada, preenche automaticamente todos os slots P.
-        // - se houver múltiplas bolsas, exige explícito presencialBolsaRow.
-        if (!presencialBolsaRow || presencialBolsaRow.length === 0) {
-          const hasPresencialSlot = scheduleRowNormalized.some((status) => status === "P");
-          if (!hasPresencialSlot) {
-            presencialBolsaRow = new Array(91).fill("");
-          } else if (bolsasRaw.length === 1) {
-            presencialBolsaRow = scheduleRowNormalized.map((status) => (status === "P" ? bolsasRaw[0] : ""));
-          } else {
+        let presencialBolsaRow: string[] | undefined;
+
+        if (hasExplicitPresencialBolsa) {
+          presencialBolsaRow = body.presencialBolsaRow!.map((c) => (c || "").toString().trim());
+
+          if (presencialBolsaRow.length !== 91) {
             return NextResponse.json(
               {
                 success: false,
-                message:
-                  "presencialBolsaRow é obrigatório quando há slots presenciais e o usuário possui mais de uma bolsa.",
+                message: "presencialBolsaRow deve ter exatamente 91 posições.",
               },
               { status: 400 }
             );
           }
-        }
 
-        if (!Array.isArray(presencialBolsaRow) || presencialBolsaRow.length !== 91) {
-          return NextResponse.json(
-            {
-              success: false,
-              message: "presencialBolsaRow deve ter exatamente 91 posições.",
-            },
-            { status: 400 }
-          );
-        }
+          for (let i = 0; i < 91; i++) {
+            const statusCode = scheduleRowNormalized[i] || "";
+            const bolsaSlot = (presencialBolsaRow[i] || "").trim();
 
-        for (let i = 0; i < 91; i++) {
-          const statusCode = scheduleRowNormalized[i] || "";
-          const bolsaSlot = (presencialBolsaRow[i] || "").trim();
+            if (statusCode !== "P") {
+              if (bolsaSlot !== "") {
+                return NextResponse.json(
+                  {
+                    success: false,
+                    message: `Slot ${i + 1}: quando status != P, a célula correspondente em PRESENCIAL_BOLSA deve estar vazia.`,
+                  },
+                  { status: 400 }
+                );
+              }
+              continue;
+            }
 
-          if (statusCode !== "P") {
-            if (bolsaSlot !== "") {
+            if (!bolsaSlot) {
               return NextResponse.json(
                 {
                   success: false,
-                  message: `Slot ${i + 1}: quando status != P, a célula correspondente em PRESENCIAL_BOLSA deve estar vazia.`,
+                  message: `Slot ${i + 1}: quando status == P, a bolsa é obrigatória.`,
                 },
                 { status: 400 }
               );
             }
-            continue;
+
+            const splitBolsas = bolsaSlot
+              .split(",")
+              .map((b) => b.trim())
+              .filter(Boolean);
+
+            if (splitBolsas.length !== 1) {
+              return NextResponse.json(
+                {
+                  success: false,
+                  message: `Slot ${i + 1}: apenas uma bolsa é permitida por slot presencial.`,
+                },
+                { status: 400 }
+              );
+            }
+
+            const bolsaKey = normalizeText(splitBolsas[0]);
+            if (!bolsaByKey.has(bolsaKey)) {
+              return NextResponse.json(
+                {
+                  success: false,
+                  message: `Slot ${i + 1}: bolsa "${splitBolsas[0]}" não pertence às bolsas cadastradas do usuário (${bolsasRaw.join(", ") || "nenhuma"}).`,
+                },
+                { status: 400 }
+              );
+            }
+
+            // Canonicaliza para o nome da bolsa cadastrado na coluna Bolsa
+            presencialBolsaRow[i] = bolsaByKey.get(bolsaKey) || splitBolsas[0];
           }
-
-          if (!bolsaSlot) {
-            return NextResponse.json(
-              {
-                success: false,
-                message: `Slot ${i + 1}: quando status == P, a bolsa é obrigatória.`,
-              },
-              { status: 400 }
-            );
+        } else {
+          // Compatibilidade com clientes antigos (editor atual): se houver apenas uma
+          // bolsa cadastrada, preenche todos os slots P automaticamente; caso contrário,
+          // mantém sem detalhamento. O schedule nunca é bloqueado por isso.
+          const hasPresencialSlot = scheduleRowNormalized.some((status) => status === "P");
+          if (hasPresencialSlot && bolsasRaw.length === 1) {
+            presencialBolsaRow = scheduleRowNormalized.map((status) => (status === "P" ? bolsasRaw[0] : ""));
+          } else {
+            presencialBolsaRow = new Array(91).fill("");
           }
-
-          const splitBolsas = bolsaSlot
-            .split(",")
-            .map((b) => b.trim())
-            .filter(Boolean);
-
-          if (splitBolsas.length !== 1) {
-            return NextResponse.json(
-              {
-                success: false,
-                message: `Slot ${i + 1}: apenas uma bolsa é permitida por slot presencial.`,
-              },
-              { status: 400 }
-            );
-          }
-
-          const bolsaKey = normalizeText(splitBolsas[0]);
-          if (!bolsaByKey.has(bolsaKey)) {
-            return NextResponse.json(
-              {
-                success: false,
-                message: `Slot ${i + 1}: bolsa "${splitBolsas[0]}" não pertence às bolsas cadastradas do usuário (${bolsasRaw.join(", ") || "nenhuma"}).`,
-              },
-              { status: 400 }
-            );
-          }
-
-          // Canonicaliza para o nome da bolsa cadastrado na coluna Bolsa
-          presencialBolsaRow[i] = bolsaByKey.get(bolsaKey) || splitBolsas[0];
         }
         
         const editor = Number(getColumnValue(row, "Editor", columnMapping) || 0);
@@ -272,12 +271,17 @@ export async function POST(request: NextRequest) {
           }
         }
         
-        const lockAfterSave = true;
         const result = await saveScheduleRow(body.email, body.scheduleRow);
-        if (result.success) {
-          const presencialResult = await savePresencialBolsaRow(body.email, presencialBolsaRow);
-          if (!presencialResult.success) {
-            return NextResponse.json(presencialResult, { status: 400 });
+        // O detalhamento por bolsa é complementar: falha ao gravá-lo NÃO deve impedir
+        // o salvamento do schedule (ex.: aba PRESENCIAL_BOLSA ainda não existente).
+        if (result.success && presencialBolsaRow?.some((cell) => (cell || "").trim() !== "")) {
+          try {
+            const presencialResult = await savePresencialBolsaRow(body.email, presencialBolsaRow);
+            if (!presencialResult.success) {
+              console.warn("Aviso: schedule salvo, mas falha ao gravar PRESENCIAL_BOLSA:", presencialResult.message);
+            }
+          } catch (presencialError) {
+            console.warn("Aviso: schedule salvo, mas falha ao gravar PRESENCIAL_BOLSA:", presencialError);
           }
         }
         
