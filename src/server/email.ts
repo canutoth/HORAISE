@@ -1,4 +1,6 @@
 import nodemailer from "nodemailer";
+import { getAdminEmailsFromAdminsEmailTab } from "./sheets";
+
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: Number(process.env.SMTP_PORT),
@@ -9,11 +11,32 @@ const transporter = nodemailer.createTransport({
   },
 });
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
+
+/**
+ * Retorna a lista de emails que devem receber notificações de admin.
+ * Fonte principal: aba "admins-email" da planilha (pode ter vários).
+ * Fallback: env EMAIL_ADMIN caso a aba esteja vazia/indisponível.
+ */
+async function getAdminEmailRecipients(): Promise<string[]> {
+  try {
+    const fromTab = await getAdminEmailsFromAdminsEmailTab();
+    if (fromTab.length > 0) return fromTab;
+  } catch (err) {
+    console.warn("Falha ao ler aba admins-email:", err);
+  }
+  const fallback = process.env.EMAIL_ADMIN;
+  if (fallback) return [fallback.toLowerCase().trim()];
+  return [];
+}
 export async function sendAdminNotification(newMemberName: string, newMemberEmail: string) {
-  const adminEmail = process.env.EMAIL_ADMIN;
+  const adminEmails = await getAdminEmailRecipients();
+  if (adminEmails.length === 0) {
+    console.warn("[sendAdminNotification] Nenhum admin configurado; email não enviado.");
+    return;
+  }
   const mailOptions = {
     from: `"HORAISE" <${process.env.SMTP_USER}>`,
-    to: adminEmail,
+    to: adminEmails.join(", "),
     subject: `🔔 Novo Cadastro Pendente: ${newMemberName}`,
     html: `
       <div style="font-family: Arial, sans-serif; color: #333;">
@@ -38,11 +61,15 @@ export async function sendAdminNotification(newMemberName: string, newMemberEmai
 }
 
 export async function sendScheduleEditedToAdmin(userName: string, userEmail: string) {
-  const adminEmail = process.env.EMAIL_ADMIN;
+  const adminEmails = await getAdminEmailRecipients();
+  if (adminEmails.length === 0) {
+    console.warn("[sendScheduleEditedToAdmin] Nenhum admin configurado; email não enviado.");
+    return;
+  }
   
   const mailOptions = {
     from: `"HORAISE" <${process.env.SMTP_USER}>`,
-    to: adminEmail,
+    to: adminEmails.join(", "),
     subject: `📅 Schedule Editado - Aguardando Aprovação: ${userName}`,
     html: `
       <div style="font-family: Arial, sans-serif; color: #333;">
@@ -78,12 +105,16 @@ export async function sendScheduleApprovedToUser(userEmail: string, userName: st
 }
 
 export async function sendAccessRequestToAdmin(userName: string, userEmail: string) {
-  const adminEmail = process.env.EMAIL_ADMIN;
+  const adminEmails = await getAdminEmailRecipients();
+  if (adminEmails.length === 0) {
+    console.warn("[sendAccessRequestToAdmin] Nenhum admin configurado; email não enviado.");
+    return;
+  }
   const approveUrl = `${BASE_URL}/api/admin?action=quick-approve-access&email=${encodeURIComponent(userEmail)}`;
   
   const mailOptions = {
     from: `"HORAISE" <${process.env.SMTP_USER}>`,
-    to: adminEmail,
+    to: adminEmails.join(", "),
     subject: `🔓 Solicitação de Acesso de Edição: ${userName}`,
     html: `
       <div style="font-family: Arial, sans-serif; color: #333;">
@@ -156,13 +187,17 @@ export async function sendSuggestionToUser(userEmail: string, userName: string) 
   return result;
 }
 export async function sendExceptionRequestToAdmin(userName: string, userEmail: string, violations: string[]) {
-  const adminEmail = process.env.EMAIL_ADMIN;
+  const adminEmails = await getAdminEmailRecipients();
+  if (adminEmails.length === 0) {
+    console.warn("[sendExceptionRequestToAdmin] Nenhum admin configurado; email não enviado.");
+    return;
+  }
   
   const violationsList = violations.map(v => `<li>${v}</li>`).join("");
   
   const mailOptions = {
     from: `"HORAISE" <${process.env.SMTP_USER}>`,
-    to: adminEmail,
+    to: adminEmails.join(", "),
     subject: `⚠️ Solicitação de Exceção de Horário: ${userName}`,
     html: `
       <div style="font-family: Arial, sans-serif; color: #333;">
@@ -177,52 +212,15 @@ export async function sendExceptionRequestToAdmin(userName: string, userEmail: s
             ${violationsList}
           </ul>
         </div>
-        <p>O horário foi salvo e está aguardando sua análise e aprovação.</p>
+        <p>O horário foi salvo e está aguardando sua análise.</p>
         <br/>
         <p><strong>Ações disponíveis no painel:</strong></p>
         <ul>
-          <li>✅ Aprovar a exceção e manter acesso de edição</li>
-          <li>✅ Aprovar a exceção e bloquear acesso de edição</li>
-          <li>❌ Rejeitar e solicitar ajustes ao usuário</li>
+          <li>✅ Aprovar o horário</li>
+          <li>✏️ Ajustar/definir um novo horário diretamente</li>
         </ul>
         <br/>
         <a href="${BASE_URL}/horaise-admin/dashboard" style="background: #ffc107; color: #333; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Ver Solicitação no Painel</a>
-      </div>
-    `,
-  };
-  await transporter.sendMail(mailOptions);
-}
-
-export async function sendExceptionApprovedToUser(userEmail: string, userName: string) {
-  const mailOptions = {
-    from: `"HORAISE" <${process.env.SMTP_USER}>`,
-    to: userEmail,
-    subject: `✅ Sua exceção de horário foi aprovada!`,
-    html: `
-      <div style="font-family: Arial, sans-serif; color: #333;">
-        <h3>Olá, ${userName}!</h3>
-        <p>O administrador analisou sua solicitação de exceção de horário e <strong>aprovou</strong> seu schedule.</p>
-        <br/>
-        <a href="${BASE_URL}/horaise-viewer" style="background: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Ver Meu Schedule</a>
-      </div>
-    `,
-  };
-  await transporter.sendMail(mailOptions);
-}
-
-export async function sendExceptionRejectedToUser(userEmail: string, userName: string, reason?: string) {
-  const mailOptions = {
-    from: `"HORAISE" <${process.env.SMTP_USER}>`,
-    to: userEmail,
-    subject: `❌ Sua exceção de horário não foi aprovada`,
-    html: `
-      <div style="font-family: Arial, sans-serif; color: #333;">
-        <h3>Olá, ${userName}!</h3>
-        <p>O administrador analisou sua solicitação de exceção de horário e <strong>não aprovou</strong> as alterações.</p>
-        ${reason ? `<p><strong>Motivo:</strong> ${reason}</p>` : ""}
-        <p>Por favor, ajuste seu horário para cumprir as regras estabelecidas ou entre em contato com o administrador.</p>
-        <br/>
-        <a href="${BASE_URL}/horaise-editor" style="background: #52afe1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Editar Horário</a>
       </div>
     `,
   };

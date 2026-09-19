@@ -3,8 +3,8 @@ const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ID || "";
 const SHEET_NAME = process.env.SHEET_NAME || "INFO";
 const BACKLOG_SHEET_NAME = process.env.BACKLOG_SHEET_NAME || "BACKLOG";
 const RULES_SHEET_NAME = process.env.RULES_SHEET_NAME || "RULES";
-const SUGGESTED_SHEET_NAME = process.env.SUGGESTED_SHEET_NAME || "SUGGESTION";
 const PRESENCIAL_BOLSA_SHEET_NAME = process.env.PRESENCIAL_BOLSA_SHEET_NAME || "PRESENCIAL_BOLSA";
+const ADMINS_EMAIL_SHEET_NAME = process.env.ADMINS_EMAIL_SHEET_NAME || "admins-email";
 
 // Cache para o mapeamento de colunas (para não precisar buscar toda vez)
 let columnMappingCache: Map<string, number> | null = null;
@@ -387,6 +387,26 @@ export async function getAdminEmailsFromSheet(): Promise<string[]> {
 }
 
 /**
+ * Retorna os emails listados na ABA "admins-email" da planilha.
+ * Esse é um subgrupo dos admins compartilhados que receberá as notificações
+ * por email (pode ter mais de um no futuro).
+ */
+export async function getAdminEmailsFromAdminsEmailTab(): Promise<string[]> {
+  const { sheets } = await getSheetsClient();
+  const sheetRef = escapeSheetName(ADMINS_EMAIL_SHEET_NAME);
+
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetRef}!A1:A100`,
+  });
+
+  return (res.data.values || [])
+    .map((row) => (row[0] || "").toString().trim().toLowerCase())
+    .filter((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    .filter((email, index, arr) => arr.indexOf(email) === index);
+}
+
+/**
  * Atualiza apenas Editor e Pending-Access de um membro (usado para solicitação de acesso)
  * @param email Email do membro
  * @param editor Novo valor de Editor (1 = pode editar, 0 = bloqueado)
@@ -641,129 +661,7 @@ export async function readRulesFromSheet(): Promise<{
   }
 }
 
-/**
- * Salva um schedule sugerido pelo admin na aba SUGGESTED
- * A aba SUGGESTED tem colunas: Email (A) + 91 colunas de schedule (B..CL)
- * @param targetEmail Email do membro que receberá a sugestão
- * @param scheduleRow Array com 91 valores do schedule sugerido
- */
-export async function saveSuggestedSchedule(targetEmail: string, scheduleRow: string[]) {
-  const { sheets } = await getSheetsClient();
-  const suggestedSheetName = escapeSheetName(SUGGESTED_SHEET_NAME);
-  
-  // Busca se já existe uma sugestão para este email
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${suggestedSheetName}!A:A`,
-  });
-  
-  const rows = res.data.values || [];
-  let rowNumber: number | null = null;
-  
-  // Procura pelo email (pula cabeçalho na linha 1)
-  for (let i = 1; i < rows.length; i++) {
-    if (rows[i][0]?.toLowerCase() === targetEmail.toLowerCase()) {
-      rowNumber = i + 1;
-      break;
-    }
-  }
-  
-  // Prepara a linha completa: [Email, ...scheduleRow]
-  const fullRow = [targetEmail, ...scheduleRow];
-  
-  console.log(`saveSuggestedSchedule: scheduleRow length=${scheduleRow.length}, fullRow length=${fullRow.length}`);
-  
-  if (fullRow.length !== 92) {
-    console.error(`ERRO: fullRow deveria ter 92 elementos (1 email + 91 schedule) mas tem ${fullRow.length}`);
-  }
-  
-  if (rowNumber) {
-    // Atualiza a linha existente
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${suggestedSheetName}!A${rowNumber}:CN${rowNumber}`,
-      valueInputOption: "RAW",
-      requestBody: { values: [fullRow] },
-    });
-  } else {
-    // Adiciona nova linha
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${suggestedSheetName}!A:CN`,
-      valueInputOption: "RAW",
-      requestBody: { values: [fullRow] },
-    });
-  }
-  
-  // Marca Pending-Suggestion=1 E concede acesso de edição (Editor=1) na aba principal
-  const mainRowNumber = await findRowByEmail(sheets, targetEmail);
-  if (mainRowNumber) {
-    const mainSheetRef = escapeSheetName(SHEET_NAME);
-    const mainColumnMapping = await getColumnMapping(sheets);
-    
-    const pendingSuggestionIndex = getColumnIndex("Pending-Suggestion", mainColumnMapping);
-    const pendingSuggestionCol = columnIndexToLetter(pendingSuggestionIndex);
-    
-    const editorIndex = getColumnIndex("Editor", mainColumnMapping);
-    const editorCol = columnIndexToLetter(editorIndex);
-    
-    const pendingAccessIndex = getColumnIndex("Pending-Access", mainColumnMapping);
-    const pendingAccessCol = columnIndexToLetter(pendingAccessIndex);
-    
-    // Atualiza Pending-Suggestion=1
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${mainSheetRef}!${pendingSuggestionCol}${mainRowNumber}`,
-      valueInputOption: "RAW",
-      requestBody: { values: [[1]] },
-    });
-    
-    // Concede acesso de edição (Editor=1, Pending-Access=0)
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${mainSheetRef}!${editorCol}${mainRowNumber}`,
-      valueInputOption: "RAW",
-      requestBody: { values: [[1]] },
-    });
-    
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${mainSheetRef}!${pendingAccessCol}${mainRowNumber}`,
-      valueInputOption: "RAW",
-      requestBody: { values: [[0]] },
-    });
-  }
-  
-  return { success: true, message: "Sugestão de horário salva com sucesso." };
-}
 
-/**
- * Carrega o schedule sugerido da aba SUGGESTED
- * @param email Email do membro
- * @returns Array com 91 valores do schedule sugerido ou null se não existir
- */
-export async function loadSuggestedSchedule(email: string): Promise<string[] | null> {
-  const { sheets } = await getSheetsClient();
-  const suggestedSheetName = escapeSheetName(SUGGESTED_SHEET_NAME);
-  
-  // Busca o email na aba SUGGESTED
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${suggestedSheetName}!A:CN`,
-  });
-  
-  const rows = res.data.values || [];
-  
-  // Procura pelo email (pula cabeçalho na linha 1)
-  for (let i = 1; i < rows.length; i++) {
-    if (rows[i][0]?.toLowerCase() === email.toLowerCase()) {
-      // Retorna as colunas B..CN (índices 1..92), mas limitado a 91 elementos
-      return rows[i].slice(1, 92);
-    }
-  }
-  
-  return null;
-}
 
 /**
  * Salva o detalhamento por bolsa dos slots presenciais na aba PRESENCIAL_BOLSA
@@ -831,90 +729,6 @@ export async function loadPresencialBolsaRow(email: string): Promise<string[] | 
   return null;
 }
 
-/**
- * Aceita o schedule sugerido: move da aba SUGGESTED para a aba principal e limpa flags
- * @param email Email do membro
- */
-export async function acceptSuggestedSchedule(email: string) {
-  const { sheets } = await getSheetsClient();
-  
-  // 1. Carrega o schedule sugerido
-  const suggestedSchedule = await loadSuggestedSchedule(email);
-  if (!suggestedSchedule) {
-    return { success: false, message: "Nenhuma sugestão encontrada." };
-  }
-  
-  // 2. Salva o schedule sugerido na aba principal
-  const mainRowNumber = await findRowByEmail(sheets, email);
-  if (!mainRowNumber) {
-    return { success: false, message: "Membro não encontrado." };
-  }
-  
-  const mainSheetRef = escapeSheetName(SHEET_NAME);
-  const columnMapping = await getColumnMapping(sheets);
-  
-  // Calcula o range das colunas de schedule (começa após HO)
-  const hoIndex = getColumnIndex("HO", columnMapping);
-  const scheduleStartCol = columnIndexToLetter(hoIndex + 1);
-  // 7 dias x 13 horas = 91 colunas
-  const scheduleEndCol = columnIndexToLetter(hoIndex + 91);
-  
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${mainSheetRef}!${scheduleStartCol}${mainRowNumber}:${scheduleEndCol}${mainRowNumber}`,
-    valueInputOption: "RAW",
-    requestBody: { values: [suggestedSchedule] },
-  });
-  
-  // 3. Limpa Pending-Suggestion=0 e Editor=0 na aba principal
-  const pendingSuggestionIndex = getColumnIndex("Pending-Suggestion", columnMapping);
-  const pendingSuggestionCol = columnIndexToLetter(pendingSuggestionIndex);
-  
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${mainSheetRef}!${pendingSuggestionCol}${mainRowNumber}`,
-    valueInputOption: "RAW",
-    requestBody: { values: [[0]] },
-  });
-  
-  // Remove acesso de edição ao aceitar sugestão
-  const editorIndex = getColumnIndex("Editor", columnMapping);
-  const editorCol = columnIndexToLetter(editorIndex);
-  
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${mainSheetRef}!${editorCol}${mainRowNumber}`,
-    valueInputOption: "RAW",
-    requestBody: { values: [[0]] },
-  });
-  
-  // 4. Remove a linha da aba SUGGESTED
-  const suggestedSheetName = escapeSheetName(SUGGESTED_SHEET_NAME);
-  const resFind = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${suggestedSheetName}!A:A`,
-  });
-  
-  const rows = resFind.data.values || [];
-  let suggestedRowNumber: number | null = null;
-  
-  for (let i = 1; i < rows.length; i++) {
-    if (rows[i][0]?.toLowerCase() === email.toLowerCase()) {
-      suggestedRowNumber = i + 1;
-      break;
-    }
-  }
-  
-  if (suggestedRowNumber) {
-    // Limpa a linha da aba SUGGESTED
-    await sheets.spreadsheets.values.clear({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${suggestedSheetName}!A${suggestedRowNumber}:CL${suggestedRowNumber}`,
-    });
-  }
-  
-  return { success: true, message: "Sugestão aceita com sucesso!" };
-}
 
 /**
  * Encontra o número da linha (1-based) de um email na coluna A de uma aba
@@ -969,7 +783,7 @@ async function deleteRowFromSheet(sheets: any, sheetName: string, rowNumber: num
 }
 
 /**
- * Deleta um membro de todas as abas onde ele aparece (INFO e SUGGESTION)
+ * Deleta um membro de todas as abas onde ele aparece
  * @param email Email do membro
  */
 export async function deleteMemberRow(email: string) {
@@ -982,15 +796,6 @@ export async function deleteMemberRow(email: string) {
 
   await deleteRowFromSheet(sheets, SHEET_NAME, rowNumber);
 
-  // Remove também a linha da aba SUGGESTION, se existir
-  try {
-    const suggestedRowNumber = await findRowByEmailInColumnA(sheets, SUGGESTED_SHEET_NAME, email);
-    if (suggestedRowNumber) {
-      await deleteRowFromSheet(sheets, SUGGESTED_SHEET_NAME, suggestedRowNumber);
-    }
-  } catch {
-    // Aba SUGGESTION não existe nesta planilha
-  }
 
   return { success: true, message: "Membro excluído com sucesso" };
 }
@@ -999,6 +804,5 @@ export const sheetsConstants = {
   SPREADSHEET_ID,
   SHEET_NAME,
   BACKLOG_SHEET_NAME,
-  SUGGESTED_SHEET_NAME,
   PRESENCIAL_BOLSA_SHEET_NAME,
 };
