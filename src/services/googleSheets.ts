@@ -439,35 +439,3 @@ export async function saveSuggestedSchedule(
     };
   }
 }
-
-/**
- * Aceita a sugestão de schedule do admin
- */
-export async function acceptSuggestedSchedule(
-  email: string
-): Promise<{ success: boolean; message: string }> {
-  try {
-    const response = await fetch("/api", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "accept-suggested-schedule", email }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      return {
-        success: false,
-        message: error.message || "Erro ao aceitar sugestão"
-      };
-    }
-
-    const result = await response.json();
-    return result;
-  } catch (error) {
-    console.error("Erro ao aceitar sugestão:", error);
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : "Erro desconhecido ao aceitar sugestão"
-    };
-  }
-}

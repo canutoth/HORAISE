@@ -7,11 +7,8 @@ import {
   loadScheduleRow,
   readAllMembers,
   updateMemberAccess,
-  approveSchedule,
   readBacklogOptions,
   readRulesFromSheet,
-  loadSuggestedSchedule,
-  acceptSuggestedSchedule,
   getColumnValue,
 } from "../../server/sheets";
 import { sendAdminNotification, sendAccessRequestToAdmin, sendScheduleEditedToAdmin } from "../../server/email";
@@ -28,8 +25,6 @@ type Actions =
   | { action: "save-schedule"; email: string; scheduleRow: string[]; isAdmin?: boolean }
   | { action: "load-schedule"; email: string }
   | { action: "save-suggested-schedule"; adminEmail: string; targetEmail: string; scheduleRow: string[] }
-  | { action: "load-suggested-schedule"; email: string }
-  | { action: "accept-suggested-schedule"; email: string }
   | { action: "read-all-members" }
   | { action: "read-backlog-options" }
   | { action: "read-rules" }
@@ -38,8 +33,6 @@ type Actions =
   | { action: "validate-dynamic-rules"; scheduleRow: string[] }
   | { action: "request-editor-access"; email: string }
   | { action: "request-schedule-exception"; email: string; schedule: ScheduleData; violations: string[] }
-  | { action: "approve-schedule-keep-editor"; email: string }
-  | { action: "approve-schedule-remove-editor"; email: string }
   | { action: "notify-profile-change"; userEmail: string; userName: string; field: string; oldValue: string; newValue: string };
 export async function POST(request: NextRequest) {
   try {
@@ -261,20 +254,6 @@ export async function POST(request: NextRequest) {
         
         return NextResponse.json(result, { status: result.success ? 200 : 400 });
       }
-      case "load-suggested-schedule": {
-        if (!body.email) return NextResponse.json({ message: "email é obrigatório" }, { status: 400 });
-        const row = await loadSuggestedSchedule(body.email);
-        if (!row) return NextResponse.json({ message: "not found" }, { status: 404 });
-        return NextResponse.json({ scheduleRow: row });
-      }
-      case "accept-suggested-schedule": {
-        if (!body.email) {
-          return NextResponse.json({ success: false, message: "email é obrigatório" }, { status: 400 });
-        }
-        
-        const result = await acceptSuggestedSchedule(body.email);
-        return NextResponse.json(result, { status: result.success ? 200 : 400 });
-      }
       case "read-all-members": {
         const members = await readAllMembers();
         return NextResponse.json({ members });
@@ -394,8 +373,13 @@ export async function POST(request: NextRequest) {
           }
           
           // Envia email ao admin notificando sobre a exceção solicitada
-          const { sendExceptionRequestToAdmin } = await import("../../server/email");
-          await sendExceptionRequestToAdmin(memberName, body.email, body.violations);
+          // Falha no email não deve impedir a solicitação, que já foi salva
+          try {
+            const { sendExceptionRequestToAdmin } = await import("../../server/email");
+            await sendExceptionRequestToAdmin(memberName, body.email, body.violations);
+          } catch (emailError) {
+            console.error("Erro ao enviar email de exceção para admin:", emailError);
+          }
           
           return NextResponse.json({ 
             success: true, 
@@ -408,54 +392,6 @@ export async function POST(request: NextRequest) {
             message: "Erro ao processar solicitação" 
           }, { status: 500 });
         }
-      }
-      case "approve-schedule-keep-editor": {
-        if (!body.email) {
-          return NextResponse.json({ success: false, message: "email é obrigatório" }, { status: 400 });
-        }
-        
-        // Busca dados do membro
-        const member = await readMemberByEmail(body.email);
-        if (!member) {
-          return NextResponse.json({ success: false, message: "Membro não encontrado" }, { status: 404 });
-        }
-        
-        const memberName = getColumnValue(member.row, "Nome", member.columnMapping) || "Usuário";
-        
-        // Aprova mantendo editor
-        const result = await approveSchedule(body.email, true);
-        
-        // Envia email ao usuário notificando aprovação (usa email de exceção aprovada)
-        if (result.success && !result.alreadyDone) {
-          const { sendExceptionApprovedToUser } = await import("../../server/email");
-          sendExceptionApprovedToUser(body.email, memberName).catch((e: unknown) => console.error("Falha email usuário:", e));
-        }
-        
-        return NextResponse.json(result, { status: result.success ? 200 : 500 });
-      }
-      case "approve-schedule-remove-editor": {
-        if (!body.email) {
-          return NextResponse.json({ success: false, message: "email é obrigatório" }, { status: 400 });
-        }
-        
-        // Busca dados do membro
-        const member = await readMemberByEmail(body.email);
-        if (!member) {
-          return NextResponse.json({ success: false, message: "Membro não encontrado" }, { status: 404 });
-        }
-        
-        const memberName = getColumnValue(member.row, "Nome", member.columnMapping) || "Usuário";
-        
-        // Aprova removendo editor
-        const result = await approveSchedule(body.email, false);
-        
-        // Envia email ao usuário notificando aprovação (usa email de exceção aprovada)
-        if (result.success && !result.alreadyDone) {
-          const { sendExceptionApprovedToUser } = await import("../../server/email");
-          sendExceptionApprovedToUser(body.email, memberName).catch((e: unknown) => console.error("Falha email usuário:", e));
-        }
-        
-        return NextResponse.json(result, { status: result.success ? 200 : 500 });
       }
       case "notify-profile-change": {
         if (!body.userEmail || !body.userName || !body.field || !body.oldValue || !body.newValue) {
