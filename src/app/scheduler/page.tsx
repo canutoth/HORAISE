@@ -10,7 +10,6 @@ import {
   Container,
   Stack,
   Alert,
-  Loader,
   Center,
   Select,
   MultiSelect,
@@ -26,10 +25,8 @@ import {
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks"; // Adicionado
 import {
-  IconArrowLeft,
   IconSearch,
   IconAlertCircle,
-  IconCheck,
   IconClock,
   IconX,
   IconUser,
@@ -37,8 +34,7 @@ import {
   IconWifi,
   IconSchool,
 } from "@tabler/icons-react";
-import { useRouter } from "next/navigation";
-import { getAllMembers, getBacklogOptions } from "../../services/googleSheets";
+import { getAllMembers, getBacklogOptions, type TeamMemberData } from "../../services/googleSheets";
 import { getViewerDisplayName } from "../../services/memberNameDisplay";
 
 const WEEKDAY_UI_INDICES = [0, 1, 2, 3, 4];
@@ -59,12 +55,12 @@ interface CompatibilityResult {
   level: number;
   slots: TimeSlot[];
   message: string;
-  members?: any[];
+  members?: SchedulerMember[];
 }
 
+type SchedulerMember = TeamMemberData & { displayName: string };
+
 export default function SchedulerPage() {
-  const router = useRouter();
-  
   // Hook para detectar mobile
   const isMobile = useMediaQuery('(max-width: 768px)');
 
@@ -72,7 +68,7 @@ export default function SchedulerPage() {
   const [selectedFrente, setSelectedFrente] = useState<string | null>(null);
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
   const [excludedFromFrente, setExcludedFromFrente] = useState<string[]>([]);
-  const [allMembers, setAllMembers] = useState<any[]>([]);
+  const [allMembers, setAllMembers] = useState<SchedulerMember[]>([]);
   const [frentesOptions, setFrentesOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMembers, setLoadingMembers] = useState(true);
@@ -129,7 +125,7 @@ export default function SchedulerPage() {
     setResult(null);
 
     try {
-      let membersToAnalyze: any[] = [];
+      let membersToAnalyze: SchedulerMember[] = [];
 
       if (searchMode === "frente" && selectedFrente) {
         membersToAnalyze = allMembers.filter(
@@ -167,7 +163,7 @@ export default function SchedulerPage() {
   };
 
   const findCompatibleSlots = (
-    members: any[],
+    members: SchedulerMember[],
     durationHours: number
   ): CompatibilityResult => {
     const level1Slots = findSlotsWithCondition(
@@ -252,9 +248,9 @@ export default function SchedulerPage() {
   };
 
   const findSlotsWithCondition = (
-    members: any[],
+    members: SchedulerMember[],
     durationHours: number,
-    condition: (statuses: (string | null)[], members: any[]) => boolean
+    condition: (statuses: (string | null)[], members: SchedulerMember[]) => boolean
   ): TimeSlot[] => {
     const validSlots: TimeSlot[] = [];
     const DAY_LABELS_FULL = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"];
@@ -428,7 +424,7 @@ export default function SchedulerPage() {
                     </Text>
                     <Radio.Group
                       value={searchMode}
-                      onChange={(val) => setSearchMode(val as any)}
+                      onChange={(val) => setSearchMode(val as "frente" | "pessoas")}
                     >
                       <Group>
                         <Radio value="frente" label="Frente" />

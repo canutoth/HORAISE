@@ -1,0 +1,6 @@
+Regra,Valor
+min_slots_seguidos,3
+min_slots_diarios_presencial,3
+intervalo_almoss,11-15
+inicio,8
+fim,20

@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import {
   Box,
   Paper,
@@ -14,9 +14,10 @@ import {
   Group,
 } from "@mantine/core";
 import { IconUserPlus, IconX, IconMail, IconUser } from "@tabler/icons-react";
-import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { notifications } from "@mantine/notifications";
 import TopNavBar from "@/components/TopNavBar";
+import GoogleLoginButton from "@/components/GoogleLoginButton";
 import {
   saveMember,
   validateEmail,
@@ -26,8 +27,16 @@ import {
   type TeamMemberData,
 } from "../../services/googleSheets";
 import { getViewerDisplayName, toDisplayNameKey } from "../../services/memberNameDisplay";
-export default function CadastroPage() {
-  const router = useRouter();
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={null}>
+      <RegisterForm />
+    </Suspense>
+  );
+}
+
+function RegisterForm() {
+  const searchParams = useSearchParams();
   const [nome, setNome] = useState("");
   const [apelido, setApelido] = useState("");
   const [email, setEmail] = useState("");
@@ -42,6 +51,18 @@ export default function CadastroPage() {
   useEffect(() => {
     document.title = "HORAISE | Cadastro";
   }, []);
+
+  const [prefillDone, setPrefillDone] = useState(false);
+
+  // Pré-preenche email e nome vindos do login do Google
+  useEffect(() => {
+    if (prefillDone) return;
+    const emailParam = searchParams.get("email");
+    if (emailParam) setEmail(emailParam);
+    const nomeParam = searchParams.get("nome");
+    if (nomeParam) setNome(nomeParam);
+    setPrefillDone(true);
+  }, [prefillDone, searchParams]);
 
   // Carrega opções de frentes
   useEffect(() => {
@@ -136,7 +157,6 @@ export default function CadastroPage() {
         // Limpa o formulário
         setNome("");
         setApelido("");
-        setEmail("");
         setFrente([]);
       } else {
         setErrorEmail(result.message || "Erro ao realizar cadastro");
@@ -168,7 +188,6 @@ export default function CadastroPage() {
           alignItems: "center",
           justifyContent: "center",
           padding: "20px",
-          paddingTop: "100px",
         }}
       >
         <Paper
@@ -182,7 +201,7 @@ export default function CadastroPage() {
             border: "2px solid rgba(142, 201, 252, 0.3)",
           }}
         >
-          <Stack gap="md" align="center">
+          <Stack gap="xl" align="center">
             <Box
               style={{
                 width: "80px",
@@ -198,7 +217,7 @@ export default function CadastroPage() {
             </Box>
 
             <Stack gap="xs" align="center">
-              <Title
+<Title
                 order={1}
                 size="h2"
                 style={{
@@ -209,19 +228,22 @@ export default function CadastroPage() {
                 Cadastro
               </Title>
               <Text size="sm" c="dimmed" ta="center">
-                Preencha os campos abaixo para criar seu perfil e começar a editar seus horários no Lab.
+                Crie sua conta no HorAISE
               </Text>
             </Stack>
 
-            <Stack gap="md" style={{ width: "100%" }}>
+            {email ? (
+              <>
+              <Stack gap="md" style={{ width: "100%" }}>
               <TextInput
                 placeholder="Digite seu email..."
                 size="md"
                 value={email}
-                onChange={(e) => setEmail(e.currentTarget.value)}
-                onKeyPress={handleKeyPress}
+                onChange={() => {}}
+                readOnly
                 disabled={loading}
                 error={errorEmail}
+                description="Email da sua conta Google — usado no login."
                 rightSection={<IconMail size={20} color="#ADB5BD" />}
                 styles={{
                   input: {
@@ -253,7 +275,7 @@ export default function CadastroPage() {
               />
 
               <TextInput
-                placeholder="Apelido (exibido no Viewer)"
+                placeholder="Apelido (exibido no Scheduler)"
                 size="md"
                 value={apelido}
                 onChange={(e) => setApelido(e.currentTarget.value)}
@@ -391,22 +413,26 @@ export default function CadastroPage() {
                   )}
                 </Box>
               </Box>
-            </Stack>
+              </Stack>
 
-            <Button
-              fullWidth
-              size="md"
-              onClick={handleCadastro}
-              loading={loading}
-              style={{
-                backgroundColor: "#0E1862",
-                "&:hover": {
-                  backgroundColor: "#0A1145",
-                },
-              }}
-            >
-              Criar Cadastro
-            </Button>
+              <Button
+                fullWidth
+                size="md"
+                onClick={handleCadastro}
+                loading={loading}
+                style={{
+                  backgroundColor: "#0E1862",
+                  "&:hover": {
+                    backgroundColor: "#0A1145",
+                  },
+                }}
+              >
+                Criar Cadastro
+              </Button>
+              </>
+) : (
+              <GoogleLoginButton />
+            )}
           </Stack>
         </Paper>
       </Box>

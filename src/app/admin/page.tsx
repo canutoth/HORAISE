@@ -20,20 +20,16 @@ import {
   Popover,
   NumberInput,
   MultiSelect,
-  Select,
   Modal,
   ThemeIcon,
-  rem,
 } from "@mantine/core";
 import {
-  IconLogout,
   IconCheck,
   IconX,
   IconUser,
   IconClock,
   IconLockOpen,
   IconLock,
-  IconRefresh,
   IconEye,
   IconPencil,
   IconDeviceFloppy,
@@ -45,23 +41,8 @@ import TopNavBar from "@/components/TopNavBar";
 import { AdminSuggestionPanel } from "@/components/AdminSuggestionPanel";
 import { notifications } from "@mantine/notifications";
 import { useMediaQuery } from "@mantine/hooks"; 
-import { getBacklogOptions } from "../../../services/googleSheets";
-import { formatAdminDisplayName } from "../../../services/memberNameDisplay";
-// 🎯 Easter egg: Normaliza o nome do Coutinho
-const normalizeCoutinho = (name: string, email: string): string => {
-  const nameLower = name.toLowerCase().trim();
-  const emailLower = email.toLowerCase().trim();
-  
-  if (
-    nameLower === "daniel coutinho" ||
-    emailLower === "dcoutinho@inf.puc-rio.br" ||
-    emailLower === "danieljosebc@gmail.com"
-  ) {
-    return "Coutinho";
-  }
-  
-  return name;
-};
+import { getBacklogOptions } from "../../services/googleSheets";
+import { formatAdminDisplayName } from "../../services/memberNameDisplay";
 
 // Bolsa "Prof." permite cadastro com 0 horas de trabalho
 const isProfBolsa = (bolsa: string): boolean => {
@@ -88,11 +69,11 @@ function AdminDashboardContent() {
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [members, setMembers] = useState<AdminMember[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
   const isMobile = useMediaQuery('(max-width: 768px)');
   const [frentesOptions, setFrentesOptions] = useState<{ value: string; label: string }[]>([]);
   const [bolsasOptions, setBolsasOptions] = useState<{ value: string; label: string; color: string }[]>([]);
   const [activeTab, setActiveTab] = useState<string>("cadastros");
+  const [adminEmail, setAdminEmail] = useState<string>("");
   
   // Estado para armazenar edições pendentes (não salvas na planilha ainda)
   const [pendingEdits, setPendingEdits] = useState<Record<string, {
@@ -281,14 +262,13 @@ function AdminDashboardContent() {
   };
 
   const fetchMembers = async () => {
-    setRefreshing(true);
     try {
       const response = await fetch("/api/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "read-all-members" }),
       });
-      const data = await response.json();
+      const data = (await response.json()) as { members?: string[][] };
       
       if (response.ok && data.members && data.members.length > 0) {
         // Primeira linha é o cabeçalho, usa para criar o mapeamento
@@ -302,7 +282,7 @@ function AdminDashboardContent() {
         });
         
         // Helper para obter valor de coluna pelo nome
-        const getColumnValue = (row: any[], columnName: string): any => {
+        const getColumnValue = (row: string[], columnName: string): string => {
           const index = columnMapping.get(columnName);
           return index !== undefined ? row[index] : "";
         };
@@ -310,8 +290,8 @@ function AdminDashboardContent() {
         // Mapeia os dados (pula a primeira linha que é o cabeçalho)
         const mappedMembers = data.members
           .slice(1)
-          .map((row: any, index: number) => ({
-            name: normalizeCoutinho(getColumnValue(row, "Nome"), getColumnValue(row, "Email")),
+          .map((row: string[], index: number) => ({
+            name: getColumnValue(row, "Nome"),
             nickname: getColumnValue(row, "Apelido"),
             email: getColumnValue(row, "Email"),
             frentes: getColumnValue(row, "Frentes"),
@@ -324,14 +304,13 @@ function AdminDashboardContent() {
             rowNumber: index + 2,
           }))
           // Filtra linhas vazias (sem email válido)
-          .filter((member: any) => member.email && member.email.trim() !== "");
+          .filter((member) => member.email && member.email.trim() !== "");
         setMembers(mappedMembers);
       }
     } catch (error) {
       console.error(error);
       notifications.show({ title: "Erro", message: "Falha ao carregar membros", color: "red" });
     } finally {
-      setRefreshing(false);
       setLoading(false);
     }
   };
@@ -339,18 +318,18 @@ function AdminDashboardContent() {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const response = await fetch("/api/admin/session");
+        const response = await fetch("/api/auth/session");
         if (!response.ok) {
           notifications.show({
             title: "Acesso Negado",
             message: "Por favor, faça login como administrador",
             color: "red",
           });
-          router.push("/horaise-admin");
+          router.push("/login");
           return;
         }
         const { email } = await response.json();
-        sessionStorage.setItem("adminEmail", email);
+        setAdminEmail(email);
         fetchBacklogOptions();
         fetchMembers();
       } catch {
@@ -359,7 +338,7 @@ function AdminDashboardContent() {
           message: "Por favor, faça login como administrador",
           color: "red",
         });
-        router.push("/horaise-admin");
+        router.push("/login");
       }
     };
 
@@ -379,7 +358,7 @@ function AdminDashboardContent() {
     const params = new URLSearchParams();
     params.set("tab", "sugerir");
     params.set("personid", email);
-    router.push(`/horaise-admin/dashboard?${params.toString()}`);
+    router.push(`/admin?${params.toString()}`);
   };
 
   const handleSimpleAction = async (email: string, actionType: string) => {
@@ -409,7 +388,7 @@ function AdminDashboardContent() {
           color: "red",
         });
       }
-    } catch (e) {
+    } catch {
       notifications.show({ title: "Erro", message: "Erro de conexão", color: "red" });
     }
   };
@@ -506,48 +485,6 @@ function AdminDashboardContent() {
       console.error(error);
       notifications.show({ title: "Erro", message: "Erro de conexão", color: "red" });
     }
-  };
-
-  // salvar edicao
-  const handleUpdateData = async (data: any) => {
-    try {
-      const response = await fetch("/api/admin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          action: "update-member-data",
-          email: data.email,
-          frentes: data.frentes,
-          bolsa: data.bolsa,
-          hp: data.hp,
-          ho: data.ho,
-        }),
-      });
-
-      const resJson = await response.json();
-      
-      if (response.ok) {
-        if (resJson.alreadyDone) {
-          notifications.show({
-            title: "Já realizado",
-            message: resJson.message || "Esses dados já estavam salvos.",
-            color: "orange",
-          });
-        } else {
-          notifications.show({ title: "Salvo", message: "Cadastro aprovado e acesso liberado!", color: "green" });
-        }
-        fetchMembers();
-      } else {
-        notifications.show({ title: "Erro", message: resJson.error || "Falha ao salvar", color: "red" });
-      }
-    } catch (error) {
-      console.error(error);
-      notifications.show({ title: "Erro", message: "Erro de conexão", color: "red" });
-    }
-  };
-
-  const handleLogout = () => {
-    window.location.href = "/api/admin/logout";
   };
 
   // Cadastro pendente = (sem bolsa) OU (HP e HO ambos zerados e não é Prof.)
@@ -747,7 +684,7 @@ function AdminDashboardContent() {
                             variant="outline" 
                             color="blue" 
                             size="lg" 
-                            onClick={() => window.open(`/horaise-viewer?personid=${encodeURIComponent(member.email)}`, '_blank')}
+                            onClick={() => window.open(`/admin?tab=sugerir&personid=${encodeURIComponent(member.email)}`, '_blank')}
                           >
                             <IconEye size={20} />
                           </ActionIcon>
@@ -872,24 +809,6 @@ function AdminDashboardContent() {
               </Title>
               <Text c="dimmed" size="sm">Visão geral das pendências e acessos</Text>
             </Box>
-            <Group gap="xs">
-              <Button 
-                variant="subtle" 
-                onClick={fetchMembers}
-                loading={refreshing}
-                px={isMobile ? "xs" : "md"}
-              >
-                {isMobile ? <IconRefresh size={20} /> : "Atualizar"}
-              </Button>
-              <Button 
-                variant="light" 
-                color="red" 
-                onClick={handleLogout}
-                px={isMobile ? "xs" : "md"}
-              >
-                {isMobile ? <IconLogout size={20} /> : "Sair"}
-              </Button>
-            </Group>
           </Group>
 
           <Paper shadow="sm" radius="md" p={isMobile ? "xs" : "md"} withBorder>
@@ -905,7 +824,7 @@ function AdminDashboardContent() {
                   {isMobile ? "Acessos" : "Acessos de Edição"}
                 </Tabs.Tab>
                 <Tabs.Tab value="sugerir" leftSection={!isMobile && <IconPencil size={16} />}>
-                  {isMobile ? "Editar" : "Editar Horários"}
+                  {isMobile ? "Horários" : "Horários"}
                 </Tabs.Tab>
               </Tabs.List>
 
@@ -920,6 +839,7 @@ function AdminDashboardContent() {
               </Tabs.Panel>
               <Tabs.Panel value="sugerir">
                 <AdminSuggestionPanel 
+                  adminEmail={adminEmail}
                   frentesOptions={frentesOptions}
                   bolsasOptions={bolsasOptions}
                   initialTargetEmail={searchParams.get("personid") || undefined}

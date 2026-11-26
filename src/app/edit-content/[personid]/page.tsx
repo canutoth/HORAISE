@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Box,
   Paper,
@@ -22,28 +22,23 @@ import {
   ThemeIcon,
   Table,
   HoverCard,
-  Divider,
   UnstyledButton,
   List,
   ScrollArea,
   TextInput,
-  NumberInput, 
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks"; 
 import {
   IconDeviceFloppy,
-  IconRefresh,
   IconAlertCircle,
   IconCheck,
   IconX,
-  IconArrowLeft,
   IconPencil,
   IconLock,
   IconSchool,
   IconDeviceLaptop,
   IconBuildingSkyscraper,
   IconUsers,
-  IconClock,
   IconBan,
   IconAlertTriangle,
   IconToolsKitchen2, 
@@ -62,6 +57,7 @@ import {
 import { formatAdminDisplayName } from "../../../services/memberNameDisplay";
 import { validateSchedule, type RuleViolation } from "@/rules/scheduleRules";
 import TopNavBar from "@/components/TopNavBar";
+import { fetchAuthSession } from "@/hooks/useAuthSession";
 
 const WEEKDAY_UI_INDICES = [0, 1, 2, 3, 4, 5, 6];
 const DAY_LABELS_SHORT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
@@ -166,7 +162,7 @@ export default function EditContentPage() {
 
   const cloneSchedule = (s: ScheduleData): ScheduleData => JSON.parse(JSON.stringify(s || {}));
 
-  const statusToCode = (st: any): string => {
+  const statusToCode = useCallback((st: string | null | undefined): string => {
     switch (st) {
       case "aula": return "A";
       case "presencial": return "P";
@@ -176,9 +172,9 @@ export default function EditContentPage() {
       case "almoco": return "L";
       default: return "";
     }
-  };
+  }, []);
 
-  const toCanonicalString = (s: ScheduleData): string => {
+  const toCanonicalString = useCallback((s: ScheduleData): string => {
     const parts: string[] = [];
     for (let day = 0; day < 7; day++) {
       for (let hour = 7; hour <= 19; hour++) {
@@ -187,7 +183,7 @@ export default function EditContentPage() {
       }
     }
     return parts.join("|");
-  };
+  }, [statusToCode]);
 
   const handleCellClick = (day: number, hour: number) => {
     setSchedule((prev) => {
@@ -281,59 +277,48 @@ export default function EditContentPage() {
     const loadMemberData = async () => {
       setIsLoading(true);
       try {
-        if (typeof window !== "undefined") {
-          const loggedEmail = sessionStorage.getItem("adminEmail");
-          if (loggedEmail) {
-            const checkAdmin = await fetch("/api", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "admin-precheck", email: loggedEmail }),
-            });
-            const result = await checkAdmin.json();
-            if (result.isAdmin) {
-              setIsAdminMode(true);
-              setAdminEmail(loggedEmail);
-            }
-          }
+        const session = await fetchAuthSession();
+        if (!session) {
+          notifications.show({
+            title: "Acesso Negado",
+            message: "Faça login para acessar os horários.",
+            color: "red",
+            icon: <IconLock />,
+            autoClose: 5000,
+          });
+          router.push("/login");
+          return;
         }
 
-        if (typeof window !== "undefined") {
-          const newMemberData = sessionStorage.getItem("newMember");
-          const isNew = sessionStorage.getItem("isNewMember") === "true";
+        const isAdminSession = session.role === "admin";
+        setIsAdminMode(isAdminSession);
+        setAdminEmail(session.email);
 
-          if (isNew && newMemberData) {
-            const member = JSON.parse(newMemberData) as TeamMemberData;
-            setMemberData(member);
-            const memberSchedule = member.schedule || {};
-            setSchedule(memberSchedule);
-            setSavedSchedule(cloneSchedule(memberSchedule));
-            setIsNewMember(true);
-            sessionStorage.removeItem("newMember");
-            sessionStorage.removeItem("isNewMember");
-            setIsLoading(false);
-            return;
-          }
+        // Usuário comum (não-admin) só pode visualizar o PRÓPRIO horário.
+        if (
+          !isAdminSession &&
+          session.email.toLowerCase().trim() !== personId.toLowerCase().trim()
+        ) {
+          notifications.show({
+            title: "Acesso Negado",
+            message: "Você só pode visualizar o seu próprio horário.",
+            color: "red",
+            icon: <IconLock />,
+            autoClose: 5000,
+          });
+          router.push("/login");
+          return;
         }
 
         const member = await getMemberByEmail(personId);
         if (member) {
-          // Admin sempre tem acesso, independente da permissão do membro
-          if (member.editor !== 1 && !isAdminMode) {
-            const isPending = member.pendingAccess === 1;
-            const errorMsg = isPending
-              ? "Seu cadastro está pendente de aprovação."
-              : "Você não tem permissão para editar.";
-            
-            notifications.show({ title: "Acesso Negado", message: errorMsg, color: "red", icon: <IconLock />, autoClose: 5000 });
-            setTimeout(() => router.push("/horaise-editor"), 2000);
-            return;
-          }
           setMemberData(member);
           const memberSchedule = member.schedule || {};
           setSchedule(memberSchedule);
           setSavedSchedule(cloneSchedule(memberSchedule));
           setIsNewMember(false);
-        } else {
+        } else if (isAdminSession) {
+          // Admin visualizando um email ainda não cadastrado: bootstrap com exemplo.
           const exampleData = await getExampleData();
           const newMember: TeamMemberData = { ...exampleData, email: personId };
           setMemberData(newMember);
@@ -341,11 +326,22 @@ export default function EditContentPage() {
           setSchedule(exampleSchedule);
           setSavedSchedule(cloneSchedule(exampleSchedule));
           setIsNewMember(true);
+        } else {
+          // Membro sem cadastro na planilha: encaminha para o registro.
+          notifications.show({
+            title: "Cadastro não encontrado",
+            message: "Você ainda não está cadastrado no AISE Lab.",
+            color: "yellow",
+            icon: <IconAlertCircle />,
+            autoClose: 5000,
+          });
+          router.push(`/register?email=${encodeURIComponent(personId)}`);
+          return;
         }
       } catch (error) {
         console.error("Erro ao carregar dados:", error);
         notifications.show({ title: "Erro", message: "Erro ao carregar dados.", color: "red" });
-        setTimeout(() => router.push("/"), 2000);
+        setTimeout(() => router.push("/scheduler"), 2000);
       } finally {
         setIsLoading(false);
       }
@@ -361,7 +357,46 @@ export default function EditContentPage() {
 
   const hasUnsavedChanges = useMemo(() => {
     return toCanonicalString(schedule) !== toCanonicalString(savedSchedule);
-  }, [schedule, savedSchedule]);
+  }, [schedule, savedSchedule, toCanonicalString]);
+
+  // Admin pode editar qualquer horário; membro precisa ter editor === 1.
+  const canEdit = useMemo(() => {
+    return isAdminMode || memberData?.editor === 1;
+  }, [isAdminMode, memberData]);
+
+  const handleRequestAccess = async () => {
+    try {
+      const response = await fetch("/api", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "request-editor-access" }),
+      });
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        notifications.show({
+          title: "Solicitação Enviada!",
+          message: "O administrador foi notificado. Aguarde a aprovação do acesso.",
+          color: "blue",
+          icon: <IconCheck />,
+          autoClose: 7000,
+        });
+        setMemberData((prev) => (prev ? { ...prev, pendingAccess: 1 } : prev));
+      } else {
+        notifications.show({
+          title: "Erro",
+          message: result.message || "Erro ao solicitar acesso",
+          color: "red",
+        });
+      }
+    } catch {
+      notifications.show({
+        title: "Erro",
+        message: "Erro ao solicitar acesso de edição",
+        color: "red",
+      });
+    }
+  };
 
   const validation = useMemo(() => {
     if (!currentData) return { valid: false, errors: ["Dados inválidos"] };
@@ -528,27 +563,6 @@ export default function EditContentPage() {
     setEditedHO("");
   };
 
-  const handleReset = async () => {
-    try {
-      const exampleData = await getExampleData();
-      const resetData: TeamMemberData = {
-        ...exampleData,
-        email: memberData?.email || personId, 
-      };
-      setMemberData(resetData);
-      setSchedule(resetData.schedule || {});
-      notifications.show({
-        title: "Resetado",
-        message: "Dados resetados para exemplo",
-        color: "blue",
-        icon: <IconRefresh />,
-      });
-    } catch (error) {
-      console.error("Erro ao resetar:", error);
-      notifications.show({ title: "Erro", message: "Erro ao carregar dados de exemplo", color: "red" });
-    }
-  };
-
   const handleSave = async () => {
     if (!currentData || !validation.valid) return false;
 
@@ -579,11 +593,11 @@ export default function EditContentPage() {
         }).then(res => res.json());
         
         if (!hoursValidation.isValid) {
-          allViolations.push({ code: "weekday-lunch-11-14" as any, day: -1, message: `❌ ${hoursValidation.message}` });
+          allViolations.push({ code: "dynamic-rule", day: -1, message: `❌ ${hoursValidation.message}` });
         }
       }
       
-      const scheduleResult = validateSchedule(schedule);
+      const scheduleResult = validateSchedule();
       if (!scheduleResult.ok) allViolations.push(...scheduleResult.violations);
       
       try {
@@ -595,7 +609,7 @@ export default function EditContentPage() {
         
         if (!dynamicValidation.isValid && dynamicValidation.errors) {
           dynamicValidation.errors.forEach((msg: string) => {
-            allViolations.push({ code: "dynamic-rule" as any, day: -1, message: msg });
+            allViolations.push({ code: "dynamic-rule", day: -1, message: msg });
           });
         }
       } catch (error) {
@@ -647,7 +661,7 @@ export default function EditContentPage() {
       } else {
         if (result.errors && Array.isArray(result.errors) && result.errors.length > 0) {
           const dynamicViolations: RuleViolation[] = result.errors.map((msg: string) => ({
-            code: "dynamic-rule" as any,
+            code: "dynamic-rule",
             day: -1,
             message: msg
           }));
@@ -655,8 +669,8 @@ export default function EditContentPage() {
           setRulesModalOpen(true);
         } else if (result.message && result.message.includes("viola as seguintes regras")) {
           const errorLines = result.message.split("\n").filter((line: string) => line.trim() !== "");
-          const dynamicViolations = errorLines.slice(1).map((msg: string) => ({
-            code: "dynamic-rule" as any,
+          const dynamicViolations: RuleViolation[] = errorLines.slice(1).map((msg: string) => ({
+            code: "dynamic-rule",
             day: -1,
             message: msg
           }));
@@ -667,7 +681,7 @@ export default function EditContentPage() {
         }
         return false;
       }
-    } catch (error) {
+    } catch {
       notifications.show({ title: "Erro", message: "Erro ao salvar.", color: "red" });
       return false;
     } finally {
@@ -739,22 +753,18 @@ export default function EditContentPage() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [hasUnsavedChanges]);
 
-  const handleBackClick = () => {
-    if (hasUnsavedChanges) setConfirmExitOpen(true);
-    else router.push("/horaise-editor");
-  };
-
   const hourCounts = useMemo(() => {
     const counts = { aula: 0, online: 0, presencial: 0, reuniao: 0 };
-    if (schedule) {
-      Object.values(schedule).forEach((daySlots: any) => {
-        Object.values(daySlots).forEach((status: any) => {
-          if (status === 'aula') counts.aula++;
-          else if (status === 'online') counts.online++;
-          else if (status === 'presencial') counts.presencial++;
-          else if (status === 'reuniao') counts.reuniao++;
-        });
-      });
+    for (let day = 0; day < 7; day++) {
+      const daySlots = schedule[day];
+      if (!daySlots) continue;
+      for (let hour = 7; hour <= 19; hour++) {
+        const status = daySlots[hour];
+        if (status === 'aula') counts.aula++;
+        else if (status === 'online') counts.online++;
+        else if (status === 'presencial') counts.presencial++;
+        else if (status === 'reuniao') counts.reuniao++;
+      }
     }
     return counts;
   }, [schedule]);
@@ -769,12 +779,14 @@ export default function EditContentPage() {
 
   const renderToolButton = (tool: string, label: string, icon: React.ReactNode, color: string, value: string | number) => {
     const isActive = activeTool === tool;
-    const canEdit = isAdminMode && (tool === 'online' || tool === 'presencial');
-    
+    const isToolsAllowed = isAdminMode && (tool === 'online' || tool === 'presencial');
+    const blocked = !canEdit;
+
     return (
       <Group gap={4} w="100%" wrap="nowrap">
         <UnstyledButton
-          onClick={() => setActiveTool(isActive ? null : tool)}
+          onClick={() => canEdit && setActiveTool(isActive ? null : tool)}
+          disabled={!canEdit}
           style={{
             width: isMobile ? "auto" : "100%", 
             minWidth: isMobile ? "85px" : "auto", 
@@ -785,6 +797,9 @@ export default function EditContentPage() {
             transition: "all 0.2s",
             flexShrink: 0,
             flex: 1,
+            opacity: blocked ? 0.55 : 1,
+            cursor: blocked ? "not-allowed" : "pointer",
+            pointerEvents: blocked ? "none" : "auto",
           }}
         >
           <Group gap="xs" w="100%" wrap="nowrap" justify={isMobile ? "center" : "flex-start"}>
@@ -803,7 +818,7 @@ export default function EditContentPage() {
             </Stack>
           </Group>
         </UnstyledButton>
-        {canEdit && !isMobile && (
+        {isToolsAllowed && !isMobile && (
           <ActionIcon 
             variant="subtle" 
             color="gray" 
@@ -833,7 +848,7 @@ export default function EditContentPage() {
   );
 
   const renderScheduleTable = (scheduleData: ScheduleData, isReadOnly: boolean) => (
-    <ScrollArea type="auto" offsetScrollbars>
+    <ScrollArea type="auto" offsetScrollbars="present">
       <Table
         striped
         highlightOnHover
@@ -916,9 +931,9 @@ export default function EditContentPage() {
                 <Box ta="left">
                   <Title order={1} size={isMobile ? "h3" : "h1"} style={{ marginBottom: 4 , paddingTop: isMobile ? "40px" : "0px"}}>
                     <span style={{ background: "#0E1862", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", fontWeight: 800 }}>HORAISE</span>{" "}
-                    <span style={{ color: "#8EC9FC", fontWeight: 800 }}>EDITOR</span>
+                    <span style={{ color: "#8EC9FC", fontWeight: 800 }}>CALENDAR</span>
                   </Title>
-                  <Text size="sm" c="dimmed">Edite sua disponibilidade e horários.</Text>
+                  <Text size="sm" c="dimmed">Consulte e edite seus horários no lab.</Text>
                 </Box>
 
                 {isNewMember && <Alert radius="md" variant="light" color="blue" title="Novo Perfil" icon={<IconAlertCircle />}>Dados de exemplo.</Alert>}
@@ -957,7 +972,7 @@ export default function EditContentPage() {
                   <Box>
                     <Group justify="space-between" mb="xs">
                         <Text size="sm" fw={600} c="#4A5568">Frentes:</Text>
-                        {!isEditingFrentes && <ActionIcon variant="subtle" color="gray" onClick={handleStartEditFrentes} size="xs"><IconPencil size={14} /></ActionIcon>}
+                        {!isEditingFrentes && canEdit && <ActionIcon variant="subtle" color="gray" onClick={handleStartEditFrentes} size="xs"><IconPencil size={14} /></ActionIcon>}
                     </Group>
                     {isEditingFrentes ? (
                         <Stack gap="sm">
@@ -1021,7 +1036,7 @@ export default function EditContentPage() {
                       </HoverCard>
                     </Group>
                     
-                    {!isMobile && <Text size="xs" c="dimmed" mb="xs">Clique em uma categoria abaixo para ativar o modo de pintura.</Text>}
+                    {!isMobile && canEdit && <Text size="xs" c="dimmed" mb="xs">Clique em uma categoria abaixo para ativar o modo de pintura.</Text>}
                     
                     {isMobile ? (
                         <ScrollArea type="never" offsetScrollbars={false} mb="sm">
@@ -1041,17 +1056,18 @@ export default function EditContentPage() {
             </Grid.Col>
 
             {/*tabela */}
-            <Grid.Col span={{ base: 12, md: 7, lg: 8 }}>
-              <Stack gap="md">
+            <Grid.Col span={{ base: 12, md: 7, lg: 8 }} style={{ display: "flex", flexDirection: "column" }}>
+              <Stack gap="md" style={{ flex: 1 }}>
                 {isAdminMode && personId.toLowerCase() !== adminEmail?.toLowerCase() && (
                   <Alert radius="md" variant="light" color="orange" title="👨‍💼 Modo Administrador" icon={<IconAlertCircle />}>
                     Você está editando o horário de <strong>{memberData?.name}</strong>. Ao salvar, o horário será definido imediatamente.
                   </Alert>
                 )}
+
+                {renderScheduleTable(schedule, !canEdit)}
                 
-                {renderScheduleTable(schedule, false)}
-                
-                <Group justify={isMobile ? "space-between" : "flex-end"} mt="md">
+                {canEdit ? (
+                  <Group justify="flex-end" mt="md">
                     <Button leftSection={<IconX size={18} />} variant="light" color="red" onClick={() => setSchedule({})} size={isMobile ? "xs" : "sm"}>Limpar</Button>
                     <Button 
                       leftSection={<IconDeviceFloppy size={18} />} 
@@ -1064,6 +1080,20 @@ export default function EditContentPage() {
                       {isAdminMode && personId.toLowerCase() !== adminEmail?.toLowerCase() ? "Salvar Horário" : "Salvar"}
                     </Button>
                   </Group>
+                ) : (
+                  <Group justify="center" mt="auto">
+                    <Button
+                      color="blue"
+                      variant="light"
+                      onClick={handleRequestAccess}
+                      disabled={memberData?.pendingAccess === 1}
+                      leftSection={<IconPencil size={14} />}
+                      size={isMobile ? "xs" : "sm"}
+                    >
+                      Solicitar Acesso de Edição
+                    </Button>
+                  </Group>
+                )}
               </Stack>
             </Grid.Col>
           </Grid>
@@ -1117,8 +1147,8 @@ export default function EditContentPage() {
         <Modal opened={confirmExitOpen} onClose={() => setConfirmExitOpen(false)} title="Alterações não salvas" centered>
           <Text size="sm" mb="md">Deseja sair sem salvar?</Text>
           <Group justify="flex-end">
-            <Button color="green" onClick={async () => { setConfirmExitOpen(false); const ok = await handleSave(); if (ok) router.push("/horaise-editor"); }}>Salvar e Sair</Button>
-            <Button variant="light" color="red" onClick={() => { setConfirmExitOpen(false); router.push("/horaise-editor"); }}>Sair sem salvar</Button>
+            <Button color="green" onClick={async () => { setConfirmExitOpen(false); const ok = await handleSave(); if (ok) router.push("/scheduler"); }}>Salvar e Sair</Button>
+            <Button variant="light" color="red" onClick={() => { setConfirmExitOpen(false); router.push("/scheduler"); }}>Sair sem salvar</Button>
           </Group>
         </Modal>
 

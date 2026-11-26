@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
         if (result.success && !result.alreadyDone) {
            const member = await readMemberByEmail(body.email);
            const name = member ? getColumnValue(member.row, "Nome", member.columnMapping) : "Usuário";
-           sendScheduleApprovedToUser(body.email, name, false).catch(console.error);
+           sendScheduleApprovedToUser(body.email, name).catch(console.error);
         }
         return NextResponse.json(result, { status: result.success ? 200 : 400 });
       }
