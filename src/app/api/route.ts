@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import {
   readMemberByEmail,
   readExample,
@@ -77,7 +77,9 @@ export async function POST(request: NextRequest) {
         const result = await updateMemberRow(memberToSave, isNewRegistration);
         if (result.success && isNewRegistration) {
           // Envia email apenas para NOVO cadastro (notifica admin)
-          sendAdminNotification(body.member.name, body.member.email).catch(e => console.error("Falha email admin:", e));
+          // after(): garante que o envio termine mesmo após a resposta (serverless congela promessas soltas)
+          const { name: newName, email: newEmail } = body.member;
+          after(() => sendAdminNotification(newName, newEmail).catch(e => console.error("Falha email admin:", e)));
         }
         return NextResponse.json(result, { status: result.success ? 200 : 400 });
       }
@@ -186,7 +188,8 @@ export async function POST(request: NextRequest) {
         // Envia email ao admin notificando sobre schedule editado
         if (result.success) {
           const memberName = getColumnValue(row, "Nome", columnMapping) || "Usuário";
-          sendScheduleEditedToAdmin(memberName, body.email).catch((e: unknown) => console.error("Falha email admin:", e));
+          const editedEmail = body.email;
+          after(() => sendScheduleEditedToAdmin(memberName, editedEmail).catch((e: unknown) => console.error("Falha email admin:", e)));
         }
         
         return NextResponse.json(result, { status: result.success ? 200 : 400 });

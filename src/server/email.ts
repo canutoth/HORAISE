@@ -20,7 +20,11 @@ const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 async function getAdminEmailRecipients(): Promise<string[]> {
   try {
     const fromTab = await getAdminEmailsFromAdminsEmailTab();
-    if (fromTab.length > 0) return fromTab;
+    if (fromTab.length > 0) {
+      console.log(`[getAdminEmailRecipients] ${fromTab.length} destinatário(s) da aba admins-email`);
+      return fromTab;
+    }
+    console.warn("[getAdminEmailRecipients] Aba admins-email vazia ou sem emails válidos na coluna A; usando EMAIL_ADMIN");
   } catch (err) {
     console.warn("Falha ao ler aba admins-email:", err);
   }
